@@ -3,11 +3,11 @@ package graph
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/index/ref/bitcoin/memo"
 	"github.com/memocash/index/ref/bitcoin/tx/gen"
 	"github.com/memocash/index/ref/bitcoin/tx/hs"
+	"github.com/memocash/index/ref/bitcoin/tx/parse"
 	"github.com/memocash/index/ref/bitcoin/tx/script"
 	"github.com/memocash/index/ref/bitcoin/util/testing/test_tx"
 	"github.com/memocash/index/ref/bitcoin/wallet"
@@ -123,6 +123,7 @@ func BasicQuery() error {
 	if err != nil {
 		return jerr.Get("error generating memo tx", err)
 	}
-	fmt.Printf("MsgTx: %#v\n", memoTx.MsgTx)
+	txInfo := parse.GetTxInfo(memoTx)
+	txInfo.Print()
 	return nil
 }
