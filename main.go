@@ -7,8 +7,10 @@ import (
 )
 
 func main() {
-	tweets.Load()
-	if err := graph.BasicQuery(); err != nil {
-		jerr.Get("error running basic query", err).Fatal()
+	tweets := tweets.Load()
+	for _,tweet := range tweets {
+		if err := graph.BasicQuery(tweet.Text); err != nil {
+			jerr.Get("error running basic query", err).Fatal()
+		}
 	}
 }

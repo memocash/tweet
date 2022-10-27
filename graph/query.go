@@ -107,13 +107,13 @@ func (g *InputGetter) AddChangeUTXO(memo.UTXO) {
 func (g *InputGetter) NewTx() {
 }
 
-func BasicQuery() error {
+func BasicQuery(message string) error {
 	address := test_tx.Address3
 	getter := &InputGetter{Address: address}
 	memoTx, err := gen.Tx(gen.TxRequest{
 		Getter: getter,
 		Outputs: []*memo.Output{{
-			Script: &script.Post{Message: "test"},
+			Script: &script.Post{Message: message},
 		}},
 		Change: wallet.Change{Main: address},
 		KeyRing: wallet.KeyRing{

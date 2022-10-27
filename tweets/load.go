@@ -3,7 +3,6 @@ package tweets
 import (
 	"encoding/json"
 	"flag"
-	"fmt"
 	"github.com/coreos/pkg/flagutil"
 	"github.com/dghubble/go-twitter/twitter"
 	"golang.org/x/oauth2"
@@ -12,7 +11,7 @@ import (
 	"log"
 )
 
-func Load() {
+func Load() []twitter.Tweet{
 	flags := struct {
 		consumerKey    string
 		consumerSecret string
@@ -65,5 +64,5 @@ func Load() {
 	//Save ID of latest tweet to a local file
 	file,_ := json.MarshalIndent(sinceID, "", " ")
 	_ = ioutil.WriteFile("sinceID.json", file, 0644)
-	fmt.Printf("USER TIMELINE:\n%+v\n", tweets)
+	return tweets
 }
