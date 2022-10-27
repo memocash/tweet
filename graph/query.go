@@ -4,9 +4,21 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/jchavannes/jgo/jerr"
+	"github.com/memocash/index/ref/bitcoin/memo"
+	"github.com/memocash/index/ref/bitcoin/tx/gen"
+	"github.com/memocash/index/ref/bitcoin/tx/hs"
+	"github.com/memocash/index/ref/bitcoin/tx/script"
+	"github.com/memocash/index/ref/bitcoin/util/testing/test_tx"
+	"github.com/memocash/index/ref/bitcoin/wallet"
 	"io/ioutil"
 	"net/http"
 	"time"
+)
+
+const (
+	AddressString = test_tx.Address3String
+	PrivateKey    = test_tx.Key3String
 )
 
 type Address struct {
@@ -24,11 +36,18 @@ type Tx struct {
 	Seen time.Time `json:"seen"`
 }
 
-func BasicQuery() {
+type InputGetter struct {
+	Address wallet.Address
+}
+
+func (g *InputGetter) SetPkHashesToUse([][]byte) {
+}
+
+func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
 	jsonData := map[string]string{
 		"query": `
             {
-                address (address: "1JJhfR2fD3mmxipTXxdtvehBiep1WNzM9q") {
+                address (address: "` + test_tx.Address3String + `") {
                     utxos {
 						tx {
 							seen
@@ -48,7 +67,7 @@ func BasicQuery() {
 	response, err := client.Do(request)
 	defer response.Body.Close()
 	if err != nil {
-		fmt.Printf("The HTTP request failed with error %s\n", err)
+		return nil, jerr.Get("The HTTP request failed with error %s\n", err)
 	}
 	data, _ := ioutil.ReadAll(response.Body)
 	var dataStruct = struct {
@@ -57,7 +76,53 @@ func BasicQuery() {
 		} `json:"data"`
 	}{}
 	if err := json.Unmarshal(data, &dataStruct); err != nil {
-		panic(err)
+		return nil, jerr.Get("error unmarshalling json", err)
 	}
-	fmt.Printf("%#v\n", dataStruct.Data.Address)
+	pkHash := g.Address.GetPkHash()
+	pkScript, err := script.P2pkh{PkHash: pkHash}.Get()
+	if err != nil {
+		return nil, jerr.Get("error getting pk script", err)
+	}
+	var utxos = make([]memo.UTXO, len(dataStruct.Data.Address.Utxos))
+	for i, utxo := range dataStruct.Data.Address.Utxos {
+		utxos[i] = memo.UTXO{
+			Input: memo.TxInput{
+				PkScript:     pkScript,
+				PkHash:       pkHash,
+				Value:        utxo.Amount,
+				PrevOutHash:  hs.GetTxHash(utxo.Hash),
+				PrevOutIndex: uint32(utxo.Index),
+			},
+		}
+	}
+	return utxos, nil
+}
+
+func (g *InputGetter) MarkUTXOsUsed([]memo.UTXO) {
+}
+
+func (g *InputGetter) AddChangeUTXO(memo.UTXO) {
+}
+
+func (g *InputGetter) NewTx() {
+}
+
+func BasicQuery() error {
+	address := test_tx.Address3
+	getter := &InputGetter{Address: address}
+	memoTx, err := gen.Tx(gen.TxRequest{
+		Getter: getter,
+		Outputs: []*memo.Output{{
+			Script: &script.Post{Message: "test"},
+		}},
+		Change: wallet.Change{Main: address},
+		KeyRing: wallet.KeyRing{
+			Keys: []wallet.PrivateKey{test_tx.Address3key},
+		},
+	})
+	if err != nil {
+		return jerr.Get("error generating memo tx", err)
+	}
+	fmt.Printf("MsgTx: %#v\n", memoTx.MsgTx)
+	return nil
 }
