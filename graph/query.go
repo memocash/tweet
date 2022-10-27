@@ -9,12 +9,34 @@ import (
 	"time"
 )
 
+type Address struct {
+	Utxos []Utxo `json:"utxos"`
+}
+
+type Utxo struct {
+	Tx     Tx     `json:"tx"`
+	Hash   string `json:"hash"`
+	Index  int    `json:"index"`
+	Amount int64  `json:"amount"`
+}
+
+type Tx struct {
+	Seen time.Time `json:"seen"`
+}
+
 func BasicQuery() {
 	jsonData := map[string]string{
 		"query": `
             {
                 address (address: "1JJhfR2fD3mmxipTXxdtvehBiep1WNzM9q") {
-                    balance
+                    utxos {
+						tx {
+							seen
+						}
+						hash
+						index
+						amount
+					}
                 }
             }
         `,
@@ -29,5 +51,13 @@ func BasicQuery() {
 		fmt.Printf("The HTTP request failed with error %s\n", err)
 	}
 	data, _ := ioutil.ReadAll(response.Body)
-	fmt.Println(string(data))
+	var dataStruct = struct {
+		Data struct {
+			Address Address `json:"address"`
+		} `json:"data"`
+	}{}
+	if err := json.Unmarshal(data, &dataStruct); err != nil {
+		panic(err)
+	}
+	fmt.Printf("%#v\n", dataStruct.Data.Address)
 }
