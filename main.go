@@ -15,14 +15,18 @@ import (
 
 func main() {
 	tweets := tweets.Load()
-	for _,tweet := range tweets {
+	for _, tweet := range tweets {
 		memoTx, err := graph.BasicQuery(tweet.Text)
 		if err != nil {
 			jerr.Get("error running basic query", err).Fatal()
 		}
-
-		jsonData := map[string]string{
-			"mutation": `{broadcast(raw: ` + hex.EncodeToString(memo.GetRaw(memoTx.MsgTx)) +`}`,
+		jsonData := map[string]interface{}{
+			"query": `mutation ($raw: String!) {
+					broadcast(raw: $raw)
+				}`,
+			"variables": map[string]string{
+				"raw": hex.EncodeToString(memo.GetRaw(memoTx.MsgTx)),
+			},
 		}
 		jsonValue, _ := json.Marshal(jsonData)
 		request, err := http.NewRequest("POST", "http://localhost:26770/graphql", bytes.NewBuffer(jsonValue))
