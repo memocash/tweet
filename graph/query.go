@@ -16,11 +16,6 @@ import (
 	"time"
 )
 
-const (
-	AddressString = test_tx.Address3String
-	PrivateKey    = test_tx.Key3String
-)
-
 type Address struct {
 	Utxos []Utxo `json:"utxos"`
 }
@@ -107,7 +102,7 @@ func (g *InputGetter) AddChangeUTXO(memo.UTXO) {
 func (g *InputGetter) NewTx() {
 }
 
-func BasicQuery(message string) error {
+func BasicQuery(message string) (*memo.Tx, error) {
 	address := test_tx.Address3
 	getter := &InputGetter{Address: address}
 	memoTx, err := gen.Tx(gen.TxRequest{
@@ -121,9 +116,9 @@ func BasicQuery(message string) error {
 		},
 	})
 	if err != nil {
-		return jerr.Get("error generating memo tx", err)
+		return nil, jerr.Get("error generating memo tx", err)
 	}
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
-	return nil
+	return memoTx, nil
 }
