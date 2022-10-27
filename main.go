@@ -1,10 +1,10 @@
 package main
 
 import (
-	"github.com/memocash/tweet/graph"
+	"github.com/memocash/tweet/tweets"
 )
 
 func main() {
-	//tweets.Load()
-	graph.BasicQuery()
+	tweets.Load()
+	//graph.BasicQuery()
 }
