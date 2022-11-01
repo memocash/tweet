@@ -1,8 +1,11 @@
-package graph
+package database
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"github.com/dghubble/go-twitter/twitter"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/index/ref/bitcoin/memo"
 	"github.com/memocash/index/ref/bitcoin/tx/gen"
@@ -102,23 +105,95 @@ func (g *InputGetter) AddChangeUTXO(memo.UTXO) {
 func (g *InputGetter) NewTx() {
 }
 
-func BasicQuery(message string) (*memo.Tx, error) {
-	address := test_tx.Address3
+func TransferTweets(address wallet.Address, key wallet.PrivateKey, tweets []twitter.Tweet) error {
+	for _, tweet := range tweets {
+		err := MakePost(address,key, tweet.Text)
+		if err != nil{
+			return jerr.Get("error transferring tweets", err)
+		}
+	}
+	return nil
+}
+
+func MakePost(address wallet.Address,key wallet.PrivateKey,message string) error {
+	memoTx, err := buildTx(address,key, script.Post{Message: message})
+	if err != nil {
+		return jerr.Get("error generating memo tx", err)
+	}
+	txInfo := parse.GetTxInfo(memoTx)
+	txInfo.Print()
+	completeTransaction(memoTx, err)
+	return nil
+}
+
+func UpdateName(address wallet.Address, key wallet.PrivateKey, name string) error {
+	memoTx, err := buildTx(address, key, script.SetName{Name: name})
+	if err != nil {
+		return jerr.Get("error generating memo tx", err)
+	}
+	txInfo := parse.GetTxInfo(memoTx)
+	txInfo.Print()
+	completeTransaction(memoTx, err)
+	return nil
+}
+
+func UpdateProfileText(address wallet.Address, key wallet.PrivateKey, profile string) error {
+	memoTx, err := buildTx(address, key, script.Profile{Text: profile})
+	if err != nil {
+		return jerr.Get("error generating memo tx", err)
+	}
+	txInfo := parse.GetTxInfo(memoTx)
+	txInfo.Print()
+	completeTransaction(memoTx, err)
+	return nil
+}
+
+func UpdateProfilePic(address wallet.Address, key wallet.PrivateKey, url string) error {
+	memoTx, err := buildTx(address, key, script.ProfilePic{Url: url})
+	if err != nil {
+		return jerr.Get("error generating memo tx", err)
+	}
+	txInfo := parse.GetTxInfo(memoTx)
+	txInfo.Print()
+	completeTransaction(memoTx, err)
+	return nil
+}
+func buildTx(address wallet.Address, key wallet.PrivateKey, outputScript memo.Script)(*memo.Tx, error){
 	getter := &InputGetter{Address: address}
 	memoTx, err := gen.Tx(gen.TxRequest{
 		Getter: getter,
 		Outputs: []*memo.Output{{
-			Script: &script.Post{Message: message},
+			Script: outputScript,
 		}},
 		Change: wallet.Change{Main: address},
 		KeyRing: wallet.KeyRing{
-			Keys: []wallet.PrivateKey{test_tx.Address3key},
+			Keys: []wallet.PrivateKey{key},
 		},
 	})
+	return memoTx, err
+}
+func completeTransaction(memoTx *memo.Tx, err error) {
 	if err != nil {
-		return nil, jerr.Get("error generating memo tx", err)
+		jerr.Get("error running basic query", err).Fatal()
 	}
-	txInfo := parse.GetTxInfo(memoTx)
-	txInfo.Print()
-	return memoTx, nil
+	jsonData := map[string]interface{}{
+		"query": `mutation ($raw: String!) {
+					broadcast(raw: $raw)
+				}`,
+		"variables": map[string]string{
+			"raw": hex.EncodeToString(memo.GetRaw(memoTx.MsgTx)),
+		},
+	}
+	jsonValue, _ := json.Marshal(jsonData)
+	request, err := http.NewRequest("POST", "http://localhost:26770/graphql", bytes.NewBuffer(jsonValue))
+	if err != nil {
+		jerr.Get("Making a new request failed\n", err).Fatal()
+	}
+	request.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: time.Second * 10}
+	response, err := client.Do(request)
+	fmt.Printf("%#v\n", response)
+	if err != nil {
+		jerr.Get("The HTTP request failed with error %s\n", err).Fatal()
+	}
 }
