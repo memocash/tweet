@@ -107,7 +107,7 @@ func (g *InputGetter) NewTx() {
 
 func TransferTweets(address wallet.Address, key wallet.PrivateKey, tweets []twitter.Tweet) error {
 	for _, tweet := range tweets {
-		err := MakePost(address,key, tweet.Text)
+		err := makePost(address,key, tweet.Text)
 		if err != nil{
 			return jerr.Get("error transferring tweets", err)
 		}
@@ -115,7 +115,7 @@ func TransferTweets(address wallet.Address, key wallet.PrivateKey, tweets []twit
 	return nil
 }
 
-func MakePost(address wallet.Address,key wallet.PrivateKey,message string) error {
+func makePost(address wallet.Address,key wallet.PrivateKey,message string) error {
 	memoTx, err := buildTx(address,key, script.Post{Message: message})
 	if err != nil {
 		return jerr.Get("error generating memo tx", err)
