@@ -14,6 +14,7 @@ import (
 	"github.com/memocash/index/ref/bitcoin/tx/script"
 	"github.com/memocash/index/ref/bitcoin/util/testing/test_tx"
 	"github.com/memocash/index/ref/bitcoin/wallet"
+	"html"
 	"io/ioutil"
 	"net/http"
 	"time"
@@ -105,9 +106,18 @@ func (g *InputGetter) AddChangeUTXO(memo.UTXO) {
 func (g *InputGetter) NewTx() {
 }
 
-func TransferTweets(address wallet.Address, key wallet.PrivateKey, tweets []twitter.Tweet) error {
+func TransferTweets(address wallet.Address, key wallet.PrivateKey, tweets []twitter.Tweet, appendLink bool, appendDate bool) error {
 	for _, tweet := range tweets {
-		err := makePost(address,key, tweet.Text)
+		tweetLink := fmt.Sprintf("\nhttps://twitter.com/twitter/status/%d\n",tweet.ID)
+		tweetDate := fmt.Sprintf("\n%s\n",tweet.CreatedAt)
+		tweetText := tweet.Text
+		if appendLink {
+			tweetText += tweetLink
+		}
+		if appendDate {
+			tweetText += tweetDate
+		}
+		err := makePost(address,key, html.UnescapeString(tweetText))
 		if err != nil{
 			return jerr.Get("error transferring tweets", err)
 		}
