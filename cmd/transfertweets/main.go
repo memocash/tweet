@@ -19,10 +19,16 @@ var transferCmd = &cobra.Command{
 		key := test_tx.GetPrivateKey(args[0])
 		address := key.GetAddress()
 		account := args[1]
-		tweetList := tweets.GetTweets(account)
-		err := database.TransferTweets(address, key, tweetList, link, date)
-		if err != nil {
-			return jerr.Get("error", err)
+		client := tweets.Connect()
+		for{
+			tweetList := tweets.GetTweets(account,client)
+			err := database.TransferTweets(address, key, tweetList, link, date)
+			if err != nil {
+				return jerr.Get("error", err)
+			}
+			if len(tweetList) < 100{
+				break
+			}
 		}
 		return nil
 	},

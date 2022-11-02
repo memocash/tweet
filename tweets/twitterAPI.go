@@ -12,39 +12,38 @@ import (
 	"log"
 )
 
-func GetTweets(screenName string) []twitter.Tweet{
-	client := connect()
-	//Struct and function call to get ID of most recent tweet, or 0 if sinceID.json doesn't exist
+func GetTweets(screenName string,client *twitter.Client) []twitter.Tweet{
+	//Struct and function call to get ID of most recent tweet, or 0 if maxID.json doesn't exist
 	type tweetID struct {
 		ID int64
 	}
-	sinceID := tweetID{
+	maxID := tweetID{
 		ID: 0,
 	}
-	content, err := ioutil.ReadFile("./sinceID.json")
+	content, err := ioutil.ReadFile("./maxID.json")
 	if err == nil{
-		err = json.Unmarshal(content, &sinceID)
+		err = json.Unmarshal(content, &maxID)
 	}
 
-	// Query to Twitter API for all tweets after sinceID.id
-	userTimelineParams := &twitter.UserTimelineParams{ScreenName: screenName, SinceID: sinceID.ID}
+	// Query to Twitter API for all tweets after maxID.id
+	userTimelineParams := &twitter.UserTimelineParams{ScreenName: screenName, MaxID: maxID.ID, Count: 100}
 	tweets, _, _ := client.Timelines.UserTimeline(userTimelineParams)
 
 	for _, tweet := range tweets {
 		// send tweet.Text through a graphQL query
 		// save the highest tweet.ID to a config file
 		println(tweet.Text)
-		if tweet.ID > sinceID.ID{
-			sinceID.ID = tweet.ID
+		if tweet.ID < maxID.ID{
+			maxID.ID = tweet.ID
 		}
 	}
 	//Save ID of latest tweet to a local file
-	file,_ := json.MarshalIndent(sinceID, "", " ")
-	_ = ioutil.WriteFile("sinceID.json", file, 0644)
+	file,_ := json.MarshalIndent(maxID, "", " ")
+	_ = ioutil.WriteFile("maxID.json", file, 0644)
 	return tweets
 }
 func GetProfile(screenName string)(string,string,string){
-	client := connect()
+	client := Connect()
 	// Query to Twitter API for profile info
 	// user show
 	userShowParams := &twitter.UserShowParams{ScreenName: screenName}
@@ -56,7 +55,7 @@ func GetProfile(screenName string)(string,string,string){
 	return name, desc, profilePic
 }
 
-func connect() *twitter.Client{
+func Connect() *twitter.Client{
 	flags := struct {
 		consumerKey    string
 		consumerSecret string
