@@ -1,11 +1,14 @@
 package transfertweets
 
 import (
+	"encoding/json"
+	"github.com/dghubble/go-twitter/twitter"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/index/ref/bitcoin/util/testing/test_tx"
 	"github.com/memocash/tweet/database"
 	"github.com/memocash/tweet/tweets"
 	"github.com/spf13/cobra"
+	"io/ioutil"
 )
 
 var link bool = false
@@ -20,16 +23,36 @@ var transferCmd = &cobra.Command{
 		address := key.GetAddress()
 		account := args[1]
 		client := tweets.Connect()
-		for{
-			tweetList := tweets.GetTweets(account,client)
-			err := database.TransferTweets(address, key, tweetList, link, date)
-			if err != nil {
-				return jerr.Get("error", err)
-			}
-			if len(tweetList) < 100{
-				break
-			}
+		type tweetObject struct {
+			TweetList []twitter.Tweet
+			Archived  int
 		}
+		var archive tweetObject
+		var tweetList []twitter.Tweet
+		content, err := ioutil.ReadFile("./tweetArchive.json")
+		if err == nil{
+			err = json.Unmarshal(content, &archive)
+		}
+		if err != nil{
+			tweetList = tweets.GetAllTweets(account,client)
+			archive.TweetList = tweetList
+			archive.Archived = 0
+		}
+		//len - Archived - 20 to len - Archived
+		tweetList = archive.TweetList[len(archive.TweetList)-archive.Archived-20:len(archive.TweetList)-archive.Archived]
+
+		//reverse tweetList
+		for i := len(tweetList)/2 - 1; i >= 0; i-- {
+			opp := len(tweetList) - 1 - i
+			tweetList[i], tweetList[opp] = tweetList[opp], tweetList[i]
+		}
+		err = database.TransferTweets(address, key, tweetList, link, date)
+		archive.Archived += 20
+		if err != nil {
+			return jerr.Get("error", err)
+		}
+		file,_ := json.MarshalIndent(archive, "", " ")
+		_ = ioutil.WriteFile("tweetArchive.json", file, 0644)
 		return nil
 	},
 }
