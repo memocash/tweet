@@ -10,6 +10,7 @@ import (
 	"golang.org/x/oauth2/clientcredentials"
 	"io/ioutil"
 	"log"
+	"strings"
 )
 
 func GetAllTweets(screenName string, client *twitter.Client) []twitter.Tweet{
@@ -41,12 +42,13 @@ func GetTweets(screenName string,client *twitter.Client) []twitter.Tweet{
 	}
 	// input to the query if maxID.json exists
 	var userTimelineParams *twitter.UserTimelineParams
+	excludeReplies := false
 	if maxID.ID != 0{
-		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, MaxID: maxID.ID, Count: 100}
+		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, ExcludeReplies: &excludeReplies,MaxID: maxID.ID, Count: 100}
 	}
 	//input to the query if maxID.json doesn't exist (just get the most recent 100)
 	if maxID.ID == 0{
-		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, Count: 100}
+		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName,ExcludeReplies: &excludeReplies, Count: 100}
 
 	}
 	// Query to Twitter API for all tweets after maxID.id
@@ -75,6 +77,9 @@ func GetProfile(screenName string)(string,string,string){
 	desc := user.Description
 	name := user.Name
 	profilePic := user.ProfileImageURL
+	//resize the profile pic to full size
+	profilePic = strings.Replace(profilePic, "_normal", "", 1)
+	println(profilePic)
 	fmt.Printf("USERS SHOW:\n%+v\n%+v\n%+v\n",name, desc, profilePic)
 	return name, desc, profilePic
 }
