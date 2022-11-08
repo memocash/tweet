@@ -17,7 +17,10 @@ func GetAllTweets(screenName string, client *twitter.Client) []twitter.Tweet{
 	for{
 		tweets := GetTweets(screenName,client)
 		tweetList = append(tweetList, tweets...)
+		//Since maxID will match to the oldest tweet, if only the oldest tweet gets added
+		//to the list, then we know we've reached the end of the timeline
 		if len(tweets) == 1{
+			//remove the duplicate oldest tweet
 			tweetList = tweetList[:len(tweetList)-1]
 			break
 		}
@@ -36,16 +39,17 @@ func GetTweets(screenName string,client *twitter.Client) []twitter.Tweet{
 	if err == nil{
 		err = json.Unmarshal(content, &maxID)
 	}
-	// Query to Twitter API for all tweets after maxID.id
+	// input to the query if maxID.json exists
 	var userTimelineParams *twitter.UserTimelineParams
 	if maxID.ID != 0{
 		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, MaxID: maxID.ID, Count: 100}
 	}
-	//just get the 100 most recent if maxID.json doesn't exist
+	//input to the query if maxID.json doesn't exist (just get the most recent 100)
 	if maxID.ID == 0{
 		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, Count: 100}
 
 	}
+	// Query to Twitter API for all tweets after maxID.id
 	tweets, _, _ := client.Timelines.UserTimeline(userTimelineParams)
 
 	for _, tweet := range tweets {

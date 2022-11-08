@@ -2,11 +2,11 @@ package cmd
 
 import (
 	"github.com/jchavannes/jgo/jerr"
+	"github.com/memocash/tweet/cmd/transfertweets"
 	"github.com/memocash/tweet/cmd/updatename"
 	"github.com/memocash/tweet/cmd/updateprofilepic"
 	"github.com/memocash/tweet/cmd/updateprofiletext"
 	"github.com/spf13/cobra"
-	"github.com/memocash/tweet/cmd/transfertweets"
 )
 
 var pf interface {
@@ -33,3 +33,4 @@ func Execute() error {
 	}
 	return nil
 }
+
