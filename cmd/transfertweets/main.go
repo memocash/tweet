@@ -25,12 +25,7 @@ var transferCmd = &cobra.Command{
 		key,address, account := util.Setup(args)
 		client := tweets.Connect()
 		//Structure of tweetArchive.json
-		type tweetObject struct {
-			TweetList []twitter.Tweet
-			//number of tweets already archived
-			Archived  int
-		}
-		var archive tweetObject
+		var archive util.TweetObject
 		var tweetList []twitter.Tweet
 		content, err := ioutil.ReadFile("./tweetArchive.json")
 		if err == nil{
@@ -43,14 +38,8 @@ var transferCmd = &cobra.Command{
 			archive.Archived = 0
 		}
 		//len - Archived - 20 to len - Archived (oldest 20 tweets not already archived)
-		tweetList = archive.TweetList[len(archive.TweetList)-archive.Archived-20:len(archive.TweetList)-archive.Archived]
 
-		//reverse tweetList so they are posted in chronological order in memo, instead of reverse chronological
-		for i := len(tweetList)/2 - 1; i >= 0; i-- {
-			opp := len(tweetList) - 1 - i
-			tweetList[i], tweetList[opp] = tweetList[opp], tweetList[i]
-		}
-		err = database.TransferTweets(address, key, tweetList, link, date)
+		err = database.TransferTweets(client, address, key, account, archive, link, date)
 		archive.Archived += 20
 		if err != nil {
 			return jerr.Get("error", err)
