@@ -16,7 +16,7 @@ func updateArchiveTweetHash(archive util.Archive, ID int64, newHash []byte){
 		}
 	}
 }
-func TransferTweets(address wallet.Address, key wallet.PrivateKey,account string, archive util.Archive, appendLink bool, appendDate bool) (int, error) {
+func TransferTweets(address wallet.Address, key wallet.PrivateKey, archive util.Archive, appendLink bool, appendDate bool) (int, error) {
 	var tweetList []util.TweetTx
 	//if there are at least 20 tweets not yet archived, get the oldest 20, otherwise just get all of them
 	if len(archive.TweetList) - archive.Archived >= 20 {

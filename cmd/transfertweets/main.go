@@ -36,7 +36,7 @@ var transferCmd = &cobra.Command{
 			archive.TweetList = tweetList
 			archive.Archived = 0
 		}
-		numTransferred,err := util2.TransferTweets(address, key, account, archive, link, date)
+		numTransferred,err := util2.TransferTweets(address, key, archive, link, date)
 		archive.Archived += numTransferred
 		if err != nil {
 			return jerr.Get("error", err)
