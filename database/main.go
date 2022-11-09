@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/dghubble/go-twitter/twitter"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/index/ref/bitcoin/memo"
 	"github.com/memocash/index/ref/bitcoin/tx/gen"
@@ -14,8 +13,6 @@ import (
 	"github.com/memocash/index/ref/bitcoin/tx/script"
 	"github.com/memocash/index/ref/bitcoin/util/testing/test_tx"
 	"github.com/memocash/index/ref/bitcoin/wallet"
-	"github.com/memocash/tweet/cmd/util"
-	"html"
 	"io/ioutil"
 	"net/http"
 	"time"
@@ -123,67 +120,7 @@ func (g *InputGetter) AddChangeUTXO(new memo.UTXO) {
 func (g *InputGetter) NewTx() {
 }
 
-func TransferTweets(client *twitter.Client, address wallet.Address, key wallet.PrivateKey,account string, archive util.TweetObject, appendLink bool, appendDate bool) error {
-	var tweetList []twitter.Tweet
-	if(len(archive.TweetList) - archive.Archived >= 20){
-		tweetList = archive.TweetList[len(archive.TweetList)-archive.Archived-20:len(archive.TweetList)-archive.Archived]
-	} else{
-		tweetList = archive.TweetList
-	}
-	//reverse tweetList so they are posted in chronological order in memo, instead of reverse chronological
-	for i := len(tweetList)/2 - 1; i >= 0; i-- {
-		opp := len(tweetList) - 1 - i
-		tweetList[i], tweetList[opp] = tweetList[opp], tweetList[i]
-	}
-	for _, tweet := range tweetList {
-		if(tweet.InReplyToStatusID == 0) {
-			tweetLink := fmt.Sprintf("\nhttps://twitter.com/twitter/status/%d\n", tweet.ID)
-			tweetDate := fmt.Sprintf("\n%s\n", tweet.CreatedAt)
-			tweetText := tweet.Text
-			if appendLink {
-				tweetText += tweetLink
-			}
-			if appendDate {
-				tweetText += tweetDate
-			}
-			parentHash, err := makePost(address, key, html.UnescapeString(tweetText))
-			if err != nil {
-				return jerr.Get("error making post", err)
-			}
-			//this part should be recursively called for each reply found
-			err = recursiveReplies(parentHash, tweet, address, key, archive, appendLink, appendDate)
-			if err != nil {
-				return jerr.Get("error getting replies", err)
-			}
-		}
-	}
-	return nil
-}
-func recursiveReplies(parentHash []byte, tweet twitter.Tweet, address wallet.Address, key wallet.PrivateKey, archive util.TweetObject, appendLink bool, appendDate bool) error {
-	replies := archive.TweetList
-	for _, reply := range replies {
-		if reply.InReplyToStatusID != tweet.ID{
-			continue
-		}
-		println("\n\n\n\n" + reply.Text + "\n\n\n\n")
-		replyLink := fmt.Sprintf("\nhttps://twitter.com/twitter/status/%d\n",reply.ID)
-		replyDate := fmt.Sprintf("\n%s\n",reply.CreatedAt)
-		replyText := reply.Text
-		if appendLink {
-			replyText += replyLink
-		}
-		if appendDate {
-			replyText += replyDate
-		}
-		parentHash,err := makeReply(parentHash,address,key, html.UnescapeString(replyText))
-		err = recursiveReplies(parentHash, reply, address, key, archive, appendLink, appendDate)
-		if err != nil {
-			return jerr.Get("error making reply", err)
-		}
-	}
-	return nil
-}
-func makePost(address wallet.Address,key wallet.PrivateKey,message string) ([]byte, error) {
+func MakePost(address wallet.Address,key wallet.PrivateKey,message string) ([]byte, error) {
 	memoTx, err := buildTx(address,key, script.Post{Message: message})
 	if err != nil {
 		return nil,jerr.Get("error generating memo tx", err)
@@ -193,7 +130,7 @@ func makePost(address wallet.Address,key wallet.PrivateKey,message string) ([]by
 	completeTransaction(memoTx, err)
 	return memoTx.GetHash(), nil
 }
-func makeReply(parentHash []byte, address wallet.Address,key wallet.PrivateKey,message string) ([]byte, error) {
+func MakeReply(parentHash []byte, address wallet.Address,key wallet.PrivateKey,message string) ([]byte, error) {
 	memoTx, err := buildTx(address,key, script.Reply{Message: message, TxHash: parentHash})
 	if err != nil {
 		return nil,jerr.Get("error generating memo tx", err)
@@ -236,6 +173,8 @@ func UpdateProfilePic(address wallet.Address, key wallet.PrivateKey, url string)
 	completeTransaction(memoTx, err)
 	return nil
 }
+
+
 func buildTx(address wallet.Address, key wallet.PrivateKey, outputScript memo.Script)(*memo.Tx, error){
 	getter := &InputGetter{Address: address}
 	memoTx, err := gen.Tx(gen.TxRequest{

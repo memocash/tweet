@@ -16,7 +16,7 @@ import (
 func GetAllTweets(screenName string, client *twitter.Client) []twitter.Tweet{
 	var tweetList []twitter.Tweet
 	for{
-		tweets := GetTweets(screenName,client)
+		tweets := getTweets(screenName,client)
 		tweetList = append(tweetList, tweets...)
 		//Since maxID will match to the oldest tweet, if only the oldest tweet gets added
 		//to the list, then we know we've reached the end of the timeline
@@ -28,7 +28,7 @@ func GetAllTweets(screenName string, client *twitter.Client) []twitter.Tweet{
 	}
 	return tweetList
 }
-func GetTweets(screenName string,client *twitter.Client) []twitter.Tweet{
+func getTweets(screenName string,client *twitter.Client) []twitter.Tweet{
 	//Struct and function call to get ID of most recent tweet, or 0 if maxID.json doesn't exist
 	type tweetID struct {
 		ID int64

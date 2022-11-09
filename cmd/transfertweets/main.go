@@ -5,7 +5,7 @@ import (
 	"github.com/dghubble/go-twitter/twitter"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/tweet/cmd/util"
-	"github.com/memocash/tweet/database"
+	util2 "github.com/memocash/tweet/database/util"
 	"github.com/memocash/tweet/tweets"
 	"github.com/spf13/cobra"
 	"io/ioutil"
@@ -37,10 +37,8 @@ var transferCmd = &cobra.Command{
 			archive.TweetList = tweetList
 			archive.Archived = 0
 		}
-		//len - Archived - 20 to len - Archived (oldest 20 tweets not already archived)
-
-		err = database.TransferTweets(client, address, key, account, archive, link, date)
-		archive.Archived += 20
+		numTransferred,err := util2.TransferTweets(client, address, key, account, archive, link, date)
+		archive.Archived += numTransferred
 		if err != nil {
 			return jerr.Get("error", err)
 		}
