@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/coreos/pkg/flagutil"
 	"github.com/dghubble/go-twitter/twitter"
+	"github.com/memocash/tweet/cmd/util"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 	"io/ioutil"
@@ -13,8 +14,8 @@ import (
 	"strings"
 )
 
-func GetAllTweets(screenName string, client *twitter.Client) []twitter.Tweet{
-	var tweetList []twitter.Tweet
+func GetAllTweets(screenName string, client *twitter.Client) []util.TweetTx{
+	var tweetList []util.TweetTx
 	for{
 		tweets := getTweets(screenName,client)
 		tweetList = append(tweetList, tweets...)
@@ -28,7 +29,7 @@ func GetAllTweets(screenName string, client *twitter.Client) []twitter.Tweet{
 	}
 	return tweetList
 }
-func getTweets(screenName string,client *twitter.Client) []twitter.Tweet{
+func getTweets(screenName string,client *twitter.Client) []util.TweetTx{
 	//Struct and function call to get ID of most recent tweet, or 0 if maxID.json doesn't exist
 	type tweetID struct {
 		ID int64
@@ -53,10 +54,11 @@ func getTweets(screenName string,client *twitter.Client) []twitter.Tweet{
 	}
 	// Query to Twitter API for all tweets after maxID.id
 	tweets, _, _ := client.Timelines.UserTimeline(userTimelineParams)
-
-	for _, tweet := range tweets {
+	var tweetTxs []util.TweetTx
+	for i, tweet := range tweets {
 		// send tweet.Text through a graphQL query
 		// save the highest tweet.ID to a config file
+		tweetTxs = append(tweetTxs, util.TweetTx{Tweet: &tweets[i], TxHash: nil})
 		println(tweet.Text)
 		println(tweet.CreatedAt)
 		if tweet.ID < maxID.ID || maxID.ID == 0{
@@ -66,7 +68,7 @@ func getTweets(screenName string,client *twitter.Client) []twitter.Tweet{
 	//Save ID of latest tweet to a local file
 	file,_ := json.MarshalIndent(maxID, "", " ")
 	_ = ioutil.WriteFile("maxID.json", file, 0644)
-	return tweets
+	return tweetTxs
 }
 func GetProfile(screenName string)(string,string,string){
 	client := Connect()

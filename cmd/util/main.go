@@ -13,8 +13,13 @@ func Setup(args []string) (wallet.PrivateKey,wallet.Address,string){
 	return key,address,account
 }
 
-type TweetObject struct {
-	TweetList []twitter.Tweet
+type TweetTx struct {
+	Tweet *twitter.Tweet
+	TxHash []byte
+}
+
+type Archive struct {
+	TweetList []TweetTx
 	//number of tweets already archived
 	Archived  int
 }
