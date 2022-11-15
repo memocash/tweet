@@ -11,7 +11,6 @@ import (
 	"github.com/memocash/index/ref/bitcoin/tx/hs"
 	"github.com/memocash/index/ref/bitcoin/tx/parse"
 	"github.com/memocash/index/ref/bitcoin/tx/script"
-	"github.com/memocash/index/ref/bitcoin/util/testing/test_tx"
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"io/ioutil"
 	"net/http"
@@ -42,13 +41,13 @@ func (g *InputGetter) SetPkHashesToUse([][]byte) {
 }
 
 func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
-	if len(g.UTXOs) != 0{
+	if len(g.UTXOs) != 0 {
 		return g.UTXOs, nil
 	}
 	jsonData := map[string]string{
 		"query": `
             {
-                address (address: "` + test_tx.Address3String + `") {
+                address (address: "` + g.Address.GetEncoded() + `") {
                     utxos {
 						tx {
 							seen
@@ -120,20 +119,20 @@ func (g *InputGetter) AddChangeUTXO(new memo.UTXO) {
 func (g *InputGetter) NewTx() {
 }
 
-func MakePost(address wallet.Address,key wallet.PrivateKey,message string) ([]byte, error) {
-	memoTx, err := buildTx(address,key, script.Post{Message: message})
+func MakePost(address wallet.Address, key wallet.PrivateKey, message string) ([]byte, error) {
+	memoTx, err := buildTx(address, key, script.Post{Message: message})
 	if err != nil {
-		return nil,jerr.Get("error generating memo tx", err)
+		return nil, jerr.Get("error generating memo tx", err)
 	}
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
 	completeTransaction(memoTx, err)
 	return memoTx.GetHash(), nil
 }
-func MakeReply(parentHash []byte, address wallet.Address,key wallet.PrivateKey,message string) ([]byte, error) {
-	memoTx, err := buildTx(address,key, script.Reply{Message: message, TxHash: parentHash})
+func MakeReply(parentHash []byte, address wallet.Address, key wallet.PrivateKey, message string) ([]byte, error) {
+	memoTx, err := buildTx(address, key, script.Reply{Message: message, TxHash: parentHash})
 	if err != nil {
-		return nil,jerr.Get("error generating memo tx", err)
+		return nil, jerr.Get("error generating memo tx", err)
 	}
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
@@ -174,8 +173,7 @@ func UpdateProfilePic(address wallet.Address, key wallet.PrivateKey, url string)
 	return nil
 }
 
-
-func buildTx(address wallet.Address, key wallet.PrivateKey, outputScript memo.Script)(*memo.Tx, error){
+func buildTx(address wallet.Address, key wallet.PrivateKey, outputScript memo.Script) (*memo.Tx, error) {
 	getter := &InputGetter{Address: address}
 	memoTx, err := gen.Tx(gen.TxRequest{
 		Getter: getter,
