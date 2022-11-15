@@ -17,6 +17,10 @@ type TweetTx struct {
 	Tweet *twitter.Tweet
 	TxHash []byte
 }
+type IdInfo struct {
+	ArchivedID int64
+	NewestID   int64
+}
 
 type Archive struct {
 	TweetList []TweetTx

@@ -17,7 +17,7 @@ import (
 func GetAllTweets(screenName string, client *twitter.Client) []util.TweetTx{
 	var tweetList []util.TweetTx
 	for{
-		tweets := getTweets(screenName,client)
+		tweets := getOldTweets(screenName,client)
 		tweetList = append(tweetList, tweets...)
 		//Since maxID will match to the oldest tweet, if only the oldest tweet gets added
 		//to the list, then we know we've reached the end of the timeline
@@ -29,30 +29,58 @@ func GetAllTweets(screenName string, client *twitter.Client) []util.TweetTx{
 	}
 	return tweetList
 }
-func getTweets(screenName string,client *twitter.Client) []util.TweetTx{
-	//Struct and function call to get ID of most recent tweet, or 0 if maxID.json doesn't exist
-	type tweetID struct {
-		ID int64
+func GetNewTweets(screenName string, client *twitter.Client) []util.TweetTx{
+	IdInfo := util.IdInfo{
+		ArchivedID: 0,
+		NewestID:   0,
 	}
-	maxID := tweetID{
-		ID: 0,
-	}
-	content, err := ioutil.ReadFile("./maxID.json")
+	content,err := ioutil.ReadFile("./IdInfo.json")
 	if err == nil{
-		err = json.Unmarshal(content, &maxID)
+		err = json.Unmarshal(content, &IdInfo)
 	}
-	// input to the query if maxID.json exists
 	var userTimelineParams *twitter.UserTimelineParams
 	excludeReplies := false
-	if maxID.ID != 0{
-		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, ExcludeReplies: &excludeReplies,MaxID: maxID.ID, Count: 100}
+	if IdInfo.NewestID != 0{
+		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, ExcludeReplies: &excludeReplies,SinceID: IdInfo.NewestID, Count: 20}
 	}
-	//input to the query if maxID.json doesn't exist (just get the most recent 100)
-	if maxID.ID == 0{
+	if IdInfo.NewestID == 0{
+		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName,ExcludeReplies: &excludeReplies, Count: 20}
+	}
+	tweets, _, _ := client.Timelines.UserTimeline(userTimelineParams)
+	var tweetTxs []util.TweetTx
+	for i, tweet := range tweets {
+		tweetTxs = append(tweetTxs, util.TweetTx{Tweet: &tweets[i], TxHash: nil})
+		println(tweet.Text)
+		println(tweet.CreatedAt)
+		if tweet.ID > IdInfo.NewestID || IdInfo.NewestID == 0{
+			IdInfo.NewestID = tweet.ID
+		}
+	}
+	file,_ := json.MarshalIndent(IdInfo, "", " ")
+	_ = ioutil.WriteFile("IdInfo.json", file, 0644)
+	return tweetTxs
+}
+func getOldTweets(screenName string,client *twitter.Client) []util.TweetTx{
+	//Struct and function call to get ID of most recent tweet, or 0 if IdInfo.json doesn't exist
+	IdInfo := util.IdInfo{
+		ArchivedID: 0,
+		NewestID:   0,
+	}
+	content, err := ioutil.ReadFile("./IdInfo.json")
+	if err == nil{
+		err = json.Unmarshal(content, &IdInfo)
+	}
+	// input to the query if IdInfo.json exists
+	var userTimelineParams *twitter.UserTimelineParams
+	excludeReplies := false
+	if IdInfo.ArchivedID != 0{
+		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, ExcludeReplies: &excludeReplies,MaxID: IdInfo.ArchivedID, Count: 100}
+	}
+	//input to the query if IdInfo.json doesn't exist (just get the most recent 100)
+	if IdInfo.ArchivedID == 0{
 		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName,ExcludeReplies: &excludeReplies, Count: 100}
-
 	}
-	// Query to Twitter API for all tweets after maxID.id
+	// Query to Twitter API for all tweets after IdInfo.id
 	tweets, _, _ := client.Timelines.UserTimeline(userTimelineParams)
 	var tweetTxs []util.TweetTx
 	for i, tweet := range tweets {
@@ -61,13 +89,16 @@ func getTweets(screenName string,client *twitter.Client) []util.TweetTx{
 		tweetTxs = append(tweetTxs, util.TweetTx{Tweet: &tweets[i], TxHash: nil})
 		println(tweet.Text)
 		println(tweet.CreatedAt)
-		if tweet.ID < maxID.ID || maxID.ID == 0{
-			maxID.ID = tweet.ID
+		if tweet.ID < IdInfo.ArchivedID || IdInfo.ArchivedID == 0{
+			IdInfo.ArchivedID = tweet.ID
+		}
+		if tweet.ID > IdInfo.NewestID || IdInfo.NewestID == 0{
+			IdInfo.NewestID = tweet.ID
 		}
 	}
 	//Save ID of latest tweet to a local file
-	file,_ := json.MarshalIndent(maxID, "", " ")
-	_ = ioutil.WriteFile("maxID.json", file, 0644)
+	file,_ := json.MarshalIndent(IdInfo, "", " ")
+	_ = ioutil.WriteFile("IdInfo.json", file, 0644)
 	return tweetTxs
 }
 func GetProfile(screenName string)(string,string,string){
