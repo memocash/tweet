@@ -14,7 +14,7 @@ var nameCmd = &cobra.Command{
 	Args: cobra.ExactArgs(2),
 	RunE: func(c *cobra.Command, args []string) error {
 		key,address, account := util.Setup(args)
-		_,_,pic := tweets.GetProfile(account)
+		_,_,pic,_ := tweets.GetProfile(account,tweets.Connect())
 		err := database.UpdateProfilePic(address,key,pic)
 		if err != nil{
 			jerr.Get("error", err).Fatal()
