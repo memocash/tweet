@@ -14,10 +14,10 @@ import (
 	"strings"
 )
 
-func GetAllTweets(screenName string, client *twitter.Client) []util.TweetTx{
+func GetAllTweets(screenName string, client *twitter.Client, fileHeader string) []util.TweetTx{
 	var tweetList []util.TweetTx
 	for{
-		tweets := getOldTweets(screenName,client)
+		tweets := getOldTweets(screenName,client, fileHeader)
 		tweetList = append(tweetList, tweets...)
 		//Since maxID will match to the oldest tweet, if only the oldest tweet gets added
 		//to the list, then we know we've reached the end of the timeline
@@ -29,12 +29,13 @@ func GetAllTweets(screenName string, client *twitter.Client) []util.TweetTx{
 	}
 	return tweetList
 }
-func GetNewTweets(screenName string, client *twitter.Client) []util.TweetTx{
+func GetNewTweets(screenName string, client *twitter.Client, fileHeader string) []util.TweetTx{
 	IdInfo := util.IdInfo{
 		ArchivedID: 0,
 		NewestID:   0,
 	}
-	content,err := ioutil.ReadFile("./IdInfo.json")
+	fileName := fmt.Sprintf("%s_IdInfo.json", fileHeader)
+	content,err := ioutil.ReadFile(fileName)
 	if err == nil{
 		err = json.Unmarshal(content, &IdInfo)
 	}
@@ -57,16 +58,17 @@ func GetNewTweets(screenName string, client *twitter.Client) []util.TweetTx{
 		}
 	}
 	file,_ := json.MarshalIndent(IdInfo, "", " ")
-	_ = ioutil.WriteFile("IdInfo.json", file, 0644)
+	_ = ioutil.WriteFile(fileName, file, 0644)
 	return tweetTxs
 }
-func getOldTweets(screenName string,client *twitter.Client) []util.TweetTx{
+func getOldTweets(screenName string,client *twitter.Client, fileHeader string) []util.TweetTx{
 	//Struct and function call to get ID of most recent tweet, or 0 if IdInfo.json doesn't exist
 	IdInfo := util.IdInfo{
 		ArchivedID: 0,
 		NewestID:   0,
 	}
-	content, err := ioutil.ReadFile("./IdInfo.json")
+	fileName := fmt.Sprintf("%s_IdInfo.json", fileHeader)
+	content, err := ioutil.ReadFile(fileName)
 	if err == nil{
 		err = json.Unmarshal(content, &IdInfo)
 	}
@@ -98,11 +100,10 @@ func getOldTweets(screenName string,client *twitter.Client) []util.TweetTx{
 	}
 	//Save ID of latest tweet to a local file
 	file,_ := json.MarshalIndent(IdInfo, "", " ")
-	_ = ioutil.WriteFile("IdInfo.json", file, 0644)
+	_ = ioutil.WriteFile(fileName, file, 0644)
 	return tweetTxs
 }
-func GetProfile(screenName string)(string,string,string){
-	client := Connect()
+func GetProfile(screenName string, client *twitter.Client)(string,string,string,string){
 	// Query to Twitter API for profile info
 	// user show
 	userShowParams := &twitter.UserShowParams{ScreenName: screenName}
@@ -110,11 +111,12 @@ func GetProfile(screenName string)(string,string,string){
 	desc := user.Description
 	name := user.Name
 	profilePic := user.ProfileImageURL
+	ID := user.IDStr
 	//resize the profile pic to full size
 	profilePic = strings.Replace(profilePic, "_normal", "", 1)
 	println(profilePic)
 	fmt.Printf("USERS SHOW:\n%+v\n%+v\n%+v\n",name, desc, profilePic)
-	return name, desc, profilePic
+	return name, desc, profilePic,ID
 }
 
 func Connect() *twitter.Client{

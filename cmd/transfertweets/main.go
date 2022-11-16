@@ -2,6 +2,7 @@ package transfertweets
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/tweet/cmd/util"
 	util2 "github.com/memocash/tweet/database/util"
@@ -24,15 +25,18 @@ var transferCmd = &cobra.Command{
 		key,address, account := util.Setup(args)
 		client := tweets.Connect()
 		//Structure of tweetArchive.json
+		_,_,_,userID := tweets.GetProfile(account,client)
 		var archive util.Archive
 		var tweetList []util.TweetTx
-		content, err := ioutil.ReadFile("./tweetArchive.json")
+		fileHeader := fmt.Sprintf("%s_%s", address, userID)
+		fileName := fmt.Sprintf("%s_tweetArchive.json",fileHeader)
+		content, err := ioutil.ReadFile(fileName)
 		if err == nil{
 			err = json.Unmarshal(content, &archive)
 		}
 		//if tweetArchive.json doesn't exist, initialize it
 		if err != nil{
-			tweetList = tweets.GetAllTweets(account,client)
+			tweetList = tweets.GetAllTweets(account,client,fileHeader)
 			archive.TweetList = tweetList
 			archive.Archived = 0
 		}
@@ -42,7 +46,7 @@ var transferCmd = &cobra.Command{
 			return jerr.Get("error", err)
 		}
 		file,_ := json.MarshalIndent(archive, "", " ")
-		_ = ioutil.WriteFile("tweetArchive.json", file, 0644)
+		_ = ioutil.WriteFile(fileName, file, 0644)
 		return nil
 	},
 }

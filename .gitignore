@@ -1,5 +1,3 @@
 .DS_Store
-sinceID.json
-maxID.json
-tweetArchive.json
-/IdInfo.json
+*_tweetArchive.json
+*_IdInfo.json

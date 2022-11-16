@@ -1,6 +1,7 @@
 package getnewtweets
 
 import (
+	"fmt"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/tweet/cmd/util"
 	util2 "github.com/memocash/tweet/database/util"
@@ -19,7 +20,9 @@ var transferCmd = &cobra.Command{
 	RunE: func(c *cobra.Command, args []string) error {
 		key,address, account := util.Setup(args)
 		client := tweets.Connect()
-		tweetList := tweets.GetNewTweets(account,client)
+		_,_,_,userID := tweets.GetProfile(account,client)
+		fileHeader := fmt.Sprintf("%s_%s", address, userID)
+		tweetList := tweets.GetNewTweets(account,client,fileHeader)
 		archive := util.Archive{
 			TweetList: tweetList,
 			Archived: 0,
