@@ -107,6 +107,7 @@ func (g *InputGetter) MarkUTXOsUsed(used []memo.UTXO) {
 				g.UTXOs = append(g.UTXOs[:i], g.UTXOs[i+1:]...)
 				//decrement i so we don't go out of bounds
 				i--
+				break
 			}
 		}
 	}
