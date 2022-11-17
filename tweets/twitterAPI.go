@@ -14,14 +14,14 @@ import (
 	"strings"
 )
 
-func GetAllTweets(screenName string, client *twitter.Client, fileHeader string) []util.TweetTx{
+func GetAllTweets(screenName string, client *twitter.Client, fileHeader string) []util.TweetTx {
 	var tweetList []util.TweetTx
-	for{
-		tweets := getOldTweets(screenName,client, fileHeader)
+	for {
+		tweets := getOldTweets(screenName, client, fileHeader)
 		tweetList = append(tweetList, tweets...)
 		//Since maxID will match to the oldest tweet, if only the oldest tweet gets added
 		//to the list, then we know we've reached the end of the timeline
-		if len(tweets) == 1{
+		if len(tweets) == 1 {
 			//remove the duplicate oldest tweet
 			tweetList = tweetList[:len(tweetList)-1]
 			break
@@ -29,23 +29,23 @@ func GetAllTweets(screenName string, client *twitter.Client, fileHeader string) 
 	}
 	return tweetList
 }
-func GetNewTweets(screenName string, client *twitter.Client, fileHeader string) []util.TweetTx{
+func GetNewTweets(screenName string, client *twitter.Client, fileHeader string) []util.TweetTx {
 	IdInfo := util.IdInfo{
 		ArchivedID: 0,
 		NewestID:   0,
 	}
 	fileName := fmt.Sprintf("%s_IdInfo.json", fileHeader)
-	content,err := ioutil.ReadFile(fileName)
-	if err == nil{
+	content, err := ioutil.ReadFile(fileName)
+	if err == nil {
 		err = json.Unmarshal(content, &IdInfo)
 	}
 	var userTimelineParams *twitter.UserTimelineParams
 	excludeReplies := false
-	if IdInfo.NewestID != 0{
-		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, ExcludeReplies: &excludeReplies,SinceID: IdInfo.NewestID, Count: 20}
+	if IdInfo.NewestID != 0 {
+		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, ExcludeReplies: &excludeReplies, SinceID: IdInfo.NewestID, Count: 20}
 	}
-	if IdInfo.NewestID == 0{
-		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName,ExcludeReplies: &excludeReplies, Count: 20}
+	if IdInfo.NewestID == 0 {
+		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, ExcludeReplies: &excludeReplies, Count: 20}
 	}
 	tweets, _, _ := client.Timelines.UserTimeline(userTimelineParams)
 	var tweetTxs []util.TweetTx
@@ -53,15 +53,15 @@ func GetNewTweets(screenName string, client *twitter.Client, fileHeader string) 
 		tweetTxs = append(tweetTxs, util.TweetTx{Tweet: &tweets[i], TxHash: nil})
 		println(tweet.Text)
 		println(tweet.CreatedAt)
-		if tweet.ID > IdInfo.NewestID || IdInfo.NewestID == 0{
+		if tweet.ID > IdInfo.NewestID || IdInfo.NewestID == 0 {
 			IdInfo.NewestID = tweet.ID
 		}
 	}
-	file,_ := json.MarshalIndent(IdInfo, "", " ")
+	file, _ := json.MarshalIndent(IdInfo, "", " ")
 	_ = ioutil.WriteFile(fileName, file, 0644)
 	return tweetTxs
 }
-func getOldTweets(screenName string,client *twitter.Client, fileHeader string) []util.TweetTx{
+func getOldTweets(screenName string, client *twitter.Client, fileHeader string) []util.TweetTx {
 	//Struct and function call to get ID of most recent tweet, or 0 if IdInfo.json doesn't exist
 	IdInfo := util.IdInfo{
 		ArchivedID: 0,
@@ -69,18 +69,18 @@ func getOldTweets(screenName string,client *twitter.Client, fileHeader string) [
 	}
 	fileName := fmt.Sprintf("%s_IdInfo.json", fileHeader)
 	content, err := ioutil.ReadFile(fileName)
-	if err == nil{
+	if err == nil {
 		err = json.Unmarshal(content, &IdInfo)
 	}
 	// input to the query if IdInfo.json exists
 	var userTimelineParams *twitter.UserTimelineParams
 	excludeReplies := false
-	if IdInfo.ArchivedID != 0{
-		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, ExcludeReplies: &excludeReplies,MaxID: IdInfo.ArchivedID, Count: 100}
+	if IdInfo.ArchivedID != 0 {
+		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, ExcludeReplies: &excludeReplies, MaxID: IdInfo.ArchivedID, Count: 100}
 	}
 	//input to the query if IdInfo.json doesn't exist (just get the most recent 100)
-	if IdInfo.ArchivedID == 0{
-		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName,ExcludeReplies: &excludeReplies, Count: 100}
+	if IdInfo.ArchivedID == 0 {
+		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, ExcludeReplies: &excludeReplies, Count: 100}
 	}
 	// Query to Twitter API for all tweets after IdInfo.id
 	tweets, _, _ := client.Timelines.UserTimeline(userTimelineParams)
@@ -91,19 +91,19 @@ func getOldTweets(screenName string,client *twitter.Client, fileHeader string) [
 		tweetTxs = append(tweetTxs, util.TweetTx{Tweet: &tweets[i], TxHash: nil})
 		println(tweet.Text)
 		println(tweet.CreatedAt)
-		if tweet.ID < IdInfo.ArchivedID || IdInfo.ArchivedID == 0{
+		if tweet.ID < IdInfo.ArchivedID || IdInfo.ArchivedID == 0 {
 			IdInfo.ArchivedID = tweet.ID
 		}
-		if tweet.ID > IdInfo.NewestID || IdInfo.NewestID == 0{
+		if tweet.ID > IdInfo.NewestID || IdInfo.NewestID == 0 {
 			IdInfo.NewestID = tweet.ID
 		}
 	}
 	//Save ID of latest tweet to a local file
-	file,_ := json.MarshalIndent(IdInfo, "", " ")
+	file, _ := json.MarshalIndent(IdInfo, "", " ")
 	_ = ioutil.WriteFile(fileName, file, 0644)
 	return tweetTxs
 }
-func GetProfile(screenName string, client *twitter.Client)(string,string,string,string){
+func GetProfile(screenName string, client *twitter.Client) (string, string, string, string) {
 	// Query to Twitter API for profile info
 	// user show
 	userShowParams := &twitter.UserShowParams{ScreenName: screenName}
@@ -114,12 +114,13 @@ func GetProfile(screenName string, client *twitter.Client)(string,string,string,
 	ID := user.IDStr
 	//resize the profile pic to full size
 	profilePic = strings.Replace(profilePic, "_normal", "", 1)
+	profilePic = strings.Replace(profilePic, "http:", "https:", 1)
 	println(profilePic)
-	fmt.Printf("USERS SHOW:\n%+v\n%+v\n%+v\n",name, desc, profilePic)
-	return name, desc, profilePic,ID
+	fmt.Printf("USERS SHOW:\n%+v\n%+v\n%+v\n", name, desc, profilePic)
+	return name, desc, profilePic, ID
 }
 
-func Connect() *twitter.Client{
+func Connect() *twitter.Client {
 	flags := struct {
 		consumerKey    string
 		consumerSecret string
@@ -146,4 +147,3 @@ func Connect() *twitter.Client{
 	client := twitter.NewClient(httpClient)
 	return client
 }
-
