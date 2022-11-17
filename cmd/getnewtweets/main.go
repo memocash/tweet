@@ -1,11 +1,9 @@
 package getnewtweets
 
 import (
-	"fmt"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/tweet/cmd/util"
-	util2 "github.com/memocash/tweet/database/util"
-	"github.com/memocash/tweet/tweets"
+	"github.com/memocash/tweet/tweetstream"
 	"github.com/spf13/cobra"
 )
 
@@ -14,24 +12,24 @@ var date bool = false
 
 var transferCmd = &cobra.Command{
 	Use:   "getnewtweets",
-	Short: "Transfer tweets to memo posts",
-	Long: "Similar to transfer tweets, but gets the 20 newest tweets. ",
+	Short: "Listens for new tweets on an account",
+	Long: "Prints out each new tweet as it comes in. ",
 	Args: cobra.ExactArgs(2),
 	RunE: func(c *cobra.Command, args []string) error {
-		key,address, account := util.Setup(args)
-		client := tweets.Connect()
-		_,_,_,userID := tweets.GetProfile(account,client)
-		fileHeader := fmt.Sprintf("%s_%s", address, userID)
-		tweetList := tweets.GetNewTweets(account,client,fileHeader)
-		archive := util.Archive{
-			TweetList: tweetList,
-			Archived: 0,
-		}
-		_,err := util2.TransferTweets(address, key, archive, link, date)
-		if err != nil {
-			return jerr.Get("error", err)
+		_,_, account := util.Setup(args)
+		//client := tweets.Connect()
+		//_,_,_,userID := tweets.GetProfile(account,client)
+		//fileHeader := fmt.Sprintf("%s_%s", address, userID)
+		streamToken, err:= tweetstream.GetStreamingToken()
+		tweetstream.ResetRules(streamToken)
+		tweetstream.FilterAccount(streamToken, account)
+		tweetstream.InitiateStream(streamToken)
+		tweetstream.ResetRules(streamToken)
+		if err != nil{
+			return jerr.Get("error getting stream token", err)
 		}
 		return nil
+
 	},
 }
 

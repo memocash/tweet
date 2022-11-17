@@ -5,6 +5,7 @@ go 1.16
 require (
 	github.com/coreos/pkg v0.0.0-20220810130054-c7d1c02cb6cf
 	github.com/dghubble/go-twitter v0.0.0-20221024160433-0cc1e72ed6d8
+	github.com/fallenstedt/twitter-stream v0.4.2 // indirect
 	github.com/gorilla/context v0.0.0-20160226214623-1ea25387ff6f // indirect
 	github.com/jchavannes/jgo v0.0.0-20220711014102-9b465cbd1236
 	github.com/logrusorgru/aurora v0.0.0-20200102142835-e9ef32dff381 // indirect
