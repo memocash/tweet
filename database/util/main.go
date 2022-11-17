@@ -31,6 +31,7 @@ func TransferTweets(address wallet.Address, key wallet.PrivateKey, archive util.
 		tweetList[i], tweetList[opp] = tweetList[opp], tweetList[i]
 	}
 	numTransferred := 0
+	wlt := database.NewWallet(address, key)
 	for _, tweet := range tweetList {
 		if tweet.Tweet == nil {
 			return numTransferred, jerr.Newf("tweet is nil, verify using correct archive: %#v", tweet)
@@ -46,7 +47,7 @@ func TransferTweets(address wallet.Address, key wallet.PrivateKey, archive util.
 		}
 		//if the tweet was a regular post, post it normally
 		if tweet.Tweet.InReplyToStatusID == 0 {
-			parentHash, err := database.MakePost(address, key, html.UnescapeString(tweetText))
+			parentHash, err := database.MakePost(wlt, html.UnescapeString(tweetText))
 			//find this tweet in archive and set its hash to the hash of the post that was just made
 			updateArchiveTweetHash(archive, tweet.Tweet.ID, parentHash)
 			tweet.TxHash = parentHash
@@ -64,7 +65,7 @@ func TransferTweets(address wallet.Address, key wallet.PrivateKey, archive util.
 			}
 			//if it turns out this tweet was actually a reply to another person's tweet, post it as a regular post
 			if parentHash == nil {
-				parentHash, err := database.MakePost(address, key, html.UnescapeString(tweetText))
+				parentHash, err := database.MakePost(wlt, html.UnescapeString(tweetText))
 				//find this tweet in archive and set its hash to the hash of the post that was just made
 				updateArchiveTweetHash(archive, tweet.Tweet.ID, parentHash)
 				tweet.TxHash = parentHash
@@ -73,7 +74,7 @@ func TransferTweets(address wallet.Address, key wallet.PrivateKey, archive util.
 				}
 				//otherwise, it's part of a thread, so post it as a reply to the parent tweet
 			} else {
-				replyHash, err := database.MakeReply(parentHash, address, key, html.UnescapeString(tweetText))
+				replyHash, err := database.MakeReply(wlt, parentHash, html.UnescapeString(tweetText))
 				//find this tweet in archive and set its hash to the hash of the post that was just made
 				updateArchiveTweetHash(archive, tweet.Tweet.ID, replyHash)
 				tweet.TxHash = replyHash

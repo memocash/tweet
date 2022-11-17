@@ -119,8 +119,22 @@ func (g *InputGetter) AddChangeUTXO(new memo.UTXO) {
 func (g *InputGetter) NewTx() {
 }
 
-func MakePost(address wallet.Address, key wallet.PrivateKey, message string) ([]byte, error) {
-	memoTx, err := buildTx(address, key, script.Post{Message: message})
+type Wallet struct {
+	Address wallet.Address
+	Key     wallet.PrivateKey
+	Getter  gen.InputGetter
+}
+
+func NewWallet(address wallet.Address, key wallet.PrivateKey) Wallet {
+	return Wallet{
+		Address: address,
+		Key:     key,
+		Getter:  &InputGetter{Address: address},
+	}
+}
+
+func MakePost(wlt Wallet, message string) ([]byte, error) {
+	memoTx, err := buildTx(wlt, script.Post{Message: message})
 	if err != nil {
 		return nil, jerr.Get("error generating memo tx", err)
 	}
@@ -129,8 +143,8 @@ func MakePost(address wallet.Address, key wallet.PrivateKey, message string) ([]
 	completeTransaction(memoTx, err)
 	return memoTx.GetHash(), nil
 }
-func MakeReply(parentHash []byte, address wallet.Address, key wallet.PrivateKey, message string) ([]byte, error) {
-	memoTx, err := buildTx(address, key, script.Reply{Message: message, TxHash: parentHash})
+func MakeReply(wallet Wallet, parentHash []byte, message string) ([]byte, error) {
+	memoTx, err := buildTx(wallet, script.Reply{Message: message, TxHash: parentHash})
 	if err != nil {
 		return nil, jerr.Get("error generating memo tx", err)
 	}
@@ -140,8 +154,8 @@ func MakeReply(parentHash []byte, address wallet.Address, key wallet.PrivateKey,
 	return memoTx.GetHash(), nil
 }
 
-func UpdateName(address wallet.Address, key wallet.PrivateKey, name string) error {
-	memoTx, err := buildTx(address, key, script.SetName{Name: name})
+func UpdateName(wlt Wallet, name string) error {
+	memoTx, err := buildTx(wlt, script.SetName{Name: name})
 	if err != nil {
 		return jerr.Get("error generating memo tx", err)
 	}
@@ -151,8 +165,8 @@ func UpdateName(address wallet.Address, key wallet.PrivateKey, name string) erro
 	return nil
 }
 
-func UpdateProfileText(address wallet.Address, key wallet.PrivateKey, profile string) error {
-	memoTx, err := buildTx(address, key, script.Profile{Text: profile})
+func UpdateProfileText(wlt Wallet, profile string) error {
+	memoTx, err := buildTx(wlt, script.Profile{Text: profile})
 	if err != nil {
 		return jerr.Get("error generating memo tx", err)
 	}
@@ -162,8 +176,8 @@ func UpdateProfileText(address wallet.Address, key wallet.PrivateKey, profile st
 	return nil
 }
 
-func UpdateProfilePic(address wallet.Address, key wallet.PrivateKey, url string) error {
-	memoTx, err := buildTx(address, key, script.ProfilePic{Url: url})
+func UpdateProfilePic(wlt Wallet, url string) error {
+	memoTx, err := buildTx(wlt, script.ProfilePic{Url: url})
 	if err != nil {
 		return jerr.Get("error generating memo tx", err)
 	}
@@ -173,16 +187,15 @@ func UpdateProfilePic(address wallet.Address, key wallet.PrivateKey, url string)
 	return nil
 }
 
-func buildTx(address wallet.Address, key wallet.PrivateKey, outputScript memo.Script) (*memo.Tx, error) {
-	getter := &InputGetter{Address: address}
+func buildTx(wlt Wallet, outputScript memo.Script) (*memo.Tx, error) {
 	memoTx, err := gen.Tx(gen.TxRequest{
-		Getter: getter,
+		Getter: wlt.Getter,
 		Outputs: []*memo.Output{{
 			Script: outputScript,
 		}},
-		Change: wallet.Change{Main: address},
+		Change: wallet.Change{Main: wlt.Address},
 		KeyRing: wallet.KeyRing{
-			Keys: []wallet.PrivateKey{key},
+			Keys: []wallet.PrivateKey{wlt.Key},
 		},
 	})
 	return memoTx, err

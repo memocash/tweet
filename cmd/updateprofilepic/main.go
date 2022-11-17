@@ -11,18 +11,17 @@ import (
 var nameCmd = &cobra.Command{
 	Use:   "updateprofilepic",
 	Short: "Update profile picture on Memo to match a Twitter account",
-	Args: cobra.ExactArgs(2),
+	Args:  cobra.ExactArgs(2),
 	RunE: func(c *cobra.Command, args []string) error {
-		key,address, account := util.Setup(args)
-		_,_,pic,_ := tweets.GetProfile(account,tweets.Connect())
-		err := database.UpdateProfilePic(address,key,pic)
-		if err != nil{
+		key, address, account := util.Setup(args)
+		_, _, pic, _ := tweets.GetProfile(account, tweets.Connect())
+		err := database.UpdateProfilePic(database.NewWallet(address, key), pic)
+		if err != nil {
 			jerr.Get("error", err).Fatal()
 		}
 		return nil
 	},
 }
-
 
 func GetCommand() *cobra.Command {
 	return nameCmd
