@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/coreos/pkg/flagutil"
+	"github.com/dghubble/go-twitter/twitter"
 	twitterstream "github.com/fallenstedt/twitter-stream"
 	"github.com/fallenstedt/twitter-stream/rules"
 	"github.com/fallenstedt/twitter-stream/stream"
@@ -68,6 +69,7 @@ func InitiateStream(tok *token_generator.RequestBearerTokenResponse){
 	api := fetchTweets(tok.AccessToken)
 
 	defer InitiateStream(tok)
+	tweetObject := twitter.Tweet{}
 	for tweet := range api.GetMessages() {
 
 		// Handle disconnections from twitter
@@ -86,7 +88,20 @@ func InitiateStream(tok *token_generator.RequestBearerTokenResponse){
 		// Here I am printing out the text.
 		// You can send this off to a queue for processing.
 		// Or do your processing here in the loop
-		fmt.Println(result.Data.Text)
+		tweetID,_ := strconv.ParseInt(result.Data.ID,10,64)
+		userID,_ := strconv.ParseInt(result.Includes.Users[0].ID,10,64)
+		//build a twitter.Tweets object from the stream data
+		tweetObject = twitter.Tweet{
+			ID: tweetID,
+			CreatedAt: result.Data.CreatedAt.Format("200601021504"),
+			Text: result.Data.Text,
+			User: &twitter.User{
+				ID: userID,
+				Name: result.Includes.Users[0].Name,
+				ScreenName: result.Includes.Users[0].Username,
+			},
+			}
+		fmt.Println(tweetObject.Text)
 	}
 
 	fmt.Println("Stopped Stream")
