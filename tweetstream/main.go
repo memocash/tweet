@@ -10,7 +10,9 @@ import (
 	"github.com/fallenstedt/twitter-stream/rules"
 	"github.com/fallenstedt/twitter-stream/stream"
 	"github.com/fallenstedt/twitter-stream/token_generator"
+	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/cmd/util"
+	util2 "github.com/memocash/tweet/database/util"
 	"log"
 	"strconv"
 )
@@ -65,10 +67,10 @@ func ResetRules(tok *token_generator.RequestBearerTokenResponse){
 	}
 }
 
-func InitiateStream(tok *token_generator.RequestBearerTokenResponse){
+func InitiateStream(tok *token_generator.RequestBearerTokenResponse, address wallet.Address, key wallet.PrivateKey){
 	api := fetchTweets(tok.AccessToken)
 
-	defer InitiateStream(tok)
+	defer InitiateStream(tok,address,key)
 	tweetObject := twitter.Tweet{}
 	for tweet := range api.GetMessages() {
 
@@ -83,13 +85,19 @@ func InitiateStream(tok *token_generator.RequestBearerTokenResponse){
 			api.StopStream()
 			continue
 		}
-		result := tweet.Data.(util.StreamDataExample)
+		result := tweet.Data.(util.TweetStreamData)
 
 		// Here I am printing out the text.
 		// You can send this off to a queue for processing.
 		// Or do your processing here in the loop
 		tweetID,_ := strconv.ParseInt(result.Data.ID,10,64)
 		userID,_ := strconv.ParseInt(result.Includes.Users[0].ID,10,64)
+		var InReplyToStatusID int64
+		if len(result.Data.ReferencedTweets) > 0 && result.Data.ReferencedTweets[0].Type == "replied_to"{
+			InReplyToStatusID,_ = strconv.ParseInt(result.Data.ReferencedTweets[0].ID,10,64)
+		} else{
+			InReplyToStatusID = 0
+		}
 		//build a twitter.Tweets object from the stream data
 		tweetObject = twitter.Tweet{
 			ID: tweetID,
@@ -100,8 +108,19 @@ func InitiateStream(tok *token_generator.RequestBearerTokenResponse){
 				Name: result.Includes.Users[0].Name,
 				ScreenName: result.Includes.Users[0].Username,
 			},
+			InReplyToStatusID: InReplyToStatusID,
 			}
-		fmt.Println(tweetObject.Text)
+		//fmt.Println(tweetObject.Text)
+		TweetTx := util.TweetTx{
+			Tweet: &tweetObject,
+			TxHash: nil,
+		}
+		archive := util.Archive{
+			TweetList: []util.TweetTx{TweetTx},
+			Archived: 0,
+		}
+		//call transfertweets
+		util2.TransferTweets(address, key,archive,true, true)
 	}
 
 	fmt.Println("Stopped Stream")
@@ -110,7 +129,8 @@ func InitiateStream(tok *token_generator.RequestBearerTokenResponse){
 func fetchTweets(token string) stream.IStream {
 	api := twitterstream.NewTwitterStream(token).Stream
 	api.SetUnmarshalHook(func(bytes []byte) (interface{}, error) {
-		data := util.StreamDataExample{}
+		fmt.Println(string(bytes))
+		data := util.TweetStreamData{}
 		if err := json.Unmarshal(bytes, &data); err != nil {
 			fmt.Printf("failed to unmarshal bytes: %v", err)
 		}
@@ -119,6 +139,7 @@ func fetchTweets(token string) stream.IStream {
 	streamExpansions := twitterstream.NewStreamQueryParamsBuilder().
 		AddExpansion("author_id").
 		AddTweetField("created_at").
+		AddTweetField("referenced_tweets").
 		Build()
 	err := api.StartStream(streamExpansions)
 	if err != nil {

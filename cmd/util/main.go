@@ -14,12 +14,16 @@ func Setup(args []string) (wallet.PrivateKey, wallet.Address, string) {
 	account := args[1]
 	return key, address, account
 }
-type StreamDataExample struct {
+type TweetStreamData struct {
 	Data struct {
 		Text      string    `json:"text"`
 		ID        string    `json:"id"`
 		CreatedAt time.Time `json:"created_at"`
 		AuthorID  string    `json:"author_id"`
+		ReferencedTweets []struct{
+			Type string `json:"type"`
+			ID string `json:"id"`
+		} `json:"referenced_tweets"`
 	} `json:"data"`
 	Includes struct {
 		Users []struct {

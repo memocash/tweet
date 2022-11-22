@@ -16,14 +16,14 @@ var transferCmd = &cobra.Command{
 	Long: "Prints out each new tweet as it comes in. ",
 	Args: cobra.ExactArgs(2),
 	RunE: func(c *cobra.Command, args []string) error {
-		_,_, account := util.Setup(args)
+		key,address,account := util.Setup(args)
 		//client := tweets.Connect()
 		//_,_,_,userID := tweets.GetProfile(account,client)
 		//fileHeader := fmt.Sprintf("%s_%s", address, userID)
 		streamToken, err:= tweetstream.GetStreamingToken()
 		tweetstream.ResetRules(streamToken)
 		tweetstream.FilterAccount(streamToken, account)
-		tweetstream.InitiateStream(streamToken)
+		tweetstream.InitiateStream(streamToken,address, key)
 		tweetstream.ResetRules(streamToken)
 		if err != nil{
 			return jerr.Get("error getting stream token", err)
