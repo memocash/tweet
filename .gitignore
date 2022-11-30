@@ -1,5 +1,5 @@
 .DS_Store
 *_tweetArchive.json
 *_IdInfo.json
-tweets.db
+tweets.db/*
 tweet
