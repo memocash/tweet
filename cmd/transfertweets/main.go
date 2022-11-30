@@ -24,14 +24,13 @@ var transferCmd = &cobra.Command{
 		client := tweets.Connect()
 		fileName := "tweets.db"
 		db, err := leveldb.OpenFile(fileName, nil)
+
 		if err != nil{
 			return jerr.Get("error opening db", err)
 		}
-		//if tweetArchive.json doesn't exist, initialize it
 		tweets.GetAllTweets(account,client,db)
-		//get the ID of the newest tweet that's already been archived
 		_,_ = util2.TransferTweets(address, key, account, db, link, date)
-		db.Close()
+		defer db.Close()
 		return nil
 	},
 }

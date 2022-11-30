@@ -86,11 +86,11 @@ func getOldTweets(screenName string, client *twitter.Client, db *leveldb.DB) []u
 	tweets, _, _ := client.Timelines.UserTimeline(userTimelineParams)
 	var tweetTxs []util.TweetTx
 	for i, tweet := range tweets {
-		prefix := fmt.Sprintf("tweets-%s-%d", screenName, tweet.ID)
+		prefix := fmt.Sprintf("tweets-%s-%019d", screenName, tweet.ID)
 		tweetTx,_ := json.Marshal(util.TweetTx{Tweet: &tweets[i], TxHash: nil})
 		db.Put([]byte(prefix),tweetTx,nil)
-		println(tweet.Text)
-		println(tweet.CreatedAt)
+		//println(tweet.Text)
+		//println(tweet.CreatedAt)
 		tweetTxs = append(tweetTxs, util.TweetTx{Tweet: &tweets[i], TxHash: nil})
 	}
 	return tweetTxs

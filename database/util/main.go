@@ -50,10 +50,10 @@ func TransferTweets(address wallet.Address, key wallet.PrivateKey, screenName st
 		}
 	}
 	//reverse tweetList so that tweets are posted in chronological order in memo, instead of reverse chronological
-	for i := len(tweetList)/2 - 1; i >= 0; i-- {
-		opp := len(tweetList) - 1 - i
-		tweetList[i], tweetList[opp] = tweetList[opp], tweetList[i]
-	}
+	//for i := len(tweetList)/2 - 1; i >= 0; i-- {
+	//	opp := len(tweetList) - 1 - i
+	//	tweetList[i], tweetList[opp] = tweetList[opp], tweetList[i]
+	//}
 	numTransferred := 0
 	wlt := database.NewWallet(address, key)
 	for _, tweet := range tweetList {
@@ -115,7 +115,7 @@ func TransferTweets(address wallet.Address, key wallet.PrivateKey, screenName st
 		}
 		//save the tweet to the saved-address-twittername-tweetID prefix
 		prefix = fmt.Sprintf("saved-%s-%s", address, screenName)
-		key := fmt.Sprintf("%s-%d", prefix, tweet.Tweet.ID)
+		key := fmt.Sprintf("%s-%019d", prefix, tweet.Tweet.ID)
 		value, err := json.Marshal(tweet)
 		if err != nil {
 			return numTransferred, jerr.Get("error marshaling tweetTx", err)
