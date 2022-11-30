@@ -12,7 +12,6 @@ import (
 	"github.com/fallenstedt/twitter-stream/token_generator"
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/cmd/util"
-	util2 "github.com/memocash/tweet/database/util"
 	"log"
 	"strconv"
 )
@@ -119,8 +118,9 @@ func InitiateStream(tok *token_generator.RequestBearerTokenResponse, address wal
 			TweetList: []util.TweetTx{TweetTx},
 			Archived: 0,
 		}
+		archive.Archived = 0
 		//call transfertweets
-		util2.TransferTweets(address, key,archive,true, true)
+		//util2.TransferTweets(address, key,archive,true, true)
 	}
 
 	fmt.Println("Stopped Stream")

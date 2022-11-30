@@ -7,27 +7,23 @@ import (
 	"github.com/coreos/pkg/flagutil"
 	"github.com/dghubble/go-twitter/twitter"
 	"github.com/memocash/tweet/cmd/util"
+	"github.com/syndtr/goleveldb/leveldb"
+	util2 "github.com/syndtr/goleveldb/leveldb/util"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 	"io/ioutil"
 	"log"
+	"strconv"
 	"strings"
 )
 
-func GetAllTweets(screenName string, client *twitter.Client, fileHeader string) []util.TweetTx {
-	var tweetList []util.TweetTx
+func GetAllTweets(screenName string, client *twitter.Client, db *leveldb.DB) {
 	for {
-		tweets := getOldTweets(screenName, client, fileHeader)
-		tweetList = append(tweetList, tweets...)
-		//Since maxID will match to the oldest tweet, if only the oldest tweet gets added
-		//to the list, then we know we've reached the end of the timeline
+		tweets := getOldTweets(screenName, client, db)
 		if len(tweets) == 1 {
-			//remove the duplicate oldest tweet
-			tweetList = tweetList[:len(tweetList)-1]
 			break
 		}
 	}
-	return tweetList
 }
 func GetNewTweets(screenName string, client *twitter.Client, fileHeader string) []util.TweetTx {
 	IdInfo := util.IdInfo{
@@ -61,46 +57,42 @@ func GetNewTweets(screenName string, client *twitter.Client, fileHeader string) 
 	_ = ioutil.WriteFile(fileName, file, 0644)
 	return tweetTxs
 }
-func getOldTweets(screenName string, client *twitter.Client, fileHeader string) []util.TweetTx {
-	//Struct and function call to get ID of most recent tweet, or 0 if IdInfo.json doesn't exist
-	IdInfo := util.IdInfo{
-		ArchivedID: 0,
-		NewestID:   0,
-	}
-	fileName := fmt.Sprintf("%s_IdInfo.json", fileHeader)
-	content, err := ioutil.ReadFile(fileName)
-	if err == nil {
-		err = json.Unmarshal(content, &IdInfo)
-	}
-	// input to the query if IdInfo.json exists
+func getOldTweets(screenName string, client *twitter.Client, db *leveldb.DB) []util.TweetTx {
 	var userTimelineParams *twitter.UserTimelineParams
 	excludeReplies := false
-	if IdInfo.ArchivedID != 0 {
-		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, ExcludeReplies: &excludeReplies, MaxID: IdInfo.ArchivedID, Count: 100}
-	}
-	//input to the query if IdInfo.json doesn't exist (just get the most recent 100)
-	if IdInfo.ArchivedID == 0 {
+	//check if there are any tweetTx objects with the prefix containing this address and this screenName
+	prefix := fmt.Sprintf("tweets-%s", screenName)
+	iter := db.NewIterator(util2.BytesPrefix([]byte(prefix)), nil)
+	tweetsFound := iter.Next()
+	iter.Release()
+	var maxID int64
+	if tweetsFound {
+		//get the newest tweet in the saved_address_tweetID
+		iter := db.NewIterator(util2.BytesPrefix([]byte(prefix)), nil)
+		maxID = 0
+		for iter.Next() {
+			key := iter.Key()
+			tweetID,_ := strconv.ParseInt(string(key[len(prefix)+1:]), 10, 64)
+			if tweetID < maxID || maxID == 0 {
+				maxID = tweetID
+			}
+		}
+		iter.Release()
+		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, ExcludeReplies: &excludeReplies, MaxID: maxID, Count: 100}
+	} else {
 		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, ExcludeReplies: &excludeReplies, Count: 100}
 	}
 	// Query to Twitter API for all tweets after IdInfo.id
 	tweets, _, _ := client.Timelines.UserTimeline(userTimelineParams)
 	var tweetTxs []util.TweetTx
 	for i, tweet := range tweets {
-		// send tweet.Text through a graphQL query
-		// save the highest tweet.ID to a config file
-		tweetTxs = append(tweetTxs, util.TweetTx{Tweet: &tweets[i], TxHash: nil})
+		prefix := fmt.Sprintf("tweets-%s-%d", screenName, tweet.ID)
+		tweetTx,_ := json.Marshal(util.TweetTx{Tweet: &tweets[i], TxHash: nil})
+		db.Put([]byte(prefix),tweetTx,nil)
 		println(tweet.Text)
 		println(tweet.CreatedAt)
-		if tweet.ID < IdInfo.ArchivedID || IdInfo.ArchivedID == 0 {
-			IdInfo.ArchivedID = tweet.ID
-		}
-		if tweet.ID > IdInfo.NewestID || IdInfo.NewestID == 0 {
-			IdInfo.NewestID = tweet.ID
-		}
+		tweetTxs = append(tweetTxs, util.TweetTx{Tweet: &tweets[i], TxHash: nil})
 	}
-	//Save ID of latest tweet to a local file
-	file, _ := json.MarshalIndent(IdInfo, "", " ")
-	_ = ioutil.WriteFile(fileName, file, 0644)
 	return tweetTxs
 }
 func GetProfile(screenName string, client *twitter.Client) (string, string, string, string) {

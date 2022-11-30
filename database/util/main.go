@@ -1,29 +1,53 @@
 package util
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/cmd/util"
 	"github.com/memocash/tweet/database"
+	"github.com/syndtr/goleveldb/leveldb"
+	util3 "github.com/syndtr/goleveldb/leveldb/util"
 	"html"
+	"strconv"
 )
 
-func updateArchiveTweetHash(archive util.Archive, ID int64, newHash []byte) {
-	for i := range archive.TweetList {
-		if archive.TweetList[i].Tweet.ID == ID {
-			archive.TweetList[i].TxHash = newHash
-			break
+func TransferTweets(address wallet.Address, key wallet.PrivateKey, screenName string, db *leveldb.DB, appendLink bool, appendDate bool) (int, error) {
+	var tweetList []util.TweetTx
+	//find the greatest ID of all the already saved tweets
+	prefix := fmt.Sprintf("saved-%s-%s",address, screenName)
+	iter := db.NewIterator(util3.BytesPrefix([]byte(prefix)), nil)
+	var startID int64 = 0
+	for iter.Next() {
+		key := iter.Key()
+		tweetID,_ := strconv.ParseInt(string(key[len(prefix)+1:]), 10, 64)
+		if tweetID > startID || startID == 0 {
+			startID = tweetID
 		}
 	}
-}
-func TransferTweets(address wallet.Address, key wallet.PrivateKey, archive util.Archive, appendLink bool, appendDate bool) (int, error) {
-	var tweetList []util.TweetTx
-	//if there are at least 20 tweets not yet archived, get the oldest 20, otherwise just get all of them
-	if len(archive.TweetList)-archive.Archived >= 20 {
-		tweetList = archive.TweetList[len(archive.TweetList)-archive.Archived-20 : len(archive.TweetList)-archive.Archived]
-	} else {
-		tweetList = archive.TweetList
+	iter.Release()
+	//get up to 20 tweets from the tweets-twittername-tweetID prefix with the smallest IDs greater than the startID
+	prefix = fmt.Sprintf("tweets-%s", screenName)
+	println(prefix)
+	iter = db.NewIterator(util3.BytesPrefix([]byte(prefix)), nil)
+	println("\n\n\n\nstartID: %d",startID)
+	for iter.Next() {
+		key := iter.Key()
+		tweetID,_ := strconv.ParseInt(string(key[len(prefix)+1:]), 10, 64)
+		println("%d",tweetID)
+		if tweetID > startID {
+			var tweetTx util.TweetTx
+			err := json.Unmarshal(iter.Value(), &tweetTx)
+			if err != nil {
+				return 0, jerr.Get("error unmarshaling tweetTx", err)
+			}
+			tweetList = append(tweetList, tweetTx)
+			println(tweetTx.Tweet.Text)
+			if len(tweetList) == 20 {
+				break
+			}
+		}
 	}
 	//reverse tweetList so that tweets are posted in chronological order in memo, instead of reverse chronological
 	for i := len(tweetList)/2 - 1; i >= 0; i-- {
@@ -49,17 +73,25 @@ func TransferTweets(address wallet.Address, key wallet.PrivateKey, archive util.
 		if tweet.Tweet.InReplyToStatusID == 0 {
 			parentHash, err := database.MakePost(wlt, html.UnescapeString(tweetText))
 			//find this tweet in archive and set its hash to the hash of the post that was just made
-			updateArchiveTweetHash(archive, tweet.Tweet.ID, parentHash)
 			tweet.TxHash = parentHash
 			if err != nil {
 				return numTransferred, jerr.Get("error making post", err)
 			}
 		} else {
-			//find the parent tweet
 			var parentHash []byte = nil
-			for _, parentTweet := range tweetList {
-				if parentTweet.Tweet.ID == tweet.Tweet.InReplyToStatusID {
-					parentHash = parentTweet.TxHash
+			//search the saved-address-twittername-tweetID prefix for the tweet that this tweet is a reply to
+			prefix = fmt.Sprintf("saved-%s-%s", address, screenName)
+			iter = db.NewIterator(util3.BytesPrefix([]byte(prefix)), nil)
+			for iter.Next() {
+				key := iter.Key()
+				tweetID,_ := strconv.ParseInt(string(key[len(prefix)+1:]), 10, 64)
+				if tweetID == tweet.Tweet.InReplyToStatusID {
+					var tweetTx util.TweetTx
+					err := json.Unmarshal(iter.Value(), &tweetTx)
+					if err != nil {
+						return numTransferred, jerr.Get("error unmarshaling tweetTx", err)
+					}
+					parentHash = tweetTx.TxHash
 					break
 				}
 			}
@@ -67,7 +99,6 @@ func TransferTweets(address wallet.Address, key wallet.PrivateKey, archive util.
 			if parentHash == nil {
 				parentHash, err := database.MakePost(wlt, html.UnescapeString(tweetText))
 				//find this tweet in archive and set its hash to the hash of the post that was just made
-				updateArchiveTweetHash(archive, tweet.Tweet.ID, parentHash)
 				tweet.TxHash = parentHash
 				if err != nil {
 					return numTransferred, jerr.Get("error making post", err)
@@ -76,14 +107,24 @@ func TransferTweets(address wallet.Address, key wallet.PrivateKey, archive util.
 			} else {
 				replyHash, err := database.MakeReply(wlt, parentHash, html.UnescapeString(tweetText))
 				//find this tweet in archive and set its hash to the hash of the post that was just made
-				updateArchiveTweetHash(archive, tweet.Tweet.ID, replyHash)
 				tweet.TxHash = replyHash
 				if err != nil {
 					return numTransferred, jerr.Get("error making reply", err)
 				}
 			}
 		}
-		numTransferred += 1
+		//save the tweet to the saved-address-twittername-tweetID prefix
+		prefix = fmt.Sprintf("saved-%s-%s", address, screenName)
+		key := fmt.Sprintf("%s-%d", prefix, tweet.Tweet.ID)
+		value, err := json.Marshal(tweet)
+		if err != nil {
+			return numTransferred, jerr.Get("error marshaling tweetTx", err)
+		}
+		err = db.Put([]byte(key), value, nil)
+		if err != nil {
+			return numTransferred, jerr.Get("error saving tweetTx", err)
+		}
+		numTransferred++
 	}
 	return numTransferred, nil
 }

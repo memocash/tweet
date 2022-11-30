@@ -1,14 +1,12 @@
 package transfertweets
 
 import (
-	"encoding/json"
-	"fmt"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/tweet/cmd/util"
 	util2 "github.com/memocash/tweet/database/util"
 	"github.com/memocash/tweet/tweets"
 	"github.com/spf13/cobra"
-	"io/ioutil"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var link bool = false
@@ -22,31 +20,18 @@ var transferCmd = &cobra.Command{
 		"it is run. Deleting the tweetArchive.json file will cause it to restart from the beginning.",
 	Args: cobra.ExactArgs(2),
 	RunE: func(c *cobra.Command, args []string) error {
-		key,address, account := util.Setup(args)
+		key,address,account := util.Setup(args)
 		client := tweets.Connect()
-		//Structure of tweetArchive.json
-		_,_,_,userID := tweets.GetProfile(account,client)
-		var archive util.Archive
-		var tweetList []util.TweetTx
-		fileHeader := fmt.Sprintf("%s_%s", address, userID)
-		fileName := fmt.Sprintf("%s_tweetArchive.json",fileHeader)
-		content, err := ioutil.ReadFile(fileName)
-		if err == nil{
-			err = json.Unmarshal(content, &archive)
+		fileName := "tweets.db"
+		db, err := leveldb.OpenFile(fileName, nil)
+		if err != nil{
+			return jerr.Get("error opening db", err)
 		}
 		//if tweetArchive.json doesn't exist, initialize it
-		if err != nil{
-			tweetList = tweets.GetAllTweets(account,client,fileHeader)
-			archive.TweetList = tweetList
-			archive.Archived = 0
-		}
-		numTransferred,err := util2.TransferTweets(address, key, archive, link, date)
-		archive.Archived += numTransferred
-		if err != nil {
-			return jerr.Get("error", err)
-		}
-		file,_ := json.MarshalIndent(archive, "", " ")
-		_ = ioutil.WriteFile(fileName, file, 0644)
+		tweets.GetAllTweets(account,client,db)
+		//get the ID of the newest tweet that's already been archived
+		_,_ = util2.TransferTweets(address, key, account, db, link, date)
+		db.Close()
 		return nil
 	},
 }
