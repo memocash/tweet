@@ -12,6 +12,8 @@ import (
 	"github.com/fallenstedt/twitter-stream/token_generator"
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/cmd/util"
+	util2 "github.com/memocash/tweet/database/util"
+	"github.com/syndtr/goleveldb/leveldb"
 	"log"
 	"strconv"
 )
@@ -66,10 +68,10 @@ func ResetRules(tok *token_generator.RequestBearerTokenResponse){
 	}
 }
 
-func InitiateStream(tok *token_generator.RequestBearerTokenResponse, address wallet.Address, key wallet.PrivateKey){
+func InitiateStream(tok *token_generator.RequestBearerTokenResponse, address wallet.Address, key wallet.PrivateKey, db *leveldb.DB){
 	api := fetchTweets(tok.AccessToken)
 
-	defer InitiateStream(tok,address,key)
+	defer InitiateStream(tok,address,key, db)
 	tweetObject := twitter.Tweet{}
 	for tweet := range api.GetMessages() {
 
@@ -100,7 +102,7 @@ func InitiateStream(tok *token_generator.RequestBearerTokenResponse, address wal
 		//build a twitter.Tweets object from the stream data
 		tweetObject = twitter.Tweet{
 			ID: tweetID,
-			CreatedAt: result.Data.CreatedAt.Format("200601021504"),
+			CreatedAt: result.Data.CreatedAt,
 			Text: result.Data.Text,
 			User: &twitter.User{
 				ID: userID,
@@ -114,13 +116,8 @@ func InitiateStream(tok *token_generator.RequestBearerTokenResponse, address wal
 			Tweet: &tweetObject,
 			TxHash: nil,
 		}
-		archive := util.Archive{
-			TweetList: []util.TweetTx{TweetTx},
-			Archived: 0,
-		}
-		archive.Archived = 0
 		//call transfertweets
-		//util2.TransferTweets(address, key,archive,true, true)
+		util2.StreamTweet(address, key, TweetTx,db, true, true)
 	}
 
 	fmt.Println("Stopped Stream")

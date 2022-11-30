@@ -4,7 +4,6 @@ import (
 	"github.com/dghubble/go-twitter/twitter"
 	"github.com/jchavannes/jgo/jlog"
 	"github.com/memocash/index/ref/bitcoin/wallet"
-	"time"
 )
 
 func Setup(args []string) (wallet.PrivateKey, wallet.Address, string) {
@@ -18,7 +17,7 @@ type TweetStreamData struct {
 	Data struct {
 		Text      string    `json:"text"`
 		ID        string    `json:"id"`
-		CreatedAt time.Time `json:"created_at"`
+		CreatedAt string `json:"created_at"`
 		AuthorID  string    `json:"author_id"`
 		ReferencedTweets []struct{
 			Type string `json:"type"`
