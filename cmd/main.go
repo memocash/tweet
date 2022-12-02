@@ -7,6 +7,7 @@ import (
 	"github.com/memocash/tweet/cmd/updatename"
 	"github.com/memocash/tweet/cmd/updateprofilepic"
 	"github.com/memocash/tweet/cmd/updateprofiletext"
+	"github.com/memocash/tweet/config"
 	"github.com/spf13/cobra"
 )
 
@@ -17,6 +18,11 @@ var pf interface {
 var indexCmd = &cobra.Command{
 	Use:   "memotweet",
 	Short: "Twitter Content -> Memo Content",
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		if err := config.InitConfig(); err != nil {
+			jerr.Get("error initializing config", err).Fatal()
+		}
+	},
 	CompletionOptions: cobra.CompletionOptions{
 		DisableDefaultCmd: true,
 	},
@@ -35,4 +41,3 @@ func Execute() error {
 	}
 	return nil
 }
-
