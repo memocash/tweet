@@ -17,7 +17,6 @@ var transferCmd = &cobra.Command{
 	Short: "Listens for new tweets on an account",
 	Long:  "Prints out each new tweet as it comes in. ",
 	RunE: func(c *cobra.Command, args []string) error {
-		key, address, account := util.Setup(args)
 		streamToken, err := tweetstream.GetStreamingToken()
 		fileName := "tweets.db"
 		db, err := leveldb.OpenFile(fileName, nil)
@@ -25,18 +24,20 @@ var transferCmd = &cobra.Command{
 			return jerr.Get("error opening db", err)
 		}
 		streamConfigs := config.GetConfig().Streams
+		var errChan = make(chan error)
 		for _, streamConfig := range streamConfigs {
 			go func(config config.Stream) {
+				key, address, account := util.Setup([]string{config.Key, config.Name})
 				tweetstream.ResetRules(streamToken)
-				tweetstream.FilterAccount(streamToken, config.Name)
-				tweetstream.InitiateStream(streamToken, address, , db)
+				tweetstream.FilterAccount(streamToken, account)
+				tweetstream.InitiateStream(streamToken, address,key, db)
 				tweetstream.ResetRules(streamToken)
 				if err != nil {
-					jerr.Get("error getting stream token", err).Fatal()
+					errChan <- jerr.Get("error getting stream token", err)
 				}
 			}(streamConfig)
 		}
-		return nil
+		return <- errChan
 	},
 }
 

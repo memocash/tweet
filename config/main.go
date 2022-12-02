@@ -17,7 +17,8 @@ type Stream struct {
 var _config Config
 
 func InitConfig() error {
-	viper.SetConfigName("config.yaml")
+	viper.SetConfigName("config")
+	viper.AddConfigPath(".")
 	if err := viper.ReadInConfig(); err != nil {
 		return jerr.Get("error reading config", err)
 	}
