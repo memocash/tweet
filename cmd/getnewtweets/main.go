@@ -2,7 +2,6 @@ package getnewtweets
 
 import (
 	"github.com/jchavannes/jgo/jerr"
-	"github.com/memocash/tweet/cmd/util"
 	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/tweetstream"
 	"github.com/spf13/cobra"
@@ -24,20 +23,11 @@ var transferCmd = &cobra.Command{
 			return jerr.Get("error opening db", err)
 		}
 		streamConfigs := config.GetConfig().Streams
-		var errChan = make(chan error)
-		for _, streamConfig := range streamConfigs {
-			go func(config config.Stream) {
-				key, address, account := util.Setup([]string{config.Key, config.Name})
-				tweetstream.ResetRules(streamToken)
-				tweetstream.FilterAccount(streamToken, account)
-				tweetstream.InitiateStream(streamToken, address,key, db)
-				tweetstream.ResetRules(streamToken)
-				if err != nil {
-					errChan <- jerr.Get("error getting stream token", err)
-				}
-			}(streamConfig)
-		}
-		return <- errChan
+		tweetstream.ResetRules(streamToken)
+		tweetstream.FilterAccount(streamToken, streamConfigs)
+		tweetstream.InitiateStream(streamToken, streamConfigs, db)
+		tweetstream.ResetRules(streamToken)
+		return nil
 	},
 }
 

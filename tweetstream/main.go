@@ -10,8 +10,8 @@ import (
 	"github.com/fallenstedt/twitter-stream/rules"
 	"github.com/fallenstedt/twitter-stream/stream"
 	"github.com/fallenstedt/twitter-stream/token_generator"
-	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/cmd/util"
+	"github.com/memocash/tweet/config"
 	util2 "github.com/memocash/tweet/database/util"
 	"github.com/syndtr/goleveldb/leveldb"
 	"log"
@@ -33,19 +33,28 @@ func GetStreamingToken() (*token_generator.RequestBearerTokenResponse, error){
 	return twitterstream.NewTokenGenerator().SetApiKeyAndSecret(flags.consumerKey, flags.consumerSecret).RequestBearerToken()
 
 }
-func FilterAccount(tok *token_generator.RequestBearerTokenResponse, screenName string) {
-	api := twitterstream.NewTwitterStream(tok.AccessToken)
-	rules := twitterstream.NewRuleBuilder().AddRule("from:" + screenName, "only get tweets from one account").Build()
+func FilterAccount(tok *token_generator.RequestBearerTokenResponse, streamConfigs []config.Stream) {
+	{
+		api := twitterstream.NewTwitterStream(tok.AccessToken)
+		var res *rules.TwitterRuleResponse
+		var err error
+		//remove duplicate names from stream configs
+		uniqueNames := make(map[string]bool)
+		for _, streamConfig := range streamConfigs {
+			uniqueNames[streamConfig.Name] = true
+		}
+		for name := range uniqueNames {
+			rules := twitterstream.NewRuleBuilder().AddRule("from:"+name, "get tweets from this account").Build()
+			res, err = api.Rules.Create(rules, false) // dryRun is set to false.
+			if err != nil {
+				panic(err)
+			}
+		}
 
-	res, err := api.Rules.Create(rules, false) // dryRun is set to false.
-
-	if err != nil {
-		panic(err)
-	}
-
-	if res.Errors != nil && len(res.Errors) > 0 {
-		//https://developer.twitter.com/en/support/twitter-api/error-troubleshooting
-		panic(fmt.Sprintf("Received an error from twitter: %v", res.Errors))
+		if res.Errors != nil && len(res.Errors) > 0 {
+			//https://developer.twitter.com/en/support/twitter-api/error-troubleshooting
+			panic(fmt.Sprintf("Received an error from twitter: %v", res.Errors))
+		}
 	}
 }
 
@@ -68,10 +77,10 @@ func ResetRules(tok *token_generator.RequestBearerTokenResponse){
 	}
 }
 
-func InitiateStream(tok *token_generator.RequestBearerTokenResponse, address wallet.Address, key wallet.PrivateKey, db *leveldb.DB){
+func InitiateStream(tok *token_generator.RequestBearerTokenResponse, streamConfigs []config.Stream, db *leveldb.DB){
 	api := fetchTweets(tok.AccessToken)
 
-	defer InitiateStream(tok,address,key, db)
+	defer InitiateStream(tok,streamConfigs, db)
 	tweetObject := twitter.Tweet{}
 	for tweet := range api.GetMessages() {
 
@@ -116,8 +125,15 @@ func InitiateStream(tok *token_generator.RequestBearerTokenResponse, address wal
 			Tweet: &tweetObject,
 			TxHash: nil,
 		}
-		//call transfertweets
-		util2.StreamTweet(address, key, TweetTx,db, true, true)
+		//call streamtweet
+		//based on the stream config, get the right address to send the tweet to
+		for _, config := range streamConfigs {
+			if config.Name == tweetObject.User.ScreenName{
+				println("sending tweet to key: ", config.Key)
+				key, address, _ := util.Setup([]string{config.Key,config.Name})
+				util2.StreamTweet(address, key, TweetTx,db, true, true)
+			}
+		}
 	}
 
 	fmt.Println("Stopped Stream")
