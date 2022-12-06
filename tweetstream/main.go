@@ -96,10 +96,6 @@ func InitiateStream(tok *token_generator.RequestBearerTokenResponse, streamConfi
 			continue
 		}
 		result := tweet.Data.(util.TweetStreamData)
-
-		// Here I am printing out the text.
-		// You can send this off to a queue for processing.
-		// Or do your processing here in the loop
 		tweetID,_ := strconv.ParseInt(result.Data.ID,10,64)
 		userID,_ := strconv.ParseInt(result.Includes.Users[0].ID,10,64)
 		var InReplyToStatusID int64
@@ -108,18 +104,32 @@ func InitiateStream(tok *token_generator.RequestBearerTokenResponse, streamConfi
 		} else{
 			InReplyToStatusID = 0
 		}
-		//build a twitter.Tweets object from the stream data
+		var tweetText = result.Data.Text
+		//pretty print result object
+		b, _ := json.MarshalIndent(result, "", "  ")
+		fmt.Println(string(b))
+
+		if len(result.Data.Attachments.MediaKeys) > 0 {
+			println("media")
+			for _, media := range result.Includes.Media {
+				//append the url into to tweet text
+				println("media url: " + media.URL)
+				tweetText += "\n" + media.URL
+			}
+		}
 		tweetObject = twitter.Tweet{
-			ID: tweetID,
+			ID:        tweetID,
 			CreatedAt: result.Data.CreatedAt,
-			Text: result.Data.Text,
+			Text:      tweetText,
 			User: &twitter.User{
-				ID: userID,
-				Name: result.Includes.Users[0].Name,
+				ID:         userID,
+				Name:       result.Includes.Users[0].Name,
 				ScreenName: result.Includes.Users[0].Username,
 			},
 			InReplyToStatusID: InReplyToStatusID,
-			}
+		}
+		println(tweetText)
+		println("\n\n\n")
 		//fmt.Println(tweetObject.Text)
 		TweetTx := util.TweetTx{
 			Tweet: &tweetObject,
@@ -153,6 +163,8 @@ func fetchTweets(token string) stream.IStream {
 		AddExpansion("author_id").
 		AddTweetField("created_at").
 		AddTweetField("referenced_tweets").
+		AddExpansion("attachments.media_keys").
+		AddMediaField("url").
 		Build()
 	err := api.StartStream(streamExpansions)
 	if err != nil {

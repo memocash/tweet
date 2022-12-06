@@ -15,6 +15,9 @@ func Setup(args []string) (wallet.PrivateKey, wallet.Address, string) {
 }
 type TweetStreamData struct {
 	Data struct {
+		Attachments struct {
+			MediaKeys []string `json:"media_keys"`
+		}`json:"attachments"`
 		Text      string    `json:"text"`
 		ID        string    `json:"id"`
 		CreatedAt string `json:"created_at"`
@@ -30,6 +33,11 @@ type TweetStreamData struct {
 			Name     string `json:"name"`
 			Username string `json:"username"`
 		} `json:"users"`
+		Media []struct {
+			MediaKey string `json:"media_key"`
+			Type string `json:"type"`
+			URL string `json:"url"`
+		}`json:"media"`
 	} `json:"includes"`
 	MatchingRules []struct {
 		ID  string `json:"id"`
