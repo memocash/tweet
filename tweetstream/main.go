@@ -131,7 +131,7 @@ func InitiateStream(tok *token_generator.RequestBearerTokenResponse, streamConfi
 			if config.Name == tweetObject.User.ScreenName{
 				println("sending tweet to key: ", config.Key)
 				key, address, _ := util.Setup([]string{config.Key,config.Name})
-				util2.StreamTweet(address, key, TweetTx,db, true, true)
+				util2.StreamTweet(address, key, TweetTx,db, true, false)
 			}
 		}
 	}
