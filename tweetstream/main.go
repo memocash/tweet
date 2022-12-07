@@ -15,6 +15,7 @@ import (
 	util2 "github.com/memocash/tweet/database/util"
 	"github.com/syndtr/goleveldb/leveldb"
 	"log"
+	"regexp"
 	"strconv"
 )
 func GetStreamingToken() (*token_generator.RequestBearerTokenResponse, error){
@@ -110,10 +111,14 @@ func InitiateStream(tok *token_generator.RequestBearerTokenResponse, streamConfi
 		fmt.Println(string(b))
 
 		if len(result.Data.Attachments.MediaKeys) > 0 {
-			println("media")
+			//use regex library to find the string https://t.co in the tweet text
+			match, _ := regexp.MatchString("https://t.co/[a-zA-Z0-9]*$", tweetText)
+			if match {
+				//remove the https://t.co from the tweet text
+				tweetText = regexp.MustCompile("https://t.co/[a-zA-Z0-9]*$").ReplaceAllString(tweetText, "")
+			}
 			for _, media := range result.Includes.Media {
 				//append the url into to tweet text
-				println("media url: " + media.URL)
 				tweetText += "\n" + media.URL
 			}
 		}
