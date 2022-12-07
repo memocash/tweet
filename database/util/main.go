@@ -10,6 +10,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	util3 "github.com/syndtr/goleveldb/leveldb/util"
 	"html"
+	"regexp"
 	"strconv"
 )
 func StreamTweet(address wallet.Address, key wallet.PrivateKey, tweet util.TweetTx, db *leveldb.DB, appendLink bool, appendDate bool) error {
@@ -96,7 +97,6 @@ func TransferTweets(address wallet.Address, key wallet.PrivateKey, screenName st
 	prefix = fmt.Sprintf("tweets-%s", screenName)
 	println(prefix)
 	iter = db.NewIterator(util3.BytesPrefix([]byte(prefix)), nil)
-	println("\n\n\n\nstartID: %d",startID)
 	for iter.Next() {
 		key := iter.Key()
 		tweetID,_ := strconv.ParseInt(string(key[len(prefix)+1:]), 10, 64)
@@ -116,6 +116,18 @@ func TransferTweets(address wallet.Address, key wallet.PrivateKey, screenName st
 	}
 	numTransferred := 0
 	for _, tweet := range tweetList {
+		match, _ := regexp.MatchString("https://t.co/[a-zA-Z0-9]*$", tweet.Tweet.Text)
+		if match {
+			//remove the https://t.co from the tweet text
+			tweet.Tweet.Text = regexp.MustCompile("https://t.co/[a-zA-Z0-9]*$").ReplaceAllString(tweet.Tweet.Text, "")
+		}
+		//marshal the tweet.Tweet object into a json and print it
+		if len(tweet.Tweet.Entities.Media) > 0 {
+			//append the url to the tweet text on a new line
+			for _, media := range tweet.Tweet.ExtendedEntities.Media {
+				tweet.Tweet.Text += fmt.Sprintf("\n%s", media.MediaURL)
+			}
+		}
 		err := StreamTweet(address, key, tweet, db, appendLink, appendDate)
 		if err != nil {
 			return numTransferred, jerr.Get("error streaming tweet", err)
