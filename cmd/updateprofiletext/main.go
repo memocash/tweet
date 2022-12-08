@@ -15,6 +15,9 @@ var nameCmd = &cobra.Command{
 	RunE: func(c *cobra.Command, args []string) error {
 		key, address, account := util.Setup(args)
 		_, desc, _, _ := tweets.GetProfile(account, tweets.Connect())
+		if desc == "" {
+			desc = " "
+		}
 		err := database.UpdateProfileText(database.NewWallet(address, key), desc)
 		if err != nil {
 			jerr.Get("error", err).Fatal()
