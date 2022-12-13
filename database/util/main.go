@@ -3,6 +3,8 @@ package util
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/hasura/go-graphql-client"
+	"github.com/hasura/go-graphql-client/pkg/jsonutil"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/cmd/util"
@@ -10,6 +12,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	util3 "github.com/syndtr/goleveldb/leveldb/util"
 	"html"
+	"log"
 	"regexp"
 	"strconv"
 )
@@ -135,4 +138,67 @@ func TransferTweets(address wallet.Address, key wallet.PrivateKey, screenName st
 		numTransferred++
 	}
 	return numTransferred, nil
+}
+func MemoListen(addresses []string) error{
+	client := graphql.NewSubscriptionClient("ws://127.0.0.1:26770/graphql")
+	defer client.Close()
+	type Subscription struct {
+		Addresses struct{
+			Hash string
+			Seen bool
+			Raw string
+			Inputs []struct{
+				Index int
+				PrevHash string `graphql:"prev_hash"`
+				PrevIndex int `graphql:"prev_index"`
+			}
+			Outputs []struct{
+				Index int
+				Amount int
+				Lock struct{
+					Address string
+				}
+			}
+			Blocks []struct{
+				Hash string
+				Timestamp int
+				Height int
+			} 
+		} `graphql:"addresses(addresses: $addresses)"`
+	}
+	var subscription = new(Subscription)
+
+	var listenchan = make(chan struct{})
+	_, err := client.Subscribe(&subscription, map[string]interface{}{"addresses": addresses}, func(dataValue []byte, errValue error) error {
+		fmt.Println("print")
+		if errValue != nil {
+			return jerr.Get("error in subscription", errValue)
+		}
+		data := Subscription{}
+		err := jsonutil.UnmarshalGraphQL(dataValue, &data)
+		pretty, err := json.MarshalIndent(data, "", "  ")
+		if err != nil {
+			return jerr.Get("error marshaling subscription", err)
+		}
+		println(string(pretty))
+		// use the github.com/hasura/go-graphql-client/pkg/jsonutil package
+		if err != nil {
+			return jerr.Get("error unmarshaling graphql data", err)
+		}
+		fmt.Println(subscription.Addresses.Hash)
+
+		listenchan <- struct{}{}
+		return nil
+	})
+	if err != nil {
+		return jerr.Get("error subscribing to graphql", err)
+	}
+	fmt.Println("Listening for memos...")
+	client.WithLog(log.Println)
+	err = client.Run()
+	if err != nil {
+		return jerr.Get("error running graphql client", err)
+	}
+	<-listenchan
+	return nil
 }
