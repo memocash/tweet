@@ -158,6 +158,11 @@ func MemoListen(addresses []string, botKey wallet.PrivateKey,tweetClient *twitte
 				Index uint32
 				PrevHash string `graphql:"prev_hash"`
 				PrevIndex uint32 `graphql:"prev_index"`
+				Output struct{
+					Lock struct{
+						Address string
+					}
+				}
 			}
 			Outputs []struct{
 				Script string
@@ -183,10 +188,10 @@ func MemoListen(addresses []string, botKey wallet.PrivateKey,tweetClient *twitte
 			errorchan <- jerr.Get("error marshaling subscription", err)
 			return nil
 		}
-		// use the github.com/hasura/go-graphql-client/pkg/jsonutil package
-		if err != nil {
-			errorchan <- jerr.Get("error unmarshaling graphql data", err)
-			return nil
+		for _,input := range data.Addresses.Inputs {
+			if(input.Output.Lock.Address == addresses[0]){
+				return nil
+			}
 		}
 		scriptArray := []string{}
 		for _, output := range data.Addresses.Outputs {
