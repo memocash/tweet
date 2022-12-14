@@ -171,7 +171,6 @@ func MemoListen(addresses []string, botKey wallet.PrivateKey,tweetClient *twitte
 	}
 	var subscription = new(Subscription)
 
-	var listenchan = make(chan struct{})
 	var errorchan = make(chan error)
 	_, err := client.Subscribe(&subscription, map[string]interface{}{"addresses": addresses}, func(dataValue []byte, errValue error) error {
 		if errValue != nil {
@@ -230,7 +229,6 @@ func MemoListen(addresses []string, botKey wallet.PrivateKey,tweetClient *twitte
 			fmt.Printf("\n\nMessage not in correct format\n\n")
 			//handle sending back money
 		}
-		listenchan <- struct{}{}
 		return nil
 	})
 	if err != nil {
@@ -246,8 +244,6 @@ func MemoListen(addresses []string, botKey wallet.PrivateKey,tweetClient *twitte
 	}()
 
 	select{
-	case <-listenchan:
-		return nil
 	case err := <-errorchan:
 		return jerr.Get("error in listen", err)
 	}
