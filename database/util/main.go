@@ -1,11 +1,15 @@
 package util
 
 import (
+	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/hasura/go-graphql-client"
 	"github.com/hasura/go-graphql-client/pkg/jsonutil"
+	"github.com/jchavannes/btcd/txscript"
 	"github.com/jchavannes/jgo/jerr"
+	"github.com/memocash/index/ref/bitcoin/memo"
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/cmd/util"
 	"github.com/memocash/tweet/database"
@@ -15,6 +19,7 @@ import (
 	"log"
 	"regexp"
 	"strconv"
+	"time"
 )
 func StreamTweet(address wallet.Address, key wallet.PrivateKey, tweet util.TweetTx, db *leveldb.DB, appendLink bool, appendDate bool) error {
 	if tweet.Tweet == nil {
@@ -145,48 +150,45 @@ func MemoListen(addresses []string) error{
 	type Subscription struct {
 		Addresses struct{
 			Hash string
-			Seen bool
+			Seen time.Time
 			Raw string
 			Inputs []struct{
-				Index int
+				Index uint32
 				PrevHash string `graphql:"prev_hash"`
-				PrevIndex int `graphql:"prev_index"`
+				PrevIndex uint32 `graphql:"prev_index"`
 			}
 			Outputs []struct{
-				Index int
-				Amount int
-				Lock struct{
-					Address string
-				}
+				Script string
 			}
 			Blocks []struct{
 				Hash string
-				Timestamp int
+				Timestamp time.Time
 				Height int
-			} 
+			}
 		} `graphql:"addresses(addresses: $addresses)"`
 	}
 	var subscription = new(Subscription)
 
 	var listenchan = make(chan struct{})
 	_, err := client.Subscribe(&subscription, map[string]interface{}{"addresses": addresses}, func(dataValue []byte, errValue error) error {
-		fmt.Println("print")
 		if errValue != nil {
 			return jerr.Get("error in subscription", errValue)
 		}
 		data := Subscription{}
 		err := jsonutil.UnmarshalGraphQL(dataValue, &data)
-		pretty, err := json.MarshalIndent(data, "", "  ")
 		if err != nil {
 			return jerr.Get("error marshaling subscription", err)
 		}
-		println(string(pretty))
 		// use the github.com/hasura/go-graphql-client/pkg/jsonutil package
 		if err != nil {
 			return jerr.Get("error unmarshaling graphql data", err)
 		}
-		fmt.Println(subscription.Addresses.Hash)
-
+		scriptArray := []string{}
+		for _, output := range data.Addresses.Outputs {
+			scriptArray = append(scriptArray, output.Script)
+		}
+		message := grabMessage(scriptArray)
+		println(message)
 		listenchan <- struct{}{}
 		return nil
 	})
@@ -201,4 +203,23 @@ func MemoListen(addresses []string) error{
 	}
 	<-listenchan
 	return nil
+}
+
+func grabMessage(outputScripts []string) string {
+	for _, script := range outputScripts {
+		lockScript, err := hex.DecodeString(script)
+		if err != nil {
+			panic(err)
+		}
+		pushData, err := txscript.PushedData(lockScript)
+		if err != nil {
+			panic(err)
+		}
+
+		if len(pushData) > 2 && bytes.Equal(pushData[0], memo.PrefixSendMoney) {
+			message := string(pushData[2])
+			return message
+		}
+	}
+	return ""
 }

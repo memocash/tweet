@@ -7,6 +7,7 @@ require (
 	github.com/dghubble/go-twitter v0.0.0-20221024160433-0cc1e72ed6d8
 	github.com/fallenstedt/twitter-stream v0.4.2
 	github.com/hasura/go-graphql-client v0.8.2-0.20221208014738-4e08b2d83631 // indirect
+	github.com/jchavannes/btcd v1.1.5-0.20220524044759-ecd7eeea2b87 // indirect
 	github.com/jchavannes/jgo v0.0.0-20220711014102-9b465cbd1236
 	github.com/memocash/index v0.1.1-0.20221013224058-19add426bf8d
 	github.com/spf13/cobra v1.6.1
