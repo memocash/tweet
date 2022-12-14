@@ -182,6 +182,7 @@ func UpdateProfilePic(wlt Wallet, url string) error {
 	if err != nil {
 		return jerr.Get("error generating memo tx", err)
 	}
+	println("tx", memoTx.GetHash())
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
 	completeTransaction(memoTx, err)

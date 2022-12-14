@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/dghubble/go-twitter/twitter"
 	"github.com/hasura/go-graphql-client"
 	"github.com/hasura/go-graphql-client/pkg/jsonutil"
 	"github.com/jchavannes/btcd/txscript"
@@ -13,6 +14,7 @@ import (
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/cmd/util"
 	"github.com/memocash/tweet/database"
+	"github.com/memocash/tweet/tweets"
 	"github.com/syndtr/goleveldb/leveldb"
 	util3 "github.com/syndtr/goleveldb/leveldb/util"
 	"html"
@@ -144,7 +146,7 @@ func TransferTweets(address wallet.Address, key wallet.PrivateKey, screenName st
 	}
 	return numTransferred, nil
 }
-func MemoListen(addresses []string) error{
+func MemoListen(addresses []string, botKey wallet.PrivateKey,tweetClient *twitter.Client) error{
 	client := graphql.NewSubscriptionClient("ws://127.0.0.1:26770/graphql")
 	defer client.Close()
 	type Subscription struct {
@@ -170,25 +172,64 @@ func MemoListen(addresses []string) error{
 	var subscription = new(Subscription)
 
 	var listenchan = make(chan struct{})
+	var errorchan = make(chan error)
 	_, err := client.Subscribe(&subscription, map[string]interface{}{"addresses": addresses}, func(dataValue []byte, errValue error) error {
 		if errValue != nil {
-			return jerr.Get("error in subscription", errValue)
+			errorchan <- jerr.Get("error in subscription", errValue)
+			return nil
 		}
 		data := Subscription{}
 		err := jsonutil.UnmarshalGraphQL(dataValue, &data)
 		if err != nil {
-			return jerr.Get("error marshaling subscription", err)
+			errorchan <- jerr.Get("error marshaling subscription", err)
+			return nil
 		}
 		// use the github.com/hasura/go-graphql-client/pkg/jsonutil package
 		if err != nil {
-			return jerr.Get("error unmarshaling graphql data", err)
+			errorchan <- jerr.Get("error unmarshaling graphql data", err)
+			return nil
 		}
 		scriptArray := []string{}
 		for _, output := range data.Addresses.Outputs {
 			scriptArray = append(scriptArray, output.Script)
 		}
 		message := grabMessage(scriptArray)
-		println(message)
+		//use regex library to check if message matches the format "CREATE TWITTER {twittername}" tweet names are a maximum of 15 characters
+		match, _ := regexp.MatchString("^CREATE TWITTER \\{[a-zA-Z0-9_]{1,15}}$", message)
+		if match {
+			fmt.Printf("\n\n%s\n\n",message)
+			//get the twittername from the message
+			twitterName := regexp.MustCompile("^CREATE TWITTER \\{([a-zA-Z0-9_]{1,15})}$").FindStringSubmatch(message)[1]
+			name,desc,profilePic,_ := tweets.GetProfile(twitterName,tweetClient)
+			fmt.Printf("Name: %s\nDesc: %s\nProfile Pic Link: %s\n",name,desc,profilePic)
+			println(addresses[0])
+			botAddress := botKey.GetAddress()
+			err := database.UpdateName(database.NewWallet(botAddress,botKey),name)
+			if err != nil {
+				errorchan <- jerr.Get("error updating name", err)
+				return nil
+			} else{
+				println("updated name")
+			}
+			err = database.UpdateProfileText(database.NewWallet(botAddress,botKey),desc)
+			if err != nil {
+				errorchan <- jerr.Get("error updating profile text", err)
+				return nil
+			} else{
+				println("updated profile text")
+			}
+			err = database.UpdateProfilePic(database.NewWallet(botAddress,botKey),profilePic)
+			if err != nil {
+				errorchan <- jerr.Get("error updating profile pic", err)
+				return nil
+			} else{
+				println("updated profile pic")
+			}
+			println("done")
+		} else{
+			fmt.Printf("\n\nMessage not in correct format\n\n")
+			//handle sending back money
+		}
 		listenchan <- struct{}{}
 		return nil
 	})
@@ -197,12 +238,19 @@ func MemoListen(addresses []string) error{
 	}
 	fmt.Println("Listening for memos...")
 	client.WithLog(log.Println)
-	err = client.Run()
-	if err != nil {
-		return jerr.Get("error running graphql client", err)
+	go func() {
+		err = client.Run()
+		if err != nil {
+			errorchan <- jerr.Get("error running graphql client", err)
+		}
+	}()
+
+	select{
+	case <-listenchan:
+		return nil
+	case err := <-errorchan:
+		return jerr.Get("error in listen", err)
 	}
-	<-listenchan
-	return nil
 }
 
 func grabMessage(outputScripts []string) string {

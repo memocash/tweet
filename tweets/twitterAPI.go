@@ -107,8 +107,8 @@ func GetProfile(screenName string, client *twitter.Client) (string, string, stri
 	//resize the profile pic to full size
 	profilePic = strings.Replace(profilePic, "_normal", "", 1)
 	profilePic = strings.Replace(profilePic, "http:", "https:", 1)
-	println(profilePic)
-	fmt.Printf("USERS SHOW:\n%+v\n%+v\n%+v\n", name, desc, profilePic)
+	//println(profilePic)
+	//fmt.Printf("USERS SHOW:\n%+v\n%+v\n%+v\n", name, desc, profilePic)
 	return name, desc, profilePic, ID
 }
 
