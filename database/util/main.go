@@ -249,6 +249,7 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 				Value:        data.Addresses.Outputs[coinIndex].Amount,
 				PrevOutHash:  hs.GetTxHash(data.Addresses.Hash),
 				PrevOutIndex: coinIndex,
+				PkHash:       wallet.GetAddressFromString(addresses[0]).GetPkHash(),
 			}}, botKey, newAddr); err != nil {
 				errorchan <- jerr.Get("error funding twitter address", err)
 				return nil
