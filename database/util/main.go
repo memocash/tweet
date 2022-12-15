@@ -236,10 +236,19 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 				return nil
 			}
 			newAddr := newKey.GetAddress()
+			println("New Key: " + newKey.GetBase58Compressed())
+			println("New Address: " + newAddr.GetEncoded())
+			coinIndex := uint32(0)
+			for i, output := range data.Addresses.Outputs {
+				if output.Lock.Address == addresses[0] {
+					coinIndex = uint32(i)
+				}
+			}
+
 			if err := database.FundTwitterAddress(memo.UTXO{Input: memo.TxInput{
-				Value:        data.Addresses.Outputs[0].Amount,
+				Value:        data.Addresses.Outputs[coinIndex].Amount,
 				PrevOutHash:  hs.GetTxHash(data.Addresses.Hash),
-				PrevOutIndex: 0,
+				PrevOutIndex: coinIndex,
 			}}, botKey, newAddr); err != nil {
 				errorchan <- jerr.Get("error funding twitter address", err)
 				return nil
@@ -267,8 +276,6 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 			}
 			println("done")
 			//update the database with numStreamUint+1
-			println("New Key: " + newKey.GetBase58Compressed())
-			println("New Address: " + newAddr.GetEncoded())
 			err = db.Put([]byte("memobot-num-streams"), []byte(strconv.FormatUint(uint64(numStreamUint+1), 10)), nil)
 			if err != nil {
 				errorchan <- jerr.Get("error updating memobot-num-streams", err)
