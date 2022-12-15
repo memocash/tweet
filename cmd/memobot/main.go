@@ -7,6 +7,7 @@ import (
 	"github.com/memocash/tweet/database/util"
 	"github.com/memocash/tweet/tweets"
 	"github.com/spf13/cobra"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var memobotCmd = &cobra.Command{
@@ -14,14 +15,20 @@ var memobotCmd = &cobra.Command{
 	Short: "Listens for new transactions on a memo account",
 	Long:  "Prints out each new transaction as it comes in. ",
 	RunE: func(c *cobra.Command, args []string) error {
-		botKey,err := wallet.ImportPrivateKey(config.GetConfig().BotKey)
+		botSeed:= config.GetConfig().BotSeed
+		//get base key and address from seed
+		mnemonic,err := wallet.GetMnemonicFromString(botSeed)
 		if err != nil {
-			return jerr.Get("error importing bot key", err)
+			return jerr.Get("error getting mnemonic from string", err)
 		}
-		println(botKey.GetBase58Compressed())
-		botAddress := botKey.GetAddress().GetEncoded()
-		println(botAddress)
-		err = util.MemoListen([]string{botAddress},botKey,tweets.Connect())
+		path := wallet.GetBip44Path(wallet.Bip44CoinTypeBTC, 0, false)
+		botKey, err := mnemonic.GetPath(path)
+		if err != nil {
+			return jerr.Get("error getting path", err)
+		}
+		db, err := leveldb.OpenFile("tweets.db", nil)
+		botAddress := botKey.GetPublicKey().GetAddress().GetEncoded()
+		err = util.MemoListen(botSeed, []string{botAddress},*botKey,tweets.Connect(), db)
 		if err != nil {
 			return jerr.Get("error listening for transactions", err)
 		}

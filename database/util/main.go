@@ -146,7 +146,9 @@ func TransferTweets(address wallet.Address, key wallet.PrivateKey, screenName st
 	}
 	return numTransferred, nil
 }
-func MemoListen(addresses []string, botKey wallet.PrivateKey,tweetClient *twitter.Client) error{
+func MemoListen(botSeed string, addresses []string, botKey wallet.PrivateKey,tweetClient *twitter.Client, db *leveldb.DB) error{
+	println(addresses[0])
+	println(botKey.GetBase58Compressed())
 	client := graphql.NewSubscriptionClient("ws://127.0.0.1:26770/graphql")
 	defer client.Close()
 	type Subscription struct {

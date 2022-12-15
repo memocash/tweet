@@ -6,7 +6,7 @@ import (
 )
 
 type Config struct {
-	BotKey  string   `mapstructure:"BOT_KEY"`
+	BotSeed  string   `mapstructure:"BOT_SEED"`
 	Streams []Stream `mapstructure:"STREAMS"`
 }
 
