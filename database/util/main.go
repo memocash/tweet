@@ -11,6 +11,7 @@ import (
 	"github.com/jchavannes/btcd/txscript"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/index/ref/bitcoin/memo"
+	"github.com/memocash/index/ref/bitcoin/tx/hs"
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/cmd/util"
 	"github.com/memocash/tweet/database"
@@ -23,6 +24,7 @@ import (
 	"strconv"
 	"time"
 )
+
 func StreamTweet(address wallet.Address, key wallet.PrivateKey, tweet util.TweetTx, db *leveldb.DB, appendLink bool, appendDate bool) error {
 	if tweet.Tweet == nil {
 		return jerr.New("tweet is nil")
@@ -39,8 +41,8 @@ func StreamTweet(address wallet.Address, key wallet.PrivateKey, tweet util.Tweet
 	}
 	//add the tweet to the twitter-twittername-tweetID prefix
 	prefix := fmt.Sprintf("tweets-%s-%019d", tweet.Tweet.User.ScreenName, tweet.Tweet.ID)
-	tweetTx,_ := json.Marshal(tweet)
-	db.Put([]byte(prefix),tweetTx,nil)
+	tweetTx, _ := json.Marshal(tweet)
+	db.Put([]byte(prefix), tweetTx, nil)
 	//if the tweet was a regular post, post it normally
 	if tweet.Tweet.InReplyToStatusID == 0 {
 		parentHash, err := database.MakePost(wlt, html.UnescapeString(tweetText))
@@ -56,7 +58,7 @@ func StreamTweet(address wallet.Address, key wallet.PrivateKey, tweet util.Tweet
 		iter := db.NewIterator(util3.BytesPrefix([]byte(prefix)), nil)
 		for iter.Next() {
 			key := iter.Key()
-			tweetID,_ := strconv.ParseInt(string(key[len(prefix)+1:]), 10, 64)
+			tweetID, _ := strconv.ParseInt(string(key[len(prefix)+1:]), 10, 64)
 			if tweetID == tweet.Tweet.InReplyToStatusID {
 				parentHash = iter.Value()
 				break
@@ -92,12 +94,12 @@ func StreamTweet(address wallet.Address, key wallet.PrivateKey, tweet util.Tweet
 func TransferTweets(address wallet.Address, key wallet.PrivateKey, screenName string, db *leveldb.DB, appendLink bool, appendDate bool) (int, error) {
 	var tweetList []util.TweetTx
 	//find the greatest ID of all the already saved tweets
-	prefix := fmt.Sprintf("saved-%s-%s",address, screenName)
+	prefix := fmt.Sprintf("saved-%s-%s", address, screenName)
 	iter := db.NewIterator(util3.BytesPrefix([]byte(prefix)), nil)
 	var startID int64 = 0
 	for iter.Next() {
 		key := iter.Key()
-		tweetID,_ := strconv.ParseInt(string(key[len(prefix)+1:]), 10, 64)
+		tweetID, _ := strconv.ParseInt(string(key[len(prefix)+1:]), 10, 64)
 		if tweetID > startID || startID == 0 {
 			startID = tweetID
 		}
@@ -109,8 +111,8 @@ func TransferTweets(address wallet.Address, key wallet.PrivateKey, screenName st
 	iter = db.NewIterator(util3.BytesPrefix([]byte(prefix)), nil)
 	for iter.Next() {
 		key := iter.Key()
-		tweetID,_ := strconv.ParseInt(string(key[len(prefix)+1:]), 10, 64)
-		println("%d",tweetID)
+		tweetID, _ := strconv.ParseInt(string(key[len(prefix)+1:]), 10, 64)
+		println("%d", tweetID)
 		if tweetID > startID {
 			var tweetTx util.TweetTx
 			err := json.Unmarshal(iter.Value(), &tweetTx)
@@ -146,33 +148,37 @@ func TransferTweets(address wallet.Address, key wallet.PrivateKey, screenName st
 	}
 	return numTransferred, nil
 }
-func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.PrivateKey,tweetClient *twitter.Client, db *leveldb.DB) error{
-	println("Listening to address: "+addresses[0])
-	println("Listening to key: "+botKey.GetBase58Compressed())
+func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.PrivateKey, tweetClient *twitter.Client, db *leveldb.DB) error {
+	println("Listening to address: " + addresses[0])
+	println("Listening to key: " + botKey.GetBase58Compressed())
 	client := graphql.NewSubscriptionClient("ws://127.0.0.1:26770/graphql")
 	defer client.Close()
 	type Subscription struct {
-		Addresses struct{
-			Hash string
-			Seen time.Time
-			Raw string
-			Inputs []struct{
-				Index uint32
-				PrevHash string `graphql:"prev_hash"`
+		Addresses struct {
+			Hash   string
+			Seen   time.Time
+			Raw    string
+			Inputs []struct {
+				Index     uint32
+				PrevHash  string `graphql:"prev_hash"`
 				PrevIndex uint32 `graphql:"prev_index"`
-				Output struct{
-					Lock struct{
+				Output    struct {
+					Lock struct {
 						Address string
 					}
 				}
 			}
-			Outputs []struct{
+			Outputs []struct {
 				Script string
+				Amount int64
+				Lock   struct {
+					Address string
+				}
 			}
-			Blocks []struct{
-				Hash string
+			Blocks []struct {
+				Hash      string
 				Timestamp time.Time
-				Height int
+				Height    int
 			}
 		} `graphql:"addresses(addresses: $addresses)"`
 	}
@@ -190,8 +196,8 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 			errorchan <- jerr.Get("error marshaling subscription", err)
 			return nil
 		}
-		for _,input := range data.Addresses.Inputs {
-			if(input.Output.Lock.Address == addresses[0]){
+		for _, input := range data.Addresses.Inputs {
+			if input.Output.Lock.Address == addresses[0] {
 				return nil
 			}
 		}
@@ -203,11 +209,11 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 		//use regex library to check if message matches the format "CREATE TWITTER {twittername}" tweet names are a maximum of 15 characters
 		match, _ := regexp.MatchString("^CREATE TWITTER \\{[a-zA-Z0-9_]{1,15}}$", message)
 		if match {
-			fmt.Printf("\n\n%s\n\n",message)
+			fmt.Printf("\n\n%s\n\n", message)
 			//get the twittername from the message
 			twitterName := regexp.MustCompile("^CREATE TWITTER \\{([a-zA-Z0-9_]{1,15})}$").FindStringSubmatch(message)[1]
-			name,desc,profilePic,_ := tweets.GetProfile(twitterName,tweetClient)
-			fmt.Printf("Name: %s\nDesc: %s\nProfile Pic Link: %s\n",name,desc,profilePic)
+			name, desc, profilePic, _ := tweets.GetProfile(twitterName, tweetClient)
+			fmt.Printf("Name: %s\nDesc: %s\nProfile Pic Link: %s\n", name, desc, profilePic)
 			println(addresses[0])
 			//botAddress := botKey.GetAddress()
 			//read the value of memobot-num-stream from the database as an unsigned integer
@@ -230,25 +236,33 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 				return nil
 			}
 			newAddr := newKey.GetAddress()
-			err = database.UpdateName(database.NewWallet(newAddr,*newKey),name)
+			if err := database.FundTwitterAddress(memo.UTXO{Input: memo.TxInput{
+				Value:        data.Addresses.Outputs[0].Amount,
+				PrevOutHash:  hs.GetTxHash(data.Addresses.Hash),
+				PrevOutIndex: 0,
+			}}, botKey, newAddr); err != nil {
+				errorchan <- jerr.Get("error funding twitter address", err)
+				return nil
+			}
+			err = database.UpdateName(database.NewWallet(newAddr, *newKey), name)
 			if err != nil {
 				errorchan <- jerr.Get("error updating name", err)
 				return nil
-			} else{
+			} else {
 				println("updated name")
 			}
-			err = database.UpdateProfileText(database.NewWallet(newAddr,*newKey),desc)
+			err = database.UpdateProfileText(database.NewWallet(newAddr, *newKey), desc)
 			if err != nil {
 				errorchan <- jerr.Get("error updating profile text", err)
 				return nil
-			} else{
+			} else {
 				println("updated profile text")
 			}
-			err = database.UpdateProfilePic(database.NewWallet(newAddr,*newKey),profilePic)
+			err = database.UpdateProfilePic(database.NewWallet(newAddr, *newKey), profilePic)
 			if err != nil {
 				errorchan <- jerr.Get("error updating profile pic", err)
 				return nil
-			} else{
+			} else {
 				println("updated profile pic")
 			}
 			println("done")
@@ -260,7 +274,7 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 				errorchan <- jerr.Get("error updating memobot-num-streams", err)
 				return nil
 			}
-		} else{
+		} else {
 			fmt.Printf("\n\nMessage not in correct format\n\n")
 			//handle sending back money
 		}
@@ -278,7 +292,7 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 		}
 	}()
 
-	select{
+	select {
 	case err := <-errorchan:
 		return jerr.Get("error in listen", err)
 	}

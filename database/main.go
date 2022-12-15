@@ -155,6 +155,20 @@ func MakeReply(wallet Wallet, parentHash []byte, message string) ([]byte, error)
 	return memoTx.GetHash(), nil
 }
 
+func FundTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Address) error {
+	memoTx, err := gen.Tx(gen.TxRequest{
+		InputsToUse: []memo.UTXO{utxo},
+		Change:      wallet.Change{Main: address},
+		KeyRing: wallet.KeyRing{
+			Keys: []wallet.PrivateKey{key},
+		},
+	})
+	txInfo := parse.GetTxInfo(memoTx)
+	txInfo.Print()
+	completeTransaction(memoTx, err)
+	return nil
+}
+
 func UpdateName(wlt Wallet, name string) error {
 	memoTx, err := buildTx(wlt, script.SetName{Name: name})
 	if err != nil {
