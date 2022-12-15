@@ -158,7 +158,10 @@ func MakeReply(wallet Wallet, parentHash []byte, message string) ([]byte, error)
 func FundTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Address) error {
 	memoTx, err := gen.Tx(gen.TxRequest{
 		InputsToUse: []memo.UTXO{utxo},
-		Change:      wallet.Change{Main: address},
+		Outputs: []*memo.Output{{
+			Amount: memo.GetMaxSendFromCount(utxo.Input.Value, 1),
+			Script: script.P2pkh{PkHash: address.GetPkHash()},
+		}},
 		KeyRing: wallet.KeyRing{
 			Keys: []wallet.PrivateKey{key},
 		},
