@@ -8,6 +8,7 @@ import (
 	"github.com/memocash/tweet/tweets"
 	"github.com/spf13/cobra"
 	"github.com/syndtr/goleveldb/leveldb"
+	"strconv"
 )
 
 var memobotCmd = &cobra.Command{
@@ -27,8 +28,31 @@ var memobotCmd = &cobra.Command{
 			return jerr.Get("error getting path", err)
 		}
 		db, err := leveldb.OpenFile("tweets.db", nil)
+		if err != nil {
+			return jerr.Get("error opening db", err)
+		}
+		//check that memobot-num-streams field of the database exists
+		fieldExists, err := db.Has([]byte("memobot-num-streams"),nil)
+		if err != nil {
+			return jerr.Get("error checking if memobot-num-streams field exists", err)
+		}
+		//if it doesn't, create it and set it to 0
+		if !fieldExists {
+			err = db.Put([]byte("memobot-num-streams"),[]byte("0"),nil)
+			if err != nil {
+				return jerr.Get("error creating memobot-num-streams field", err)
+			}
+		}
+		//get the number of streams from the database
+		numStreamsBytes, err := db.Get([]byte("memobot-num-streams"),nil)
+		if err != nil {
+			return jerr.Get("error getting memobot-num-streams field", err)
+		}
+		numStreamsUint,err := strconv.ParseUint(string(numStreamsBytes), 10, 64)
+		println("num streams: ",numStreamsUint)
+
 		botAddress := botKey.GetPublicKey().GetAddress().GetEncoded()
-		err = util.MemoListen(botSeed, []string{botAddress},*botKey,tweets.Connect(), db)
+		err = util.MemoListen(mnemonic, []string{botAddress},*botKey,tweets.Connect(), db)
 		if err != nil {
 			return jerr.Get("error listening for transactions", err)
 		}

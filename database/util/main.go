@@ -146,9 +146,9 @@ func TransferTweets(address wallet.Address, key wallet.PrivateKey, screenName st
 	}
 	return numTransferred, nil
 }
-func MemoListen(botSeed string, addresses []string, botKey wallet.PrivateKey,tweetClient *twitter.Client, db *leveldb.DB) error{
-	println(addresses[0])
-	println(botKey.GetBase58Compressed())
+func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.PrivateKey,tweetClient *twitter.Client, db *leveldb.DB) error{
+	println("Listening to address: "+addresses[0])
+	println("Listening to key: "+botKey.GetBase58Compressed())
 	client := graphql.NewSubscriptionClient("ws://127.0.0.1:26770/graphql")
 	defer client.Close()
 	type Subscription struct {
@@ -209,22 +209,42 @@ func MemoListen(botSeed string, addresses []string, botKey wallet.PrivateKey,twe
 			name,desc,profilePic,_ := tweets.GetProfile(twitterName,tweetClient)
 			fmt.Printf("Name: %s\nDesc: %s\nProfile Pic Link: %s\n",name,desc,profilePic)
 			println(addresses[0])
-			botAddress := botKey.GetAddress()
-			err := database.UpdateName(database.NewWallet(botAddress,botKey),name)
+			//botAddress := botKey.GetAddress()
+			//read the value of memobot-num-stream from the database as an unsigned integer
+			numStreamBytes, err := db.Get([]byte("memobot-num-streams"), nil)
+			if err != nil {
+				errorchan <- jerr.Get("error getting num-streams", err)
+				return nil
+			}
+			numStream, err := strconv.ParseUint(string(numStreamBytes), 10, 64)
+			if err != nil {
+				errorchan <- jerr.Get("error parsing num-streams", err)
+				return nil
+			}
+			//convert numStream to a uint
+			numStreamUint := uint(numStream)
+			path := wallet.GetBip44Path(wallet.Bip44CoinTypeBTC, numStreamUint+1, false)
+			newKey, err := mnemonic.GetPath(path)
+			if err != nil {
+				errorchan <- jerr.Get("error getting path", err)
+				return nil
+			}
+			newAddr := newKey.GetAddress()
+			err = database.UpdateName(database.NewWallet(newAddr,*newKey),name)
 			if err != nil {
 				errorchan <- jerr.Get("error updating name", err)
 				return nil
 			} else{
 				println("updated name")
 			}
-			err = database.UpdateProfileText(database.NewWallet(botAddress,botKey),desc)
+			err = database.UpdateProfileText(database.NewWallet(newAddr,*newKey),desc)
 			if err != nil {
 				errorchan <- jerr.Get("error updating profile text", err)
 				return nil
 			} else{
 				println("updated profile text")
 			}
-			err = database.UpdateProfilePic(database.NewWallet(botAddress,botKey),profilePic)
+			err = database.UpdateProfilePic(database.NewWallet(newAddr,*newKey),profilePic)
 			if err != nil {
 				errorchan <- jerr.Get("error updating profile pic", err)
 				return nil
@@ -232,6 +252,14 @@ func MemoListen(botSeed string, addresses []string, botKey wallet.PrivateKey,twe
 				println("updated profile pic")
 			}
 			println("done")
+			//update the database with numStreamUint+1
+			println("New Key: " + newKey.GetBase58Compressed())
+			println("New Address: " + newAddr.GetEncoded())
+			err = db.Put([]byte("memobot-num-streams"), []byte(strconv.FormatUint(uint64(numStreamUint+1), 10)), nil)
+			if err != nil {
+				errorchan <- jerr.Get("error updating memobot-num-streams", err)
+				return nil
+			}
 		} else{
 			fmt.Printf("\n\nMessage not in correct format\n\n")
 			//handle sending back money
