@@ -171,7 +171,28 @@ func FundTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Ad
 	completeTransaction(memoTx, err)
 	return nil
 }
-
+func SendToTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Address) error {
+	errorMsg := "Please send at least 5,000 sats to fund your MemoBot"
+	memoTx, err := gen.Tx(gen.TxRequest{
+		InputsToUse: []memo.UTXO{utxo},
+		Outputs: []*memo.Output{{
+			Amount: memo.GetMaxSendFromCount(utxo.Input.Value, 1) - (int64(35 + len(errorMsg))),
+			Script: script.P2pkh{PkHash: address.GetPkHash()},
+		}, {
+			Amount: 0,
+			Script: script.Send{
+				Hash: address.GetPkHash(),
+				Message: errorMsg},
+		}},
+		KeyRing: wallet.KeyRing{
+			Keys: []wallet.PrivateKey{key},
+		},
+	})
+	txInfo := parse.GetTxInfo(memoTx)
+	txInfo.Print()
+	completeTransaction(memoTx, err)
+	return nil
+}
 func UpdateName(wlt Wallet, name string) error {
 	memoTx, err := buildTx(wlt, script.SetName{Name: name})
 	if err != nil {

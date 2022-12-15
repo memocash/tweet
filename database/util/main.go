@@ -19,7 +19,6 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	util3 "github.com/syndtr/goleveldb/leveldb/util"
 	"html"
-	"log"
 	"regexp"
 	"strconv"
 	"time"
@@ -183,7 +182,6 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 		} `graphql:"addresses(addresses: $addresses)"`
 	}
 	var subscription = new(Subscription)
-
 	var errorchan = make(chan error)
 	_, err := client.Subscribe(&subscription, map[string]interface{}{"addresses": addresses}, func(dataValue []byte, errValue error) error {
 		if errValue != nil {
@@ -209,13 +207,45 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 		//use regex library to check if message matches the format "CREATE TWITTER {twittername}" tweet names are a maximum of 15 characters
 		match, _ := regexp.MatchString("^CREATE TWITTER \\{[a-zA-Z0-9_]{1,15}}$", message)
 		if match {
+
+			//check if the value of the transaction is less than 5,000
+			coinIndex := uint32(0)
+			for i, output := range data.Addresses.Outputs {
+				if output.Lock.Address == addresses[0] {
+					coinIndex = uint32(i)
+				}
+			}
+			if data.Addresses.Outputs[coinIndex].Amount < 5000{
+				if data.Addresses.Outputs[coinIndex].Amount < 546{
+				return nil
+				}
+				//send the money back to the sender with a message that the input wasn't enough
+				//get the address of the sender
+				senderAddress := ""
+				for _, input := range data.Addresses.Inputs {
+					if input.Output.Lock.Address != addresses[0] {
+						senderAddress = input.Output.Lock.Address
+					}
+				}
+				//create a transaction with the sender address and the amount of the transaction
+				if err := database.SendToTwitterAddress(memo.UTXO{Input: memo.TxInput{
+					Value:        data.Addresses.Outputs[coinIndex].Amount,
+					PrevOutHash:  hs.GetTxHash(data.Addresses.Hash),
+					PrevOutIndex: coinIndex,
+					PkHash:       wallet.GetAddressFromString(addresses[0]).GetPkHash(),
+				}}, botKey, wallet.GetAddressFromString(senderAddress)); err != nil {
+					errorchan <- jerr.Get("error sending money back", err)
+					return nil
+				}
+				return nil
+			}
+
+
+
+
 			fmt.Printf("\n\n%s\n\n", message)
 			//get the twittername from the message
-			twitterName := regexp.MustCompile("^CREATE TWITTER \\{([a-zA-Z0-9_]{1,15})}$").FindStringSubmatch(message)[1]
-			name, desc, profilePic, _ := tweets.GetProfile(twitterName, tweetClient)
-			fmt.Printf("Name: %s\nDesc: %s\nProfile Pic Link: %s\n", name, desc, profilePic)
 			println(addresses[0])
-			//botAddress := botKey.GetAddress()
 			//read the value of memobot-num-stream from the database as an unsigned integer
 			numStreamBytes, err := db.Get([]byte("memobot-num-streams"), nil)
 			if err != nil {
@@ -238,12 +268,6 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 			newAddr := newKey.GetAddress()
 			println("New Key: " + newKey.GetBase58Compressed())
 			println("New Address: " + newAddr.GetEncoded())
-			coinIndex := uint32(0)
-			for i, output := range data.Addresses.Outputs {
-				if output.Lock.Address == addresses[0] {
-					coinIndex = uint32(i)
-				}
-			}
 
 			if err := database.FundTwitterAddress(memo.UTXO{Input: memo.TxInput{
 				Value:        data.Addresses.Outputs[coinIndex].Amount,
@@ -254,21 +278,28 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 				errorchan <- jerr.Get("error funding twitter address", err)
 				return nil
 			}
-			err = database.UpdateName(database.NewWallet(newAddr, *newKey), name)
+			newWallet := database.NewWallet(newAddr, *newKey)
+			twitterName := regexp.MustCompile("^CREATE TWITTER \\{([a-zA-Z0-9_]{1,15})}$").FindStringSubmatch(message)[1]
+			name, desc, profilePic, _ := tweets.GetProfile(twitterName, tweetClient)
+			fmt.Printf("Name: %s\nDesc: %s\nProfile Pic Link: %s\n", name, desc, profilePic)
+			if desc == "" {
+				desc = " "
+			}
+			err = database.UpdateName(newWallet, name)
 			if err != nil {
 				errorchan <- jerr.Get("error updating name", err)
 				return nil
 			} else {
 				println("updated name")
 			}
-			err = database.UpdateProfileText(database.NewWallet(newAddr, *newKey), desc)
+			err = database.UpdateProfileText(newWallet, desc)
 			if err != nil {
 				errorchan <- jerr.Get("error updating profile text", err)
 				return nil
 			} else {
 				println("updated profile text")
 			}
-			err = database.UpdateProfilePic(database.NewWallet(newAddr, *newKey), profilePic)
+			err = database.UpdateProfilePic(newWallet, profilePic)
 			if err != nil {
 				errorchan <- jerr.Get("error updating profile pic", err)
 				return nil
@@ -276,6 +307,8 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 				println("updated profile pic")
 			}
 			println("done")
+			println("New Key: " + newKey.GetBase58Compressed())
+			println("New Address: " + newAddr.GetEncoded())
 			//update the database with numStreamUint+1
 			err = db.Put([]byte("memobot-num-streams"), []byte(strconv.FormatUint(uint64(numStreamUint+1), 10)), nil)
 			if err != nil {
@@ -292,7 +325,7 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 		return jerr.Get("error subscribing to graphql", err)
 	}
 	fmt.Println("Listening for memos...")
-	client.WithLog(log.Println)
+	//client.WithLog(log.Println)
 	go func() {
 		err = client.Run()
 		if err != nil {
