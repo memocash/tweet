@@ -283,26 +283,27 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 				return nil
 			}
 			newWallet := database.NewWallet(newAddr, *newKey)
-			name, desc, profilePic, _ := tweets.GetProfile(twitterName, tweetClient)
-			fmt.Printf("Name: %s\nDesc: %s\nProfile Pic Link: %s\n", name, desc, profilePic)
-			if desc == "" {
-				desc = " "
+			profile, err := tweets.GetProfile(twitterName, tweetClient)
+			if err != nil {
+				return jerr.Get("fatal error getting profile", err)
 			}
-			err = database.UpdateName(newWallet, name)
+			fmt.Printf("Name: %s\nDesc: %s\nProfile Pic Link: %s\n",
+				profile.Name, profile.Description, profile.ProfilePic)
+			err = database.UpdateName(newWallet, profile.Name)
 			if err != nil {
 				errorchan <- jerr.Get("error updating name", err)
 				return nil
 			} else {
 				println("updated name")
 			}
-			err = database.UpdateProfileText(newWallet, desc)
+			err = database.UpdateProfileText(newWallet, profile.Description)
 			if err != nil {
 				errorchan <- jerr.Get("error updating profile text", err)
 				return nil
 			} else {
 				println("updated profile text")
 			}
-			err = database.UpdateProfilePic(newWallet, profilePic)
+			err = database.UpdateProfilePic(newWallet, profile.ProfilePic)
 			if err != nil {
 				errorchan <- jerr.Get("error updating profile pic", err)
 				return nil

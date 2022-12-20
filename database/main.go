@@ -180,7 +180,7 @@ func SendToTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.
 		}, {
 			Amount: 0,
 			Script: script.Send{
-				Hash: address.GetPkHash(),
+				Hash:    address.GetPkHash(),
 				Message: errorMsg},
 		}},
 		KeyRing: wallet.KeyRing{
@@ -204,6 +204,9 @@ func UpdateName(wlt Wallet, name string) error {
 }
 
 func UpdateProfileText(wlt Wallet, profile string) error {
+	if profile == "" {
+		profile = " "
+	}
 	memoTx, err := buildTx(wlt, script.Profile{Text: profile})
 	if err != nil {
 		return jerr.Get("error generating memo tx", err)

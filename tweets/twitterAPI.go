@@ -12,7 +12,6 @@ import (
 	"io/ioutil"
 	"log"
 	"strconv"
-	"strings"
 )
 
 func GetAllTweets(screenName string, client *twitter.Client, db *leveldb.DB) {
@@ -93,23 +92,6 @@ func getOldTweets(screenName string, client *twitter.Client, db *leveldb.DB) []T
 		tweetTxs = append(tweetTxs, TweetTx{Tweet: &tweets[i], TxHash: nil})
 	}
 	return tweetTxs
-}
-
-func GetProfile(screenName string, client *twitter.Client) (string, string, string, string) {
-	// Query to Twitter API for profile info
-	// user show
-	userShowParams := &twitter.UserShowParams{ScreenName: screenName}
-	user, _, _ := client.Users.Show(userShowParams)
-	desc := user.Description
-	name := user.Name
-	profilePic := user.ProfileImageURL
-	ID := user.IDStr
-	//resize the profile pic to full size
-	profilePic = strings.Replace(profilePic, "_normal", "", 1)
-	profilePic = strings.Replace(profilePic, "http:", "https:", 1)
-	//println(profilePic)
-	//fmt.Printf("USERS SHOW:\n%+v\n%+v\n%+v\n", name, desc, profilePic)
-	return name, desc, profilePic, ID
 }
 
 func Connect() *twitter.Client {

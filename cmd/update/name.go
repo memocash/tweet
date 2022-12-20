@@ -11,13 +11,15 @@ var nameCmd = &cobra.Command{
 	Use:   "name",
 	Short: "Update profile name on Memo to match a Twitter account",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(c *cobra.Command, args []string) error {
+	Run: func(c *cobra.Command, args []string) {
 		accountKey := tweets.GetAccountKeyFromArgs(args)
-		name, _, _, _ := tweets.GetProfile(accountKey.Account, tweets.Connect())
-		err := database.UpdateName(database.NewWallet(accountKey.Address, accountKey.Key), name)
+		profile, err := tweets.GetProfile(accountKey.Account, tweets.Connect())
+		if err != nil {
+			jerr.Get("fatal error getting profile", err).Fatal()
+		}
+		err = database.UpdateName(database.NewWallet(accountKey.Address, accountKey.Key), profile.Name)
 		if err != nil {
 			jerr.Get("error", err).Fatal()
 		}
-		return nil
 	},
 }
