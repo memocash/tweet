@@ -8,11 +8,11 @@ import (
 	"github.com/fallenstedt/twitter-stream/rules"
 	"github.com/fallenstedt/twitter-stream/stream"
 	"github.com/fallenstedt/twitter-stream/token_generator"
+	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/tweet/cmd/util"
 	"github.com/memocash/tweet/config"
 	util2 "github.com/memocash/tweet/database/util"
 	"github.com/syndtr/goleveldb/leveldb"
-	"log"
 	"regexp"
 	"strconv"
 )
@@ -20,7 +20,7 @@ import (
 func GetStreamingToken() (*token_generator.RequestBearerTokenResponse, error) {
 	conf := config.GetTwitterAPIConfig()
 	if !conf.IsSet() {
-		log.Fatal("Application Access Token required")
+		return nil, jerr.New("Application Access Token required")
 	}
 	return twitterstream.NewTokenGenerator().SetApiKeyAndSecret(conf.ConsumerKey, conf.ConsumerSecret).RequestBearerToken()
 }

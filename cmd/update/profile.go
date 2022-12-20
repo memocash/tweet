@@ -1,4 +1,4 @@
-package updatename
+package update
 
 import (
 	"github.com/jchavannes/jgo/jerr"
@@ -8,21 +8,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var nameCmd = &cobra.Command{
-	Use:   "updatename",
-	Short: "Update profile name on Memo to match a Twitter account",
+var profileCmd = &cobra.Command{
+	Use:   "profiletext",
+	Short: "Update profile description on Memo to match a Twitter account",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(c *cobra.Command, args []string) error {
 		key, address, account := util.Setup(args)
-		name, _, _, _ := tweets.GetProfile(account, tweets.Connect())
-		err := database.UpdateName(database.NewWallet(address, key), name)
+		_, desc, _, _ := tweets.GetProfile(account, tweets.Connect())
+		if desc == "" {
+			desc = " "
+		}
+		err := database.UpdateProfileText(database.NewWallet(address, key), desc)
 		if err != nil {
 			jerr.Get("error", err).Fatal()
 		}
 		return nil
 	},
-}
-
-func GetCommand() *cobra.Command {
-	return nameCmd
 }

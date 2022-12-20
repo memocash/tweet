@@ -5,9 +5,7 @@ import (
 	"github.com/memocash/tweet/cmd/getnewtweets"
 	"github.com/memocash/tweet/cmd/memobot"
 	"github.com/memocash/tweet/cmd/transfertweets"
-	"github.com/memocash/tweet/cmd/updatename"
-	"github.com/memocash/tweet/cmd/updateprofilepic"
-	"github.com/memocash/tweet/cmd/updateprofiletext"
+	"github.com/memocash/tweet/cmd/update"
 	"github.com/memocash/tweet/config"
 	"github.com/spf13/cobra"
 )
@@ -28,9 +26,7 @@ var indexCmd = &cobra.Command{
 func Execute() error {
 	indexCmd.AddCommand(
 		transfertweets.GetCommand(),
-		updatename.GetCommand(),
-		updateprofiletext.GetCommand(),
-		updateprofilepic.GetCommand(),
+		update.GetCommand(),
 		getnewtweets.GetCommand(),
 		memobot.GetCommand(),
 	)
