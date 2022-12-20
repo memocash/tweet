@@ -204,49 +204,52 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 			scriptArray = append(scriptArray, output.Script)
 		}
 		message := grabMessage(scriptArray)
+		senderAddress := ""
+		for _, input := range data.Addresses.Inputs {
+			if input.Output.Lock.Address != addresses[0] {
+				senderAddress = input.Output.Lock.Address
+			}
+		}
+		coinIndex := uint32(0)
+		for i, output := range data.Addresses.Outputs {
+			if output.Lock.Address == addresses[0] {
+				coinIndex = uint32(i)
+			}
+		}
 		//use regex library to check if message matches the format "CREATE TWITTER {twittername}" tweet names are a maximum of 15 characters
 		match, _ := regexp.MatchString("^CREATE TWITTER \\{[a-zA-Z0-9_]{1,15}}$", message)
 		if match {
-
-			//check if the value of the transaction is less than 5,000
-			coinIndex := uint32(0)
-			for i, output := range data.Addresses.Outputs {
-				if output.Lock.Address == addresses[0] {
-					coinIndex = uint32(i)
-				}
+			twitterName := regexp.MustCompile("^CREATE TWITTER \\{([a-zA-Z0-9_]{1,15})}$").FindStringSubmatch(message)[1]
+			//check if the value of the transaction is less than 5,000 or this address already has a bot for this account in the database
+			botExists := false
+			iter := db.NewIterator(util3.BytesPrefix([]byte("linked-"+senderAddress+"-"+twitterName)), nil)
+			for iter.Next() {
+				botExists = true
 			}
-			if data.Addresses.Outputs[coinIndex].Amount < 5000{
+			if botExists || data.Addresses.Outputs[coinIndex].Amount < 5000 {
 				if data.Addresses.Outputs[coinIndex].Amount < 546{
 				return nil
 				}
-				//send the money back to the sender with a message that the input wasn't enough
-				//get the address of the sender
-				senderAddress := ""
-				for _, input := range data.Addresses.Inputs {
-					if input.Output.Lock.Address != addresses[0] {
-						senderAddress = input.Output.Lock.Address
-					}
+				errMsg := ""
+				if botExists{
+					errMsg = fmt.Sprintf("You already have a bot for the account @%s", twitterName)
+				} else{
+					errMsg = fmt.Sprintf("You need to send at least 5,000 satoshis to create a bot for the account @%s", twitterName)
 				}
-				//create a transaction with the sender address and the amount of the transaction
+				print("\n\n\nSending error message: " + errMsg+"\n\n\n")
 				if err := database.SendToTwitterAddress(memo.UTXO{Input: memo.TxInput{
 					Value:        data.Addresses.Outputs[coinIndex].Amount,
 					PrevOutHash:  hs.GetTxHash(data.Addresses.Hash),
 					PrevOutIndex: coinIndex,
 					PkHash:       wallet.GetAddressFromString(addresses[0]).GetPkHash(),
-				}}, botKey, wallet.GetAddressFromString(senderAddress)); err != nil {
+				}}, botKey, wallet.GetAddressFromString(senderAddress), errMsg); err != nil {
 					errorchan <- jerr.Get("error sending money back", err)
 					return nil
 				}
 				return nil
 			}
-
-
-
-
 			fmt.Printf("\n\n%s\n\n", message)
-			//get the twittername from the message
 			println(addresses[0])
-			//read the value of memobot-num-stream from the database as an unsigned integer
 			numStreamBytes, err := db.Get([]byte("memobot-num-streams"), nil)
 			if err != nil {
 				errorchan <- jerr.Get("error getting num-streams", err)
@@ -279,7 +282,6 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 				return nil
 			}
 			newWallet := database.NewWallet(newAddr, *newKey)
-			twitterName := regexp.MustCompile("^CREATE TWITTER \\{([a-zA-Z0-9_]{1,15})}$").FindStringSubmatch(message)[1]
 			name, desc, profilePic, _ := tweets.GetProfile(twitterName, tweetClient)
 			fmt.Printf("Name: %s\nDesc: %s\nProfile Pic Link: %s\n", name, desc, profilePic)
 			if desc == "" {
@@ -309,15 +311,60 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 			println("done")
 			println("New Key: " + newKey.GetBase58Compressed())
 			println("New Address: " + newAddr.GetEncoded())
-			//update the database with numStreamUint+1
 			err = db.Put([]byte("memobot-num-streams"), []byte(strconv.FormatUint(uint64(numStreamUint+1), 10)), nil)
 			if err != nil {
 				errorchan <- jerr.Get("error updating memobot-num-streams", err)
 				return nil
 			}
-		} else {
+			//add a field to the database that links the sending address and twitter name to the new key
+			err = db.Put([]byte("linked-"+senderAddress+"-"+twitterName), []byte(newKey.GetBase58Compressed()), nil)
+			if err != nil {
+				errorchan <- jerr.Get("error updating linked-"+senderAddress+"-"+twitterName, err)
+				return nil
+			}
+		} else if regexp.MustCompile("^WITHDRAW TWITTER \\{([a-zA-Z0-9_]{1,15})}$").MatchString(message) {
+			//check the database for each field that matches linked-<senderAddress>-<twitterName>
+			//if there is a match, print out the address and key
+			//if there is no match, print out an error message
+			twitterName := regexp.MustCompile("^WITHDRAW TWITTER \\{([a-zA-Z0-9_]{1,15})}$").FindStringSubmatch(message)[1]
+			searchString := "linked-" + senderAddress + "-" + twitterName
+			iter := db.NewIterator(util3.BytesPrefix([]byte(searchString)), nil)
+			for iter.Next() {
+				key := iter.Key()
+				value := iter.Value()
+				println("Field name: " + string(key))
+				println("Private Key: " + string(value))
+			}
+			iter.Release()
+			err := iter.Error()
+			if err != nil {
+				errorchan <- jerr.Get("error iterating through database", err)
+				return nil
+			}
+		} else{
 			fmt.Printf("\n\nMessage not in correct format\n\n")
 			//handle sending back money
+			coinIndex := uint32(0)
+			for i, output := range data.Addresses.Outputs {
+				if output.Lock.Address == addresses[0] {
+					coinIndex = uint32(i)
+				}
+			}
+			//not enough to send back
+			if data.Addresses.Outputs[coinIndex].Amount < 546{
+				return nil
+			}
+			//create a transaction with the sender address and the amount of the transaction
+			if err := database.SendToTwitterAddress(memo.UTXO{Input: memo.TxInput{
+				Value:        data.Addresses.Outputs[coinIndex].Amount,
+				PrevOutHash:  hs.GetTxHash(data.Addresses.Hash),
+				PrevOutIndex: coinIndex,
+				PkHash:       wallet.GetAddressFromString(addresses[0]).GetPkHash(),
+			}}, botKey, wallet.GetAddressFromString(senderAddress), "Message was not in correct format"); err != nil {
+				errorchan <- jerr.Get("error sending money back", err)
+				return nil
+			}
+			return nil
 		}
 		return nil
 	})

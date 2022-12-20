@@ -171,12 +171,11 @@ func FundTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Ad
 	completeTransaction(memoTx, err)
 	return nil
 }
-func SendToTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Address) error {
-	errorMsg := "Please send at least 5,000 sats to fund your MemoBot"
+func SendToTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Address, errorMsg string) error {
 	memoTx, err := gen.Tx(gen.TxRequest{
 		InputsToUse: []memo.UTXO{utxo},
 		Outputs: []*memo.Output{{
-			Amount: memo.GetMaxSendFromCount(utxo.Input.Value, 1) - (int64(35 + len(errorMsg))),
+			Amount: memo.GetMaxSendFromCount(utxo.Input.Value, 1) - (int64(36 + len(errorMsg))),
 			Script: script.P2pkh{PkHash: address.GetPkHash()},
 		}, {
 			Amount: 0,
