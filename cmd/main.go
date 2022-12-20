@@ -12,10 +12,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var pf interface {
-	Stop()
-}
-
 var indexCmd = &cobra.Command{
 	Use:   "memotweet",
 	Short: "Twitter Content -> Memo Content",

@@ -20,26 +20,24 @@ var transferCmd = &cobra.Command{
 		"it is run. Deleting the tweetArchive.json file will cause it to restart from the beginning.",
 	Args: cobra.ExactArgs(2),
 	RunE: func(c *cobra.Command, args []string) error {
-		key,address,account := util.Setup(args)
+		key, address, account := util.Setup(args)
 		client := tweets.Connect()
 		fileName := "tweets.db"
 		db, err := leveldb.OpenFile(fileName, nil)
 
-		if err != nil{
+		if err != nil {
 			return jerr.Get("error opening db", err)
 		}
-		tweets.GetAllTweets(account,client,db)
-		_,_ = util2.TransferTweets(address, key, account, db, link, date)
+		tweets.GetAllTweets(account, client, db)
+		_, _ = util2.TransferTweets(address, key, account, db, link, date)
 		defer db.Close()
 		return nil
 	},
 }
-
 
 func GetCommand() *cobra.Command {
 	//if link and date are supplied, the tweet will be linked and the date will be added to the memo post
 	transferCmd.PersistentFlags().BoolVarP(&link, "link", "l", false, "link to tweet")
 	transferCmd.PersistentFlags().BoolVarP(&date, "date", "d", false, "add date to post")
 	return transferCmd
-	}
-
+}

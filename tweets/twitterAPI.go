@@ -2,11 +2,10 @@ package tweets
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
-	"github.com/coreos/pkg/flagutil"
 	"github.com/dghubble/go-twitter/twitter"
 	"github.com/memocash/tweet/cmd/util"
+	config2 "github.com/memocash/tweet/config"
 	"github.com/syndtr/goleveldb/leveldb"
 	util2 "github.com/syndtr/goleveldb/leveldb/util"
 	"golang.org/x/oauth2"
@@ -72,7 +71,7 @@ func getOldTweets(screenName string, client *twitter.Client, db *leveldb.DB) []u
 		maxID = 0
 		for iter.Next() {
 			key := iter.Key()
-			tweetID,_ := strconv.ParseInt(string(key[len(prefix)+1:]), 10, 64)
+			tweetID, _ := strconv.ParseInt(string(key[len(prefix)+1:]), 10, 64)
 			if tweetID < maxID || maxID == 0 {
 				maxID = tweetID
 			}
@@ -87,8 +86,8 @@ func getOldTweets(screenName string, client *twitter.Client, db *leveldb.DB) []u
 	var tweetTxs []util.TweetTx
 	for i, tweet := range tweets {
 		prefix := fmt.Sprintf("tweets-%s-%019d", screenName, tweet.ID)
-		tweetTx,_ := json.Marshal(util.TweetTx{Tweet: &tweets[i], TxHash: nil})
-		db.Put([]byte(prefix),tweetTx,nil)
+		tweetTx, _ := json.Marshal(util.TweetTx{Tweet: &tweets[i], TxHash: nil})
+		db.Put([]byte(prefix), tweetTx, nil)
 		//println(tweet.Text)
 		//println(tweet.CreatedAt)
 		tweetTxs = append(tweetTxs, util.TweetTx{Tweet: &tweets[i], TxHash: nil})
@@ -113,23 +112,14 @@ func GetProfile(screenName string, client *twitter.Client) (string, string, stri
 }
 
 func Connect() *twitter.Client {
-	flags := struct {
-		consumerKey    string
-		consumerSecret string
-	}{}
-
-	flag.StringVar(&flags.consumerKey, "consumer-key", "", "Twitter Consumer Key")
-	flag.StringVar(&flags.consumerSecret, "consumer-secret", "", "Twitter Consumer Secret")
-	flag.Parse()
-	flagutil.SetFlagsFromEnv(flag.CommandLine, "TWITTER")
-
-	if flags.consumerKey == "" || flags.consumerSecret == "" {
+	conf := config2.GetTwitterAPIConfig()
+	if !conf.IsSet() {
 		log.Fatal("Application Access Token required")
 	}
 	// oauth2 configures a client that uses app credentials to keep a fresh token
 	config := &clientcredentials.Config{
-		ClientID:     flags.consumerKey,
-		ClientSecret: flags.consumerSecret,
+		ClientID:     conf.ConsumerKey,
+		ClientSecret: conf.ConsumerSecret,
 		TokenURL:     "https://api.twitter.com/oauth2/token",
 	}
 	// http.Client will automatically authorize Requests

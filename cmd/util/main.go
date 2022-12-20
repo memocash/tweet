@@ -13,18 +13,19 @@ func Setup(args []string) (wallet.PrivateKey, wallet.Address, string) {
 	account := args[1]
 	return key, address, account
 }
+
 type TweetStreamData struct {
 	Data struct {
 		Attachments struct {
 			MediaKeys []string `json:"media_keys"`
-		}`json:"attachments"`
-		Text      string    `json:"text"`
-		ID        string    `json:"id"`
-		CreatedAt string `json:"created_at"`
-		AuthorID  string    `json:"author_id"`
-		ReferencedTweets []struct{
+		} `json:"attachments"`
+		Text             string `json:"text"`
+		ID               string `json:"id"`
+		CreatedAt        string `json:"created_at"`
+		AuthorID         string `json:"author_id"`
+		ReferencedTweets []struct {
 			Type string `json:"type"`
-			ID string `json:"id"`
+			ID   string `json:"id"`
 		} `json:"referenced_tweets"`
 	} `json:"data"`
 	Includes struct {
@@ -35,9 +36,9 @@ type TweetStreamData struct {
 		} `json:"users"`
 		Media []struct {
 			MediaKey string `json:"media_key"`
-			Type string `json:"type"`
-			URL string `json:"url"`
-		}`json:"media"`
+			Type     string `json:"type"`
+			URL      string `json:"url"`
+		} `json:"media"`
 	} `json:"includes"`
 	MatchingRules []struct {
 		ID  string `json:"id"`
@@ -45,11 +46,11 @@ type TweetStreamData struct {
 	} `json:"matching_rules"`
 }
 
-
 type TweetTx struct {
 	Tweet  *twitter.Tweet
 	TxHash []byte
 }
+
 type IdInfo struct {
 	ArchivedID int64
 	NewestID   int64

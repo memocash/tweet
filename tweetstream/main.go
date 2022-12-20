@@ -2,9 +2,7 @@ package tweetstream
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
-	"github.com/coreos/pkg/flagutil"
 	"github.com/dghubble/go-twitter/twitter"
 	twitterstream "github.com/fallenstedt/twitter-stream"
 	"github.com/fallenstedt/twitter-stream/rules"
@@ -18,22 +16,15 @@ import (
 	"regexp"
 	"strconv"
 )
-func GetStreamingToken() (*token_generator.RequestBearerTokenResponse, error){
-	flags := struct {
-		consumerKey    string
-		consumerSecret string
-	}{}
-	flag.StringVar(&flags.consumerKey, "consumer-key", "", "Twitter Consumer Key")
-	flag.StringVar(&flags.consumerSecret, "consumer-secret", "", "Twitter Consumer Secret")
-	flag.Parse()
-	flagutil.SetFlagsFromEnv(flag.CommandLine, "TWITTER")
 
-	if flags.consumerKey == "" || flags.consumerSecret == "" {
+func GetStreamingToken() (*token_generator.RequestBearerTokenResponse, error) {
+	conf := config.GetTwitterAPIConfig()
+	if !conf.IsSet() {
 		log.Fatal("Application Access Token required")
 	}
-	return twitterstream.NewTokenGenerator().SetApiKeyAndSecret(flags.consumerKey, flags.consumerSecret).RequestBearerToken()
-
+	return twitterstream.NewTokenGenerator().SetApiKeyAndSecret(conf.ConsumerKey, conf.ConsumerSecret).RequestBearerToken()
 }
+
 func FilterAccount(tok *token_generator.RequestBearerTokenResponse, streamConfigs []config.Stream) {
 	{
 		api := twitterstream.NewTwitterStream(tok.AccessToken)
@@ -59,15 +50,15 @@ func FilterAccount(tok *token_generator.RequestBearerTokenResponse, streamConfig
 	}
 }
 
-func ResetRules(tok *token_generator.RequestBearerTokenResponse){
+func ResetRules(tok *token_generator.RequestBearerTokenResponse) {
 	api := twitterstream.NewTwitterStream(tok.AccessToken)
-	res,err := api.Rules.Get()
+	res, err := api.Rules.Get()
 	if err != nil {
 		panic(err)
 	}
 	for _, rule := range res.Data {
-		ID,_ := strconv.Atoi(rule.Id)
-		res, err := api.Rules.Delete(rules.NewDeleteRulesRequest(ID),false)
+		ID, _ := strconv.Atoi(rule.Id)
+		res, err := api.Rules.Delete(rules.NewDeleteRulesRequest(ID), false)
 		if err != nil {
 			panic(err)
 		}
@@ -78,10 +69,10 @@ func ResetRules(tok *token_generator.RequestBearerTokenResponse){
 	}
 }
 
-func InitiateStream(tok *token_generator.RequestBearerTokenResponse, streamConfigs []config.Stream, db *leveldb.DB){
+func InitiateStream(tok *token_generator.RequestBearerTokenResponse, streamConfigs []config.Stream, db *leveldb.DB) {
 	api := fetchTweets(tok.AccessToken)
 
-	defer InitiateStream(tok,streamConfigs, db)
+	defer InitiateStream(tok, streamConfigs, db)
 	tweetObject := twitter.Tweet{}
 	for tweet := range api.GetMessages() {
 
@@ -97,12 +88,12 @@ func InitiateStream(tok *token_generator.RequestBearerTokenResponse, streamConfi
 			continue
 		}
 		result := tweet.Data.(util.TweetStreamData)
-		tweetID,_ := strconv.ParseInt(result.Data.ID,10,64)
-		userID,_ := strconv.ParseInt(result.Includes.Users[0].ID,10,64)
+		tweetID, _ := strconv.ParseInt(result.Data.ID, 10, 64)
+		userID, _ := strconv.ParseInt(result.Includes.Users[0].ID, 10, 64)
 		var InReplyToStatusID int64
-		if len(result.Data.ReferencedTweets) > 0 && result.Data.ReferencedTweets[0].Type == "replied_to"{
-			InReplyToStatusID,_ = strconv.ParseInt(result.Data.ReferencedTweets[0].ID,10,64)
-		} else{
+		if len(result.Data.ReferencedTweets) > 0 && result.Data.ReferencedTweets[0].Type == "replied_to" {
+			InReplyToStatusID, _ = strconv.ParseInt(result.Data.ReferencedTweets[0].ID, 10, 64)
+		} else {
 			InReplyToStatusID = 0
 		}
 		var tweetText = result.Data.Text
@@ -137,23 +128,22 @@ func InitiateStream(tok *token_generator.RequestBearerTokenResponse, streamConfi
 		println("\n\n\n")
 		//fmt.Println(tweetObject.Text)
 		TweetTx := util.TweetTx{
-			Tweet: &tweetObject,
+			Tweet:  &tweetObject,
 			TxHash: nil,
 		}
 		//call streamtweet
 		//based on the stream config, get the right address to send the tweet to
 		for _, config := range streamConfigs {
-			if config.Name == tweetObject.User.ScreenName{
+			if config.Name == tweetObject.User.ScreenName {
 				println("sending tweet to key: ", config.Key)
-				key, address, _ := util.Setup([]string{config.Key,config.Name})
-				util2.StreamTweet(address, key, TweetTx,db, true, false)
+				key, address, _ := util.Setup([]string{config.Key, config.Name})
+				util2.StreamTweet(address, key, TweetTx, db, true, false)
 			}
 		}
 	}
-
 	fmt.Println("Stopped Stream")
-
 }
+
 func fetchTweets(token string) stream.IStream {
 	api := twitterstream.NewTwitterStream(token).Stream
 	api.SetUnmarshalHook(func(bytes []byte) (interface{}, error) {

@@ -6,8 +6,18 @@ import (
 )
 
 type Config struct {
-	BotSeed  string   `mapstructure:"BOT_SEED"`
-	Streams []Stream `mapstructure:"STREAMS"`
+	BotSeed    string     `mapstructure:"BOT_SEED"`
+	Streams    []Stream   `mapstructure:"STREAMS"`
+	TwitterAPI TwitterAPI `mapstructure:"TWITTER_API"`
+}
+
+type TwitterAPI struct {
+	ConsumerKey    string `mapstructure:"CONSUMER_KEY"`
+	ConsumerSecret string `mapstructure:"CONSUMER_SECRET"`
+}
+
+func (t TwitterAPI) IsSet() bool {
+	return t.ConsumerKey != "" && t.ConsumerSecret != ""
 }
 
 type Stream struct {
@@ -31,4 +41,8 @@ func InitConfig() error {
 
 func GetConfig() Config {
 	return _config
+}
+
+func GetTwitterAPIConfig() TwitterAPI {
+	return _config.TwitterAPI
 }
