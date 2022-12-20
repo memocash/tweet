@@ -13,7 +13,6 @@ import (
 	"github.com/memocash/index/ref/bitcoin/memo"
 	"github.com/memocash/index/ref/bitcoin/tx/hs"
 	"github.com/memocash/index/ref/bitcoin/wallet"
-	"github.com/memocash/tweet/cmd/util"
 	"github.com/memocash/tweet/database"
 	"github.com/memocash/tweet/tweets"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -24,11 +23,11 @@ import (
 	"time"
 )
 
-func StreamTweet(address wallet.Address, key wallet.PrivateKey, tweet util.TweetTx, db *leveldb.DB, appendLink bool, appendDate bool) error {
+func StreamTweet(accountKey tweets.AccountKey, tweet tweets.TweetTx, db *leveldb.DB, appendLink bool, appendDate bool) error {
 	if tweet.Tweet == nil {
 		return jerr.New("tweet is nil")
 	}
-	wlt := database.NewWallet(address, key)
+	wlt := database.NewWallet(accountKey.Address, accountKey.Key)
 	tweetLink := fmt.Sprintf("\nhttps://twitter.com/twitter/status/%d\n", tweet.Tweet.ID)
 	tweetDate := fmt.Sprintf("\n%s\n", tweet.Tweet.CreatedAt)
 	tweetText := tweet.Tweet.Text
@@ -53,7 +52,7 @@ func StreamTweet(address wallet.Address, key wallet.PrivateKey, tweet util.Tweet
 	} else {
 		var parentHash []byte = nil
 		//search the saved-address-twittername-tweetID prefix for the tweet that this tweet is a reply to
-		prefix := fmt.Sprintf("saved-%s-%s", address, tweet.Tweet.User.ScreenName)
+		prefix := fmt.Sprintf("saved-%s-%s", accountKey.Address, tweet.Tweet.User.ScreenName)
 		iter := db.NewIterator(util3.BytesPrefix([]byte(prefix)), nil)
 		for iter.Next() {
 			key := iter.Key()
@@ -82,7 +81,7 @@ func StreamTweet(address wallet.Address, key wallet.PrivateKey, tweet util.Tweet
 		}
 	}
 	//save the txHash to the saved-address-twittername-tweetID prefix
-	prefix = fmt.Sprintf("saved-%s-%s", address, tweet.Tweet.User.ScreenName)
+	prefix = fmt.Sprintf("saved-%s-%s", accountKey.Address, tweet.Tweet.User.ScreenName)
 	dbKey := fmt.Sprintf("%s-%019d", prefix, tweet.Tweet.ID)
 	err := db.Put([]byte(dbKey), tweet.TxHash, nil)
 	if err != nil {
@@ -90,10 +89,11 @@ func StreamTweet(address wallet.Address, key wallet.PrivateKey, tweet util.Tweet
 	}
 	return nil
 }
-func TransferTweets(address wallet.Address, key wallet.PrivateKey, screenName string, db *leveldb.DB, appendLink bool, appendDate bool) (int, error) {
-	var tweetList []util.TweetTx
+
+func TransferTweets(accountKey tweets.AccountKey, db *leveldb.DB, appendLink bool, appendDate bool) (int, error) {
+	var tweetList []tweets.TweetTx
 	//find the greatest ID of all the already saved tweets
-	prefix := fmt.Sprintf("saved-%s-%s", address, screenName)
+	prefix := fmt.Sprintf("saved-%s-%s", accountKey.Address, accountKey.Account)
 	iter := db.NewIterator(util3.BytesPrefix([]byte(prefix)), nil)
 	var startID int64 = 0
 	for iter.Next() {
@@ -105,7 +105,7 @@ func TransferTweets(address wallet.Address, key wallet.PrivateKey, screenName st
 	}
 	iter.Release()
 	//get up to 20 tweets from the tweets-twittername-tweetID prefix with the smallest IDs greater than the startID
-	prefix = fmt.Sprintf("tweets-%s", screenName)
+	prefix = fmt.Sprintf("tweets-%s", accountKey.Account)
 	println(prefix)
 	iter = db.NewIterator(util3.BytesPrefix([]byte(prefix)), nil)
 	for iter.Next() {
@@ -113,7 +113,7 @@ func TransferTweets(address wallet.Address, key wallet.PrivateKey, screenName st
 		tweetID, _ := strconv.ParseInt(string(key[len(prefix)+1:]), 10, 64)
 		println("%d", tweetID)
 		if tweetID > startID {
-			var tweetTx util.TweetTx
+			var tweetTx tweets.TweetTx
 			err := json.Unmarshal(iter.Value(), &tweetTx)
 			if err != nil {
 				return 0, jerr.Get("error unmarshaling tweetTx", err)
@@ -139,7 +139,7 @@ func TransferTweets(address wallet.Address, key wallet.PrivateKey, screenName st
 				tweet.Tweet.Text += fmt.Sprintf("\n%s", media.MediaURL)
 			}
 		}
-		err := StreamTweet(address, key, tweet, db, appendLink, appendDate)
+		err := StreamTweet(accountKey, tweet, db, appendLink, appendDate)
 		if err != nil {
 			return numTransferred, jerr.Get("error streaming tweet", err)
 		}
@@ -147,6 +147,7 @@ func TransferTweets(address wallet.Address, key wallet.PrivateKey, screenName st
 	}
 	return numTransferred, nil
 }
+
 func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.PrivateKey, tweetClient *twitter.Client, db *leveldb.DB) error {
 	println("Listening to address: " + addresses[0])
 	println("Listening to key: " + botKey.GetBase58Compressed())
@@ -227,16 +228,16 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 				botExists = true
 			}
 			if botExists || data.Addresses.Outputs[coinIndex].Amount < 5000 {
-				if data.Addresses.Outputs[coinIndex].Amount < 546{
-				return nil
+				if data.Addresses.Outputs[coinIndex].Amount < 546 {
+					return nil
 				}
 				errMsg := ""
-				if botExists{
+				if botExists {
 					errMsg = fmt.Sprintf("You already have a bot for the account @%s", twitterName)
-				} else{
+				} else {
 					errMsg = fmt.Sprintf("You need to send at least 5,000 satoshis to create a bot for the account @%s", twitterName)
 				}
-				print("\n\n\nSending error message: " + errMsg+"\n\n\n")
+				print("\n\n\nSending error message: " + errMsg + "\n\n\n")
 				if err := database.SendToTwitterAddress(memo.UTXO{Input: memo.TxInput{
 					Value:        data.Addresses.Outputs[coinIndex].Amount,
 					PrevOutHash:  hs.GetTxHash(data.Addresses.Hash),
@@ -341,7 +342,7 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 				errorchan <- jerr.Get("error iterating through database", err)
 				return nil
 			}
-		} else{
+		} else {
 			fmt.Printf("\n\nMessage not in correct format\n\n")
 			//handle sending back money
 			coinIndex := uint32(0)
@@ -351,7 +352,7 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 				}
 			}
 			//not enough to send back
-			if data.Addresses.Outputs[coinIndex].Amount < 546{
+			if data.Addresses.Outputs[coinIndex].Amount < 546 {
 				return nil
 			}
 			//create a transaction with the sender address and the amount of the transaction

@@ -2,7 +2,6 @@ package update
 
 import (
 	"github.com/jchavannes/jgo/jerr"
-	"github.com/memocash/tweet/cmd/util"
 	"github.com/memocash/tweet/database"
 	"github.com/memocash/tweet/tweets"
 	"github.com/spf13/cobra"
@@ -13,9 +12,9 @@ var profilePicCmd = &cobra.Command{
 	Short: "Update profile picture on Memo to match a Twitter account",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(c *cobra.Command, args []string) error {
-		key, address, account := util.Setup(args)
-		_, _, pic, _ := tweets.GetProfile(account, tweets.Connect())
-		err := database.UpdateProfilePic(database.NewWallet(address, key), pic)
+		accountKey := tweets.GetAccountKeyFromArgs(args)
+		_, _, pic, _ := tweets.GetProfile(accountKey.Account, tweets.Connect())
+		err := database.UpdateProfilePic(database.NewWallet(accountKey.Address, accountKey.Key), pic)
 		if err != nil {
 			jerr.Get("error", err).Fatal()
 		}

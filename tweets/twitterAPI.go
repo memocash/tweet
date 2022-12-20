@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/dghubble/go-twitter/twitter"
-	"github.com/memocash/tweet/cmd/util"
 	config2 "github.com/memocash/tweet/config"
 	"github.com/syndtr/goleveldb/leveldb"
 	util2 "github.com/syndtr/goleveldb/leveldb/util"
@@ -24,8 +23,9 @@ func GetAllTweets(screenName string, client *twitter.Client, db *leveldb.DB) {
 		}
 	}
 }
-func GetNewTweets(screenName string, client *twitter.Client, fileHeader string) []util.TweetTx {
-	IdInfo := util.IdInfo{
+
+func GetNewTweets(screenName string, client *twitter.Client, fileHeader string) []TweetTx {
+	IdInfo := IdInfo{
 		ArchivedID: 0,
 		NewestID:   0,
 	}
@@ -43,9 +43,9 @@ func GetNewTweets(screenName string, client *twitter.Client, fileHeader string) 
 		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, ExcludeReplies: &excludeReplies, Count: 20}
 	}
 	tweets, _, _ := client.Timelines.UserTimeline(userTimelineParams)
-	var tweetTxs []util.TweetTx
+	var tweetTxs []TweetTx
 	for i, tweet := range tweets {
-		tweetTxs = append(tweetTxs, util.TweetTx{Tweet: &tweets[i], TxHash: nil})
+		tweetTxs = append(tweetTxs, TweetTx{Tweet: &tweets[i], TxHash: nil})
 		println(tweet.Text)
 		println(tweet.CreatedAt)
 		if tweet.ID > IdInfo.NewestID || IdInfo.NewestID == 0 {
@@ -56,7 +56,7 @@ func GetNewTweets(screenName string, client *twitter.Client, fileHeader string) 
 	_ = ioutil.WriteFile(fileName, file, 0644)
 	return tweetTxs
 }
-func getOldTweets(screenName string, client *twitter.Client, db *leveldb.DB) []util.TweetTx {
+func getOldTweets(screenName string, client *twitter.Client, db *leveldb.DB) []TweetTx {
 	var userTimelineParams *twitter.UserTimelineParams
 	excludeReplies := false
 	//check if there are any tweetTx objects with the prefix containing this address and this screenName
@@ -83,17 +83,18 @@ func getOldTweets(screenName string, client *twitter.Client, db *leveldb.DB) []u
 	}
 	// Query to Twitter API for all tweets after IdInfo.id
 	tweets, _, _ := client.Timelines.UserTimeline(userTimelineParams)
-	var tweetTxs []util.TweetTx
+	var tweetTxs []TweetTx
 	for i, tweet := range tweets {
 		prefix := fmt.Sprintf("tweets-%s-%019d", screenName, tweet.ID)
-		tweetTx, _ := json.Marshal(util.TweetTx{Tweet: &tweets[i], TxHash: nil})
+		tweetTx, _ := json.Marshal(TweetTx{Tweet: &tweets[i], TxHash: nil})
 		db.Put([]byte(prefix), tweetTx, nil)
 		//println(tweet.Text)
 		//println(tweet.CreatedAt)
-		tweetTxs = append(tweetTxs, util.TweetTx{Tweet: &tweets[i], TxHash: nil})
+		tweetTxs = append(tweetTxs, TweetTx{Tweet: &tweets[i], TxHash: nil})
 	}
 	return tweetTxs
 }
+
 func GetProfile(screenName string, client *twitter.Client) (string, string, string, string) {
 	// Query to Twitter API for profile info
 	// user show

@@ -9,9 +9,9 @@ import (
 	"github.com/fallenstedt/twitter-stream/stream"
 	"github.com/fallenstedt/twitter-stream/token_generator"
 	"github.com/jchavannes/jgo/jerr"
-	"github.com/memocash/tweet/cmd/util"
 	"github.com/memocash/tweet/config"
 	util2 "github.com/memocash/tweet/database/util"
+	"github.com/memocash/tweet/tweets"
 	"github.com/syndtr/goleveldb/leveldb"
 	"regexp"
 	"strconv"
@@ -26,27 +26,24 @@ func GetStreamingToken() (*token_generator.RequestBearerTokenResponse, error) {
 }
 
 func FilterAccount(tok *token_generator.RequestBearerTokenResponse, streamConfigs []config.Stream) {
-	{
-		api := twitterstream.NewTwitterStream(tok.AccessToken)
-		var res *rules.TwitterRuleResponse
-		var err error
-		//remove duplicate names from stream configs
-		uniqueNames := make(map[string]bool)
-		for _, streamConfig := range streamConfigs {
-			uniqueNames[streamConfig.Name] = true
+	api := twitterstream.NewTwitterStream(tok.AccessToken)
+	var res *rules.TwitterRuleResponse
+	var err error
+	//remove duplicate names from stream configs
+	uniqueNames := make(map[string]bool)
+	for _, streamConfig := range streamConfigs {
+		uniqueNames[streamConfig.Name] = true
+	}
+	for name := range uniqueNames {
+		rules := twitterstream.NewRuleBuilder().AddRule("from:"+name, "get tweets from this account").Build()
+		res, err = api.Rules.Create(rules, false) // dryRun is set to false.
+		if err != nil {
+			panic(err)
 		}
-		for name := range uniqueNames {
-			rules := twitterstream.NewRuleBuilder().AddRule("from:"+name, "get tweets from this account").Build()
-			res, err = api.Rules.Create(rules, false) // dryRun is set to false.
-			if err != nil {
-				panic(err)
-			}
-		}
-
-		if res.Errors != nil && len(res.Errors) > 0 {
-			//https://developer.twitter.com/en/support/twitter-api/error-troubleshooting
-			panic(fmt.Sprintf("Received an error from twitter: %v", res.Errors))
-		}
+	}
+	if res.Errors != nil && len(res.Errors) > 0 {
+		//https://developer.twitter.com/en/support/twitter-api/error-troubleshooting
+		panic(fmt.Sprintf("Received an error from twitter: %v", res.Errors))
 	}
 }
 
@@ -71,7 +68,6 @@ func ResetRules(tok *token_generator.RequestBearerTokenResponse) {
 
 func InitiateStream(tok *token_generator.RequestBearerTokenResponse, streamConfigs []config.Stream, db *leveldb.DB) {
 	api := fetchTweets(tok.AccessToken)
-
 	defer InitiateStream(tok, streamConfigs, db)
 	tweetObject := twitter.Tweet{}
 	for tweet := range api.GetMessages() {
@@ -87,7 +83,7 @@ func InitiateStream(tok *token_generator.RequestBearerTokenResponse, streamConfi
 			api.StopStream()
 			continue
 		}
-		result := tweet.Data.(util.TweetStreamData)
+		result := tweet.Data.(tweets.TweetStreamData)
 		tweetID, _ := strconv.ParseInt(result.Data.ID, 10, 64)
 		userID, _ := strconv.ParseInt(result.Includes.Users[0].ID, 10, 64)
 		var InReplyToStatusID int64
@@ -127,7 +123,7 @@ func InitiateStream(tok *token_generator.RequestBearerTokenResponse, streamConfi
 		println(tweetText)
 		println("\n\n\n")
 		//fmt.Println(tweetObject.Text)
-		TweetTx := util.TweetTx{
+		TweetTx := tweets.TweetTx{
 			Tweet:  &tweetObject,
 			TxHash: nil,
 		}
@@ -136,8 +132,8 @@ func InitiateStream(tok *token_generator.RequestBearerTokenResponse, streamConfi
 		for _, config := range streamConfigs {
 			if config.Name == tweetObject.User.ScreenName {
 				println("sending tweet to key: ", config.Key)
-				key, address, _ := util.Setup([]string{config.Key, config.Name})
-				util2.StreamTweet(address, key, TweetTx, db, true, false)
+				twitterAccountWallet := tweets.GetAccountKeyFromArgs([]string{config.Key, config.Name})
+				util2.StreamTweet(twitterAccountWallet, TweetTx, db, true, false)
 			}
 		}
 	}
@@ -148,7 +144,7 @@ func fetchTweets(token string) stream.IStream {
 	api := twitterstream.NewTwitterStream(token).Stream
 	api.SetUnmarshalHook(func(bytes []byte) (interface{}, error) {
 		fmt.Println(string(bytes))
-		data := util.TweetStreamData{}
+		data := tweets.TweetStreamData{}
 		if err := json.Unmarshal(bytes, &data); err != nil {
 			fmt.Printf("failed to unmarshal bytes: %v", err)
 		}

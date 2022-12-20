@@ -2,7 +2,6 @@ package transfertweets
 
 import (
 	"github.com/jchavannes/jgo/jerr"
-	"github.com/memocash/tweet/cmd/util"
 	util2 "github.com/memocash/tweet/database/util"
 	"github.com/memocash/tweet/tweets"
 	"github.com/spf13/cobra"
@@ -20,7 +19,7 @@ var transferCmd = &cobra.Command{
 		"it is run. Deleting the tweetArchive.json file will cause it to restart from the beginning.",
 	Args: cobra.ExactArgs(2),
 	RunE: func(c *cobra.Command, args []string) error {
-		key, address, account := util.Setup(args)
+		accountKey := tweets.GetAccountKeyFromArgs(args)
 		client := tweets.Connect()
 		fileName := "tweets.db"
 		db, err := leveldb.OpenFile(fileName, nil)
@@ -28,8 +27,8 @@ var transferCmd = &cobra.Command{
 		if err != nil {
 			return jerr.Get("error opening db", err)
 		}
-		tweets.GetAllTweets(account, client, db)
-		_, _ = util2.TransferTweets(address, key, account, db, link, date)
+		tweets.GetAllTweets(accountKey.Account, client, db)
+		_, _ = util2.TransferTweets(accountKey, db, link, date)
 		defer db.Close()
 		return nil
 	},

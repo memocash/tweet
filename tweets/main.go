@@ -1,18 +1,8 @@
-package util
+package tweets
 
 import (
 	"github.com/dghubble/go-twitter/twitter"
-	"github.com/jchavannes/jgo/jlog"
-	"github.com/memocash/index/ref/bitcoin/wallet"
 )
-
-func Setup(args []string) (wallet.PrivateKey, wallet.Address, string) {
-	key, _ := wallet.ImportPrivateKey(args[0])
-	address := key.GetAddress()
-	jlog.Logf("Using address: %s\n", address.GetEncoded())
-	account := args[1]
-	return key, address, account
-}
 
 type TweetStreamData struct {
 	Data struct {
