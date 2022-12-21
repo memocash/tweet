@@ -93,6 +93,11 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 		return jerr.Get("error getting streaming token", err)
 	}
 	api := tweetstream.FetchTweets(streamToken.AccessToken)
+	streamArray := updateStreamArray(db,make([]config.Stream, 0))
+	err = updateStream(db, api, streamArray)
+	if err != nil {
+		return jerr.Get("error updating stream", err)
+	}
 	defer client.Close()
 	type Subscription struct {
 		Addresses struct {
@@ -288,7 +293,8 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 				num_running -= 1
 				return nil
 			}
-			err = updateStream(db,api)
+			streamArray = updateStreamArray(db, streamArray)
+			err = updateStream(db,api, streamArray)
 			if err != nil {
 				errorchan <- jerr.Get("error updating stream", err)
 				num_running -= 1
@@ -356,26 +362,13 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 		return jerr.Get("error in listen", err)
 	}
 }
-func updateStream(db *leveldb.DB, api *twitterstream.TwitterApi) error{
+func updateStream(db *leveldb.DB, api *twitterstream.TwitterApi, streamArray []config.Stream) error{
 	//check if there are already running streams on this token
 	//if there are, stop them
 	//api.Stream.StopStream()
 	//create an array of {twitterName, newKey} objects by searching through the linked-<senderAddress>-<twitterName> fields
-	streamArray := make([]config.Stream, 0)
-	iter := db.NewIterator(util3.BytesPrefix([]byte("linked-")), nil)
-	for iter.Next() {
-		//find the twitterName at the end of the linked-<senderAddress>-<twitterName> field
-		twitterName := strings.Split(string(iter.Key()), "-")[2]
-		newKey := string(iter.Value())
-		streamArray = append(streamArray, config.Stream{Key: newKey, Name: twitterName})
-	}
-	for _, stream := range streamArray {
-		println("streaming " + stream.Name + " to key " + stream.Key)
-	}
-	iter.Release()
-	err := iter.Error()
-	if err != nil {
-		return jerr.Get("error iterating through database", err)
+	if len(streamArray) == 0 {
+		return nil
 	}
 	go func() {
 		tweetstream.ResetRules(api)
@@ -384,6 +377,27 @@ func updateStream(db *leveldb.DB, api *twitterstream.TwitterApi) error{
 		tweetstream.ResetRules(api)
 	}()
 	return nil
+}
+
+func updateStreamArray(db *leveldb.DB, streamArray []config.Stream) []config.Stream{
+	iter := db.NewIterator(util3.BytesPrefix([]byte("linked-")), nil)
+	for iter.Next() {
+		//find the twitterName at the end of the linked-<senderAddress>-<twitterName> field
+		twitterName := strings.Split(string(iter.Key()), "-")[2]
+		newKey := string(iter.Value())
+		//only add it to the stream array if this key : name pair isn't already in it
+		found := false
+		for _, stream := range streamArray {
+			if stream.Key == newKey && stream.Name == twitterName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			streamArray = append(streamArray, config.Stream{Key: newKey, Name: twitterName})
+		}
+	}
+	return streamArray
 }
 
 func grabMessage(outputScripts []string) string {

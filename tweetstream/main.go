@@ -66,8 +66,10 @@ func ResetRules(api *twitterstream.TwitterApi) {
 func InitiateStream(api *twitterstream.TwitterApi, streamConfigs []config.Stream, db *leveldb.DB) {
 	defer InitiateStream(api, streamConfigs, db)
 	tweetObject := twitter.Tweet{}
+	for _, stream := range streamConfigs {
+		println("streaming " + stream.Name + " to key " + stream.Key)
+	}
 	for tweet := range api.Stream.GetMessages() {
-
 		// Handle disconnections from twitter
 		// https://developer.twitter.com/en/docs/twitter-api/tweets/volume-streams/integrate/handling-disconnections
 		if tweet.Err != nil {
@@ -126,6 +128,7 @@ func InitiateStream(api *twitterstream.TwitterApi, streamConfigs []config.Stream
 		//call streamtweet
 		//based on the stream config, get the right address to send the tweet to
 		for _, config := range streamConfigs {
+			println(config.Name)
 			if config.Name == tweetObject.User.ScreenName {
 				println("sending tweet to key: ", config.Key)
 				twitterAccountWallet := tweets.GetAccountKeyFromArgs([]string{config.Key, config.Name})
