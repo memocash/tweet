@@ -16,17 +16,22 @@ var transferCmd = &cobra.Command{
 	Short: "Listens for new tweets on an account",
 	Long:  "Prints out each new tweet as it comes in. ",
 	RunE: func(c *cobra.Command, args []string) error {
-		streamToken, err := tweetstream.GetStreamingToken()
+		streamToken,err := tweetstream.GetStreamingToken()
+		if err != nil {
+			return jerr.Get("error getting streaming token", err)
+		}
+		api := tweetstream.FetchTweets(streamToken.AccessToken)
+
 		fileName := "tweets.db"
 		db, err := leveldb.OpenFile(fileName, nil)
 		if err != nil {
 			return jerr.Get("error opening db", err)
 		}
 		streamConfigs := config.GetConfig().Streams
-		tweetstream.ResetRules(streamToken)
-		tweetstream.FilterAccount(streamToken, streamConfigs)
-		tweetstream.InitiateStream(streamToken, streamConfigs, db)
-		tweetstream.ResetRules(streamToken)
+		tweetstream.ResetRules(api)
+		tweetstream.FilterAccount(api, streamConfigs)
+		tweetstream.InitiateStream(api, streamConfigs, db)
+		tweetstream.ResetRules(api)
 		return nil
 	},
 }

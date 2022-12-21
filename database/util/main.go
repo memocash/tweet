@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/dghubble/go-twitter/twitter"
+	twitterstream "github.com/fallenstedt/twitter-stream"
 	"github.com/hasura/go-graphql-client"
 	"github.com/hasura/go-graphql-client/pkg/jsonutil"
 	"github.com/jchavannes/btcd/txscript"
@@ -87,6 +88,11 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 	println("Listening to address: " + addresses[0])
 	println("Listening to key: " + botKey.GetBase58Compressed())
 	client := graphql.NewSubscriptionClient("ws://127.0.0.1:26770/graphql")
+	streamToken,err := tweetstream.GetStreamingToken()
+	if err != nil {
+		return jerr.Get("error getting streaming token", err)
+	}
+	api := tweetstream.FetchTweets(streamToken.AccessToken)
 	defer client.Close()
 	type Subscription struct {
 		Addresses struct {
@@ -120,7 +126,7 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 	var subscription = new(Subscription)
 	var errorchan = make(chan error)
 	num_running := 0
-	_, err := client.Subscribe(&subscription, map[string]interface{}{"addresses": addresses}, func(dataValue []byte, errValue error) error {
+	_, err = client.Subscribe(&subscription, map[string]interface{}{"addresses": addresses}, func(dataValue []byte, errValue error) error {
 		num_running += 1
 		println("Running: " + strconv.Itoa(num_running))
 		if num_running > 1{
@@ -282,7 +288,7 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 				num_running -= 1
 				return nil
 			}
-			err = updateStream(db)
+			err = updateStream(db,api)
 			if err != nil {
 				errorchan <- jerr.Get("error updating stream", err)
 				num_running -= 1
@@ -314,6 +320,7 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 			//handle sending back money
 			//not enough to send back
 			if data.Addresses.Outputs[coinIndex].Amount < 546 {
+				num_running -= 1
 				return nil
 			}
 			//create a transaction with the sender address and the amount of the transaction
@@ -349,15 +356,10 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 		return jerr.Get("error in listen", err)
 	}
 }
-func updateStream(db *leveldb.DB) error{
+func updateStream(db *leveldb.DB, api *twitterstream.TwitterApi) error{
 	//check if there are already running streams on this token
 	//if there are, stop them
-	streamToken,err := tweetstream.GetStreamingToken()
-	if err != nil {
-		return jerr.Get("error getting streaming token", err)
-	}
-	//api := tweetstream.FetchTweets(streamToken.AccessToken)
-	//api.StopStream()
+	//api.Stream.StopStream()
 	//create an array of {twitterName, newKey} objects by searching through the linked-<senderAddress>-<twitterName> fields
 	streamArray := make([]config.Stream, 0)
 	iter := db.NewIterator(util3.BytesPrefix([]byte("linked-")), nil)
@@ -371,14 +373,16 @@ func updateStream(db *leveldb.DB) error{
 		println("streaming " + stream.Name + " to key " + stream.Key)
 	}
 	iter.Release()
-	err = iter.Error()
+	err := iter.Error()
 	if err != nil {
 		return jerr.Get("error iterating through database", err)
 	}
-	tweetstream.ResetRules(streamToken)
-	tweetstream.FilterAccount(streamToken, streamArray)
-	tweetstream.InitiateStream(streamToken, streamArray, db)
-	tweetstream.ResetRules(streamToken)
+	go func() {
+		tweetstream.ResetRules(api)
+		tweetstream.FilterAccount(api, streamArray)
+		tweetstream.InitiateStream(api, streamArray, db)
+		tweetstream.ResetRules(api)
+	}()
 	return nil
 }
 

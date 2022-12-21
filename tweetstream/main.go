@@ -6,7 +6,6 @@ import (
 	"github.com/dghubble/go-twitter/twitter"
 	twitterstream "github.com/fallenstedt/twitter-stream"
 	"github.com/fallenstedt/twitter-stream/rules"
-	"github.com/fallenstedt/twitter-stream/stream"
 	"github.com/fallenstedt/twitter-stream/token_generator"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/tweet/config"
@@ -25,8 +24,7 @@ func GetStreamingToken() (*token_generator.RequestBearerTokenResponse, error) {
 	return twitterstream.NewTokenGenerator().SetApiKeyAndSecret(conf.ConsumerKey, conf.ConsumerSecret).RequestBearerToken()
 }
 
-func FilterAccount(tok *token_generator.RequestBearerTokenResponse, streamConfigs []config.Stream) {
-	api := twitterstream.NewTwitterStream(tok.AccessToken)
+func FilterAccount(api *twitterstream.TwitterApi, streamConfigs []config.Stream) {
 	var res *rules.TwitterRuleResponse
 	var err error
 	//remove duplicate names from stream configs
@@ -47,8 +45,7 @@ func FilterAccount(tok *token_generator.RequestBearerTokenResponse, streamConfig
 	}
 }
 
-func ResetRules(tok *token_generator.RequestBearerTokenResponse) {
-	api := twitterstream.NewTwitterStream(tok.AccessToken)
+func ResetRules(api *twitterstream.TwitterApi) {
 	res, err := api.Rules.Get()
 	if err != nil {
 		panic(err)
@@ -66,11 +63,10 @@ func ResetRules(tok *token_generator.RequestBearerTokenResponse) {
 	}
 }
 
-func InitiateStream(tok *token_generator.RequestBearerTokenResponse, streamConfigs []config.Stream, db *leveldb.DB) {
-	api := FetchTweets(tok.AccessToken)
-	defer InitiateStream(tok, streamConfigs, db)
+func InitiateStream(api *twitterstream.TwitterApi, streamConfigs []config.Stream, db *leveldb.DB) {
+	defer InitiateStream(api, streamConfigs, db)
 	tweetObject := twitter.Tweet{}
-	for tweet := range api.GetMessages() {
+	for tweet := range api.Stream.GetMessages() {
 
 		// Handle disconnections from twitter
 		// https://developer.twitter.com/en/docs/twitter-api/tweets/volume-streams/integrate/handling-disconnections
@@ -80,7 +76,7 @@ func InitiateStream(tok *token_generator.RequestBearerTokenResponse, streamConfi
 			// StopStream will close the long running GET request to Twitter's v2 Streaming endpoint by
 			// closing the `GetMessages` channel. Once it's closed, it's safe to perform a new network request
 			// with `StartStream`
-			api.StopStream()
+			api.Stream.StopStream()
 			continue
 		}
 		result := tweet.Data.(tweets.TweetStreamData)
@@ -140,9 +136,9 @@ func InitiateStream(tok *token_generator.RequestBearerTokenResponse, streamConfi
 	fmt.Println("Stopped Stream")
 }
 
-func FetchTweets(token string) stream.IStream {
-	api := twitterstream.NewTwitterStream(token).Stream
-	api.SetUnmarshalHook(func(bytes []byte) (interface{}, error) {
+func FetchTweets(token string) *twitterstream.TwitterApi {
+	api := twitterstream.NewTwitterStream(token)
+	api.Stream.SetUnmarshalHook(func(bytes []byte) (interface{}, error) {
 		fmt.Println(string(bytes))
 		data := tweets.TweetStreamData{}
 		if err := json.Unmarshal(bytes, &data); err != nil {
@@ -157,7 +153,7 @@ func FetchTweets(token string) stream.IStream {
 		AddExpansion("attachments.media_keys").
 		AddMediaField("url").
 		Build()
-	err := api.StartStream(streamExpansions)
+	err := api.Stream.StartStream(streamExpansions)
 	if err != nil {
 		panic(err)
 	}
