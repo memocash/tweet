@@ -12,6 +12,7 @@ import (
 	"github.com/memocash/index/ref/bitcoin/tx/parse"
 	"github.com/memocash/index/ref/bitcoin/tx/script"
 	"github.com/memocash/index/ref/bitcoin/wallet"
+	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/tweets"
 	"github.com/syndtr/goleveldb/leveldb"
 	util3 "github.com/syndtr/goleveldb/leveldb/util"
@@ -19,6 +20,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -338,3 +340,24 @@ func StreamTweet(accountKey tweets.AccountKey, tweet tweets.TweetTx, db *leveldb
 	}
 	return nil
 }
+func UpdateStreamArray(db *leveldb.DB, streamArray []config.Stream) []config.Stream{
+	iter := db.NewIterator(util3.BytesPrefix([]byte("linked-")), nil)
+	for iter.Next() {
+		//find the twitterName at the end of the linked-<senderAddress>-<twitterName> field
+		twitterName := strings.Split(string(iter.Key()), "-")[2]
+		newKey := string(iter.Value())
+		//only add it to the stream array if this key : name pair isn't already in it
+		found := false
+		for _, stream := range streamArray {
+			if stream.Key == newKey && stream.Name == twitterName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			streamArray = append(streamArray, config.Stream{Key: newKey, Name: twitterName})
+		}
+	}
+	return streamArray
+}
+

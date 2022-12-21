@@ -66,10 +66,11 @@ func ResetRules(api *twitterstream.TwitterApi) {
 func InitiateStream(api *twitterstream.TwitterApi, streamConfigs []config.Stream, db *leveldb.DB) {
 	defer InitiateStream(api, streamConfigs, db)
 	tweetObject := twitter.Tweet{}
-	for _, stream := range streamConfigs {
-		println("streaming " + stream.Name + " to key " + stream.Key)
-	}
 	for tweet := range api.Stream.GetMessages() {
+		streamConfigs = database.UpdateStreamArray(db, streamConfigs)
+		for i, _ := range streamConfigs {
+			println("streaming " + streamConfigs[i].Name + " to key " + streamConfigs[i].Key)
+		}
 		// Handle disconnections from twitter
 		// https://developer.twitter.com/en/docs/twitter-api/tweets/volume-streams/integrate/handling-disconnections
 		if tweet.Err != nil {

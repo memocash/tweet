@@ -22,7 +22,6 @@ import (
 	util3 "github.com/syndtr/goleveldb/leveldb/util"
 	"regexp"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -93,7 +92,7 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 		return jerr.Get("error getting streaming token", err)
 	}
 	api := tweetstream.FetchTweets(streamToken.AccessToken)
-	streamArray := updateStreamArray(db,make([]config.Stream, 0))
+	streamArray := database.UpdateStreamArray(db,make([]config.Stream, 0))
 	err = updateStream(db, api, streamArray)
 	if err != nil {
 		return jerr.Get("error updating stream", err)
@@ -293,7 +292,7 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 				num_running -= 1
 				return nil
 			}
-			streamArray = updateStreamArray(db, streamArray)
+			streamArray = database.UpdateStreamArray(db, streamArray)
 			err = updateStream(db,api, streamArray)
 			if err != nil {
 				errorchan <- jerr.Get("error updating stream", err)
@@ -371,33 +370,10 @@ func updateStream(db *leveldb.DB, api *twitterstream.TwitterApi, streamArray []c
 		return nil
 	}
 	go func() {
-		tweetstream.ResetRules(api)
-		tweetstream.FilterAccount(api, streamArray)
 		tweetstream.InitiateStream(api, streamArray, db)
 		tweetstream.ResetRules(api)
 	}()
 	return nil
-}
-
-func updateStreamArray(db *leveldb.DB, streamArray []config.Stream) []config.Stream{
-	iter := db.NewIterator(util3.BytesPrefix([]byte("linked-")), nil)
-	for iter.Next() {
-		//find the twitterName at the end of the linked-<senderAddress>-<twitterName> field
-		twitterName := strings.Split(string(iter.Key()), "-")[2]
-		newKey := string(iter.Value())
-		//only add it to the stream array if this key : name pair isn't already in it
-		found := false
-		for _, stream := range streamArray {
-			if stream.Key == newKey && stream.Name == twitterName {
-				found = true
-				break
-			}
-		}
-		if !found {
-			streamArray = append(streamArray, config.Stream{Key: newKey, Name: twitterName})
-		}
-	}
-	return streamArray
 }
 
 func grabMessage(outputScripts []string) string {
