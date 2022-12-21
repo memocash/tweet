@@ -13,82 +13,17 @@ import (
 	"github.com/memocash/index/ref/bitcoin/memo"
 	"github.com/memocash/index/ref/bitcoin/tx/hs"
 	"github.com/memocash/index/ref/bitcoin/wallet"
+	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/database"
 	"github.com/memocash/tweet/tweets"
+	"github.com/memocash/tweet/tweetstream"
 	"github.com/syndtr/goleveldb/leveldb"
 	util3 "github.com/syndtr/goleveldb/leveldb/util"
-	"html"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 )
-
-func StreamTweet(accountKey tweets.AccountKey, tweet tweets.TweetTx, db *leveldb.DB, appendLink bool, appendDate bool) error {
-	if tweet.Tweet == nil {
-		return jerr.New("tweet is nil")
-	}
-	wlt := database.NewWallet(accountKey.Address, accountKey.Key)
-	tweetLink := fmt.Sprintf("\nhttps://twitter.com/twitter/status/%d\n", tweet.Tweet.ID)
-	tweetDate := fmt.Sprintf("\n%s\n", tweet.Tweet.CreatedAt)
-	tweetText := tweet.Tweet.Text
-	if appendLink {
-		tweetText += tweetLink
-	}
-	if appendDate {
-		tweetText += tweetDate
-	}
-	//add the tweet to the twitter-twittername-tweetID prefix
-	prefix := fmt.Sprintf("tweets-%s-%019d", tweet.Tweet.User.ScreenName, tweet.Tweet.ID)
-	tweetTx, _ := json.Marshal(tweet)
-	db.Put([]byte(prefix), tweetTx, nil)
-	//if the tweet was a regular post, post it normally
-	if tweet.Tweet.InReplyToStatusID == 0 {
-		parentHash, err := database.MakePost(wlt, html.UnescapeString(tweetText))
-		//find this tweet in archive and set its hash to the hash of the post that was just made
-		tweet.TxHash = parentHash
-		if err != nil {
-			return jerr.Get("error making post", err)
-		}
-	} else {
-		var parentHash []byte = nil
-		//search the saved-address-twittername-tweetID prefix for the tweet that this tweet is a reply to
-		prefix := fmt.Sprintf("saved-%s-%s", accountKey.Address, tweet.Tweet.User.ScreenName)
-		iter := db.NewIterator(util3.BytesPrefix([]byte(prefix)), nil)
-		for iter.Next() {
-			key := iter.Key()
-			tweetID, _ := strconv.ParseInt(string(key[len(prefix)+1:]), 10, 64)
-			if tweetID == tweet.Tweet.InReplyToStatusID {
-				parentHash = iter.Value()
-				break
-			}
-		}
-		//if it turns out this tweet was actually a reply to another person's tweet, post it as a regular post
-		if parentHash == nil {
-			parentHash, err := database.MakePost(wlt, html.UnescapeString(tweetText))
-			//find this tweet in archive and set its hash to the hash of the post that was just made
-			tweet.TxHash = parentHash
-			if err != nil {
-				return jerr.Get("error making post", err)
-			}
-			//otherwise, it's part of a thread, so post it as a reply to the parent tweet
-		} else {
-			replyHash, err := database.MakeReply(wlt, parentHash, html.UnescapeString(tweetText))
-			//find this tweet in archive and set its hash to the hash of the post that was just made
-			tweet.TxHash = replyHash
-			if err != nil {
-				return jerr.Get("error making reply", err)
-			}
-		}
-	}
-	//save the txHash to the saved-address-twittername-tweetID prefix
-	prefix = fmt.Sprintf("saved-%s-%s", accountKey.Address, tweet.Tweet.User.ScreenName)
-	dbKey := fmt.Sprintf("%s-%019d", prefix, tweet.Tweet.ID)
-	err := db.Put([]byte(dbKey), tweet.TxHash, nil)
-	if err != nil {
-		return jerr.Get("error saving tweetTx", err)
-	}
-	return nil
-}
 
 func TransferTweets(accountKey tweets.AccountKey, db *leveldb.DB, appendLink bool, appendDate bool) (int, error) {
 	var tweetList []tweets.TweetTx
@@ -139,7 +74,7 @@ func TransferTweets(accountKey tweets.AccountKey, db *leveldb.DB, appendLink boo
 				tweet.Tweet.Text += fmt.Sprintf("\n%s", media.MediaURL)
 			}
 		}
-		err := StreamTweet(accountKey, tweet, db, appendLink, appendDate)
+		err := database.StreamTweet(accountKey, tweet, db, appendLink, appendDate)
 		if err != nil {
 			return numTransferred, jerr.Get("error streaming tweet", err)
 		}
@@ -310,7 +245,6 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 			} else {
 				println("updated profile pic")
 			}
-			println("done")
 			println("New Key: " + newKey.GetBase58Compressed())
 			println("New Address: " + newAddr.GetEncoded())
 			err = db.Put([]byte("memobot-num-streams"), []byte(strconv.FormatUint(uint64(numStreamUint+1), 10)), nil)
@@ -324,6 +258,12 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 				errorchan <- jerr.Get("error updating linked-"+senderAddress+"-"+twitterName, err)
 				return nil
 			}
+			err = updateStream(db)
+			if err != nil {
+				errorchan <- jerr.Get("error updating stream", err)
+				return nil
+			}
+			println("done")
 		} else if regexp.MustCompile("^WITHDRAW TWITTER \\{([a-zA-Z0-9_]{1,15})}$").MatchString(message) {
 			//check the database for each field that matches linked-<senderAddress>-<twitterName>
 			//if there is a match, print out the address and key
@@ -346,12 +286,6 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 		} else {
 			fmt.Printf("\n\nMessage not in correct format\n\n")
 			//handle sending back money
-			coinIndex := uint32(0)
-			for i, output := range data.Addresses.Outputs {
-				if output.Lock.Address == addresses[0] {
-					coinIndex = uint32(i)
-				}
-			}
 			//not enough to send back
 			if data.Addresses.Outputs[coinIndex].Amount < 546 {
 				return nil
@@ -381,11 +315,42 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 			errorchan <- jerr.Get("error running graphql client", err)
 		}
 	}()
-
 	select {
 	case err := <-errorchan:
 		return jerr.Get("error in listen", err)
 	}
+}
+func updateStream(db *leveldb.DB) error{
+	//check if there are already running streams on this token
+	//if there are, stop them
+	streamToken,err := tweetstream.GetStreamingToken()
+	if err != nil {
+		return jerr.Get("error getting streaming token", err)
+	}
+	//api := tweetstream.FetchTweets(streamToken.AccessToken)
+	//api.StopStream()
+	//create an array of {twitterName, newKey} objects by searching through the linked-<senderAddress>-<twitterName> fields
+	streamArray := make([]config.Stream, 0)
+	iter := db.NewIterator(util3.BytesPrefix([]byte("linked-")), nil)
+	for iter.Next() {
+		//find the twitterName at the end of the linked-<senderAddress>-<twitterName> field
+		twitterName := strings.Split(string(iter.Key()), "-")[2]
+		newKey := string(iter.Value())
+		streamArray = append(streamArray, config.Stream{Key: newKey, Name: twitterName})
+	}
+	for _, stream := range streamArray {
+		println("streaming " + stream.Name + " to key " + stream.Key)
+	}
+	iter.Release()
+	err = iter.Error()
+	if err != nil {
+		return jerr.Get("error iterating through database", err)
+	}
+	tweetstream.ResetRules(streamToken)
+	tweetstream.FilterAccount(streamToken, streamArray)
+	tweetstream.InitiateStream(streamToken, streamArray, db)
+	tweetstream.ResetRules(streamToken)
+	return nil
 }
 
 func grabMessage(outputScripts []string) string {

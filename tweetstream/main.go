@@ -10,7 +10,7 @@ import (
 	"github.com/fallenstedt/twitter-stream/token_generator"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/tweet/config"
-	util2 "github.com/memocash/tweet/database/util"
+	"github.com/memocash/tweet/database"
 	"github.com/memocash/tweet/tweets"
 	"github.com/syndtr/goleveldb/leveldb"
 	"regexp"
@@ -67,7 +67,7 @@ func ResetRules(tok *token_generator.RequestBearerTokenResponse) {
 }
 
 func InitiateStream(tok *token_generator.RequestBearerTokenResponse, streamConfigs []config.Stream, db *leveldb.DB) {
-	api := fetchTweets(tok.AccessToken)
+	api := FetchTweets(tok.AccessToken)
 	defer InitiateStream(tok, streamConfigs, db)
 	tweetObject := twitter.Tweet{}
 	for tweet := range api.GetMessages() {
@@ -133,14 +133,14 @@ func InitiateStream(tok *token_generator.RequestBearerTokenResponse, streamConfi
 			if config.Name == tweetObject.User.ScreenName {
 				println("sending tweet to key: ", config.Key)
 				twitterAccountWallet := tweets.GetAccountKeyFromArgs([]string{config.Key, config.Name})
-				util2.StreamTweet(twitterAccountWallet, TweetTx, db, true, false)
+				database.StreamTweet(twitterAccountWallet, TweetTx, db, true, false)
 			}
 		}
 	}
 	fmt.Println("Stopped Stream")
 }
 
-func fetchTweets(token string) stream.IStream {
+func FetchTweets(token string) stream.IStream {
 	api := twitterstream.NewTwitterStream(token).Stream
 	api.SetUnmarshalHook(func(bytes []byte) (interface{}, error) {
 		fmt.Println(string(bytes))
