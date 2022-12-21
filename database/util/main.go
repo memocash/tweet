@@ -119,19 +119,29 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 	}
 	var subscription = new(Subscription)
 	var errorchan = make(chan error)
+	num_running := 0
 	_, err := client.Subscribe(&subscription, map[string]interface{}{"addresses": addresses}, func(dataValue []byte, errValue error) error {
+		num_running += 1
+		println("Running: " + strconv.Itoa(num_running))
+		if num_running > 1{
+			num_running -= 1
+			return nil
+		}
 		if errValue != nil {
 			errorchan <- jerr.Get("error in subscription", errValue)
+			num_running -= 1
 			return nil
 		}
 		data := Subscription{}
 		err := jsonutil.UnmarshalGraphQL(dataValue, &data)
 		if err != nil {
 			errorchan <- jerr.Get("error marshaling subscription", err)
+			num_running -= 1
 			return nil
 		}
 		for _, input := range data.Addresses.Inputs {
 			if input.Output.Lock.Address == addresses[0] {
+				num_running -= 1
 				return nil
 			}
 		}
@@ -164,6 +174,7 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 			}
 			if botExists || data.Addresses.Outputs[coinIndex].Amount < 5000 {
 				if data.Addresses.Outputs[coinIndex].Amount < 546 {
+					num_running -= 1
 					return nil
 				}
 				errMsg := ""
@@ -180,8 +191,10 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 					PkHash:       wallet.GetAddressFromString(addresses[0]).GetPkHash(),
 				}}, botKey, wallet.GetAddressFromString(senderAddress), errMsg); err != nil {
 					errorchan <- jerr.Get("error sending money back", err)
+					num_running -= 1
 					return nil
 				}
+				num_running -= 1
 				return nil
 			}
 			fmt.Printf("\n\n%s\n\n", message)
@@ -189,11 +202,13 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 			numStreamBytes, err := db.Get([]byte("memobot-num-streams"), nil)
 			if err != nil {
 				errorchan <- jerr.Get("error getting num-streams", err)
+				num_running -= 1
 				return nil
 			}
 			numStream, err := strconv.ParseUint(string(numStreamBytes), 10, 64)
 			if err != nil {
 				errorchan <- jerr.Get("error parsing num-streams", err)
+				num_running -= 1
 				return nil
 			}
 			//convert numStream to a uint
@@ -202,6 +217,7 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 			newKey, err := mnemonic.GetPath(path)
 			if err != nil {
 				errorchan <- jerr.Get("error getting path", err)
+				num_running -= 1
 				return nil
 			}
 			newAddr := newKey.GetAddress()
@@ -215,18 +231,22 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 				PkHash:       wallet.GetAddressFromString(addresses[0]).GetPkHash(),
 			}}, botKey, newAddr); err != nil {
 				errorchan <- jerr.Get("error funding twitter address", err)
+				num_running -= 1
 				return nil
 			}
 			newWallet := database.NewWallet(newAddr, *newKey)
 			profile, err := tweets.GetProfile(twitterName, tweetClient)
 			if err != nil {
-				return jerr.Get("fatal error getting profile", err)
+				errorchan <- jerr.Get("fatal error getting profile", err)
+				num_running -= 1
+				return nil
 			}
 			fmt.Printf("Name: %s\nDesc: %s\nProfile Pic Link: %s\n",
 				profile.Name, profile.Description, profile.ProfilePic)
 			err = database.UpdateName(newWallet, profile.Name)
 			if err != nil {
 				errorchan <- jerr.Get("error updating name", err)
+				num_running -= 1
 				return nil
 			} else {
 				println("updated name")
@@ -234,6 +254,7 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 			err = database.UpdateProfileText(newWallet, profile.Description)
 			if err != nil {
 				errorchan <- jerr.Get("error updating profile text", err)
+				num_running -= 1
 				return nil
 			} else {
 				println("updated profile text")
@@ -241,6 +262,7 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 			err = database.UpdateProfilePic(newWallet, profile.ProfilePic)
 			if err != nil {
 				errorchan <- jerr.Get("error updating profile pic", err)
+				num_running -= 1
 				return nil
 			} else {
 				println("updated profile pic")
@@ -250,17 +272,20 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 			err = db.Put([]byte("memobot-num-streams"), []byte(strconv.FormatUint(uint64(numStreamUint+1), 10)), nil)
 			if err != nil {
 				errorchan <- jerr.Get("error updating memobot-num-streams", err)
+				num_running -= 1
 				return nil
 			}
 			//add a field to the database that links the sending address and twitter name to the new key
 			err = db.Put([]byte("linked-"+senderAddress+"-"+twitterName), []byte(newKey.GetBase58Compressed()), nil)
 			if err != nil {
 				errorchan <- jerr.Get("error updating linked-"+senderAddress+"-"+twitterName, err)
+				num_running -= 1
 				return nil
 			}
 			err = updateStream(db)
 			if err != nil {
 				errorchan <- jerr.Get("error updating stream", err)
+				num_running -= 1
 				return nil
 			}
 			println("done")
@@ -281,6 +306,7 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 			err := iter.Error()
 			if err != nil {
 				errorchan <- jerr.Get("error iterating through database", err)
+				num_running -= 1
 				return nil
 			}
 		} else {
@@ -298,10 +324,13 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 				PkHash:       wallet.GetAddressFromString(addresses[0]).GetPkHash(),
 			}}, botKey, wallet.GetAddressFromString(senderAddress), "Message was not in correct format"); err != nil {
 				errorchan <- jerr.Get("error sending money back", err)
+				num_running -= 1
 				return nil
 			}
+			num_running -= 1
 			return nil
 		}
+		num_running -= 1
 		return nil
 	})
 	if err != nil {
