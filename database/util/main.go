@@ -308,6 +308,22 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 			searchString := "linked-" + senderAddress + "-" + twitterName
 			//refund if this field doesn't exist
 			iter := db.NewIterator(util3.BytesPrefix([]byte(searchString)), nil)
+			if !iter.Next() {
+				errMsg := "No linked address found for " + senderAddress + "-" + twitterName
+				print("\n\n\nSending error message: " + errMsg + "\n\n\n")
+				if err := database.SendToTwitterAddress(memo.UTXO{Input: memo.TxInput{
+					Value:        data.Addresses.Outputs[coinIndex].Amount,
+					PrevOutHash:  hs.GetTxHash(data.Addresses.Hash),
+					PrevOutIndex: coinIndex,
+					PkHash:       wallet.GetAddressFromString(addresses[0]).GetPkHash(),
+				}}, botKey, wallet.GetAddressFromString(senderAddress), errMsg); err != nil {
+					errorchan <- jerr.Get("error sending money back", err)
+					num_running -= 1
+					return nil
+				}
+				num_running -= 1
+				return nil
+			}
 			for iter.Next() {
 				fieldName := iter.Key()
 				stringKey := iter.Value()
