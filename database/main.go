@@ -25,14 +25,20 @@ import (
 )
 
 type Address struct {
-	Utxos []Utxo `json:"utxos"`
+	Outputs []Output `json:"outputs"`
 }
 
-type Utxo struct {
-	Tx     Tx     `json:"tx"`
-	Hash   string `json:"hash"`
-	Index  int    `json:"index"`
-	Amount int64  `json:"amount"`
+type Output struct {
+	Tx     Tx      `json:"tx"`
+	Hash   string  `json:"hash"`
+	Index  int     `json:"index"`
+	Amount int64   `json:"amount"`
+	Spends []Input `json:"spends"`
+}
+
+type Input struct {
+	Hash  string `json:"hash"`
+	Index int    `json:"index"`
 }
 
 type Tx struct {
@@ -43,6 +49,7 @@ type InputGetter struct {
 	Address wallet.Address
 	UTXOs   []memo.UTXO
 }
+
 
 func (g *InputGetter) SetPkHashesToUse([][]byte) {
 }
@@ -55,13 +62,17 @@ func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
 		"query": `
             {
                 address (address: "` + g.Address.GetEncoded() + `") {
-                    utxos {
+                    outputs {
 						tx {
 							seen
 						}
 						hash
 						index
 						amount
+						spends {
+							hash
+						    index
+						}
 					}
                 }
             }
@@ -90,21 +101,25 @@ func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
 	if err != nil {
 		return nil, jerr.Get("error getting pk script", err)
 	}
-	var utxos = make([]memo.UTXO, len(dataStruct.Data.Address.Utxos))
-	for i, utxo := range dataStruct.Data.Address.Utxos {
-		utxos[i] = memo.UTXO{
+	var utxos []memo.UTXO
+	for _, output := range dataStruct.Data.Address.Outputs {
+		if len(output.Spends) > 0 {
+			continue
+		}
+		utxos = append(utxos, memo.UTXO{
 			Input: memo.TxInput{
 				PkScript:     pkScript,
 				PkHash:       pkHash,
-				Value:        utxo.Amount,
-				PrevOutHash:  hs.GetTxHash(utxo.Hash),
-				PrevOutIndex: uint32(utxo.Index),
+				Value:        output.Amount,
+				PrevOutHash:  hs.GetTxHash(output.Hash),
+				PrevOutIndex: uint32(output.Index),
 			},
-		}
+		})
 	}
 	g.UTXOs = utxos
 	return utxos, nil
 }
+
 
 func (g *InputGetter) MarkUTXOsUsed(used []memo.UTXO) {
 	for i := 0; i < len(g.UTXOs); i++ {

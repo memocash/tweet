@@ -306,17 +306,65 @@ func MemoListen(mnemonic *wallet.Mnemonic, addresses []string, botKey wallet.Pri
 			//if there is no match, print out an error message
 			twitterName := regexp.MustCompile("^WITHDRAW TWITTER \\{([a-zA-Z0-9_]{1,15})}$").FindStringSubmatch(message)[1]
 			searchString := "linked-" + senderAddress + "-" + twitterName
+			//refund if this field doesn't exist
 			iter := db.NewIterator(util3.BytesPrefix([]byte(searchString)), nil)
 			for iter.Next() {
-				key := iter.Key()
-				value := iter.Value()
-				println("Field name: " + string(key))
-				println("Private Key: " + string(value))
+				fieldName := iter.Key()
+				stringKey := iter.Value()
+				println("Field name: " + string(fieldName))
+				println("Private Key: " + string(stringKey))
+				//get the address object from the private key
+				key,err := wallet.ImportPrivateKey(string(stringKey))
+				if err != nil {
+					errorchan <- jerr.Get("error importing private key", err)
+					num_running -= 1
+					return nil
+				}
+				address := key.GetAddress()
+				println("Address: " + address.GetEncoded())
+				inputGetter := database.InputGetter{
+					Address: address,
+					UTXOs:   nil,
+				}
+				//use the address object of the spawned key to get the outputs array
+				outputs,err := inputGetter.GetUTXOs(nil)
+				if err != nil {
+					errorchan <- jerr.Get("error getting utxos", err)
+					num_running -= 1
+					return nil
+				}
+				//use the outputs array to get the amount (the function only returns outputs without a spend)
+				for _,output := range outputs {
+					if err := database.FundTwitterAddress(memo.UTXO{Input: memo.TxInput{
+						Value:        output.Input.Value,
+						PrevOutHash:  output.Input.PrevOutHash,
+						PrevOutIndex: output.Input.PrevOutIndex,
+						PkHash:       address.GetPkHash(),
+					}}, key, wallet.GetAddressFromString(senderAddress)); err != nil {
+						errorchan <- jerr.Get("error sending funds back", err)
+						num_running -= 1
+						return nil
+					}
+				}
 			}
 			iter.Release()
 			err := iter.Error()
 			if err != nil {
 				errorchan <- jerr.Get("error iterating through database", err)
+				num_running -= 1
+				return nil
+			}
+			//delete the field from the database, and restart the stream without it
+			err = db.Delete([]byte("linked-"+senderAddress+"-"+twitterName), nil)
+			if err != nil {
+				errorchan <- jerr.Get("error deleting linked-"+senderAddress+"-"+twitterName, err)
+				num_running -= 1
+				return nil
+			}
+			newStreamArray := database.UpdateStreamArray(db, make([]config.Stream, 0))
+			err = updateStream(db,api, newStreamArray)
+			if err != nil {
+				errorchan <- jerr.Get("error updating stream", err)
 				num_running -= 1
 				return nil
 			}
