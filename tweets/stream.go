@@ -97,7 +97,6 @@ func (s *Stream) ResetRules() error {
 
 func (s *Stream) InitiateStream(streamConfigs []config.Stream) error {
 	s.SetFreshApi()
-	defer s.CloseApi()
 	if err := s.ResetRules(); err != nil {
 		return jerr.Get("error twitter stream reset rules", err)
 	}
@@ -125,7 +124,10 @@ func (s *Stream) InitiateStream(streamConfigs []config.Stream) error {
 	tweetObject := twitter.Tweet{}
 	for tweet := range s.Api.Stream.GetMessages() {
 		if tweet.Err != nil {
-			return jerr.Get("got error from twitter: %v", tweet.Err)
+			if jerr.HasErrorPart(tweet.Err, "response body closed") {
+				break
+			}
+			return jerr.Get("got error from twitter", tweet.Err)
 		}
 		result := tweet.Data.(obj.TweetStreamData)
 		tweetID, _ := strconv.ParseInt(result.Data.ID, 10, 64)

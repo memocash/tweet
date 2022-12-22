@@ -261,7 +261,7 @@ func (b *Bot) UpdateStream() error {
 	}
 	go func() {
 		if err := b.Stream.InitiateStream(streamArray); err != nil {
-			b.ErrorChan <- jerr.Get("error twitter stream filter account", err)
+			b.ErrorChan <- jerr.Get("error twitter initiate stream in update", err)
 		}
 	}()
 	return nil

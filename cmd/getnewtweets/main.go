@@ -26,7 +26,7 @@ var transferCmd = &cobra.Command{
 			jerr.Get("error getting new tweet stream", err).Fatal()
 		}
 		if err := stream.InitiateStream(streamConfigs); err != nil {
-			jerr.Get("error twitter stream filter account", err).Fatal()
+			jerr.Get("error twitter initiate stream get new tweets", err).Fatal()
 		}
 	},
 }
