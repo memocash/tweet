@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/dghubble/go-twitter/twitter"
+	"github.com/jchavannes/jgo/jerr"
 	config2 "github.com/memocash/tweet/config"
+	"github.com/memocash/tweet/tweets/obj"
 	"github.com/syndtr/goleveldb/leveldb"
 	util2 "github.com/syndtr/goleveldb/leveldb/util"
 	"golang.org/x/oauth2"
@@ -14,17 +16,20 @@ import (
 	"strconv"
 )
 
-func GetAllTweets(screenName string, client *twitter.Client, db *leveldb.DB) {
+func GetAllTweets(screenName string, client *twitter.Client, db *leveldb.DB) error {
 	for {
-		tweets := getOldTweets(screenName, client, db)
+		tweets, err := getOldTweets(screenName, client, db)
+		if err != nil {
+			return jerr.Get("error getting old tweets", err)
+		}
 		if len(tweets) == 1 {
-			break
+			return nil
 		}
 	}
 }
 
-func GetNewTweets(screenName string, client *twitter.Client, fileHeader string) []TweetTx {
-	IdInfo := IdInfo{
+func GetNewTweets(screenName string, client *twitter.Client, fileHeader string) []obj.TweetTx {
+	IdInfo := obj.IdInfo{
 		ArchivedID: 0,
 		NewestID:   0,
 	}
@@ -42,9 +47,9 @@ func GetNewTweets(screenName string, client *twitter.Client, fileHeader string) 
 		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, ExcludeReplies: &excludeReplies, Count: 20}
 	}
 	tweets, _, _ := client.Timelines.UserTimeline(userTimelineParams)
-	var tweetTxs []TweetTx
+	var tweetTxs []obj.TweetTx
 	for i, tweet := range tweets {
-		tweetTxs = append(tweetTxs, TweetTx{Tweet: &tweets[i], TxHash: nil})
+		tweetTxs = append(tweetTxs, obj.TweetTx{Tweet: &tweets[i], TxHash: nil})
 		println(tweet.Text)
 		println(tweet.CreatedAt)
 		if tweet.ID > IdInfo.NewestID || IdInfo.NewestID == 0 {
@@ -55,7 +60,8 @@ func GetNewTweets(screenName string, client *twitter.Client, fileHeader string) 
 	_ = ioutil.WriteFile(fileName, file, 0644)
 	return tweetTxs
 }
-func getOldTweets(screenName string, client *twitter.Client, db *leveldb.DB) []TweetTx {
+
+func getOldTweets(screenName string, client *twitter.Client, db *leveldb.DB) ([]obj.TweetTx, error) {
 	var userTimelineParams *twitter.UserTimelineParams
 	excludeReplies := false
 	//check if there are any tweetTx objects with the prefix containing this address and this screenName
@@ -81,17 +87,20 @@ func getOldTweets(screenName string, client *twitter.Client, db *leveldb.DB) []T
 		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, ExcludeReplies: &excludeReplies, Count: 100}
 	}
 	// Query to Twitter API for all tweets after IdInfo.id
-	tweets, _, _ := client.Timelines.UserTimeline(userTimelineParams)
-	var tweetTxs []TweetTx
+	tweets, _, err := client.Timelines.UserTimeline(userTimelineParams)
+	if err != nil {
+		return nil, jerr.Get("error getting old tweets from user timeline", err)
+	}
+	var tweetTxs []obj.TweetTx
 	for i, tweet := range tweets {
 		prefix := fmt.Sprintf("tweets-%s-%019d", screenName, tweet.ID)
-		tweetTx, _ := json.Marshal(TweetTx{Tweet: &tweets[i], TxHash: nil})
-		db.Put([]byte(prefix), tweetTx, nil)
-		//println(tweet.Text)
-		//println(tweet.CreatedAt)
-		tweetTxs = append(tweetTxs, TweetTx{Tweet: &tweets[i], TxHash: nil})
+		tweetTx, _ := json.Marshal(obj.TweetTx{Tweet: &tweets[i], TxHash: nil})
+		if err := db.Put([]byte(prefix), tweetTx, nil); err != nil {
+			return nil, jerr.Get("error saving old tweet", err)
+		}
+		tweetTxs = append(tweetTxs, obj.TweetTx{Tweet: &tweets[i], TxHash: nil})
 	}
-	return tweetTxs
+	return tweetTxs, nil
 }
 
 func Connect() *twitter.Client {

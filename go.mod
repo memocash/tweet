@@ -3,7 +3,6 @@ module github.com/memocash/tweet
 go 1.16
 
 require (
-	github.com/coreos/pkg v0.0.0-20220810130054-c7d1c02cb6cf
 	github.com/dghubble/go-twitter v0.0.0-20221024160433-0cc1e72ed6d8
 	github.com/fallenstedt/twitter-stream v0.4.2
 	github.com/hasura/go-graphql-client v0.8.2-0.20221208014738-4e08b2d83631 // indirect

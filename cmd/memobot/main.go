@@ -3,11 +3,11 @@ package memobot
 import (
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/index/ref/bitcoin/wallet"
+	"github.com/memocash/tweet/bot"
 	"github.com/memocash/tweet/config"
-	"github.com/memocash/tweet/database/util"
+	"github.com/memocash/tweet/database"
 	"github.com/memocash/tweet/tweets"
 	"github.com/spf13/cobra"
-	"github.com/syndtr/goleveldb/leveldb"
 	"strconv"
 )
 
@@ -27,7 +27,7 @@ var memobotCmd = &cobra.Command{
 		if err != nil {
 			return jerr.Get("error getting path", err)
 		}
-		db, err := leveldb.OpenFile("tweets.db", nil)
+		db, err := database.GetDb()
 		if err != nil {
 			return jerr.Get("error opening db", err)
 		}
@@ -52,8 +52,8 @@ var memobotCmd = &cobra.Command{
 		println("num streams: ", numStreamsUint)
 
 		botAddress := botKey.GetPublicKey().GetAddress().GetEncoded()
-		err = util.MemoListen(mnemonic, []string{botAddress}, *botKey, tweets.Connect(), db)
-		if err != nil {
+		memoBot := bot.NewBot(mnemonic, []string{botAddress}, *botKey, tweets.Connect(), db)
+		if err = memoBot.Listen(); err != nil {
 			return jerr.Get("error listening for transactions", err)
 		}
 		return nil
