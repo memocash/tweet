@@ -211,17 +211,84 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 		//if there is no match, print out an error message
 		twitterName := regexp.MustCompile("^WITHDRAW TWITTER \\{([a-zA-Z0-9_]{1,15})}$").FindStringSubmatch(message)[1]
 		searchString := "linked-" + senderAddress + "-" + twitterName
-		iter := b.Db.NewIterator(util.BytesPrefix([]byte(searchString)), nil)
-		for iter.Next() {
-			key := iter.Key()
-			value := iter.Value()
-			println("Field name: " + string(key))
-			println("Private Key: " + string(value))
-		}
-		iter.Release()
-		err := iter.Error()
+		//refund if this field doesn't exist
+		println("here")
+		searchValue,err := b.Db.Get([]byte(searchString), nil)
 		if err != nil {
-			return jerr.Get("error iterating through database", err)
+			if err == leveldb.ErrNotFound {
+				//handle refund
+				errMsg := "No linked address found for " + senderAddress + "-" + twitterName
+				print("\n\n\nSending error message: " + errMsg + "\n\n\n")
+				if data.Addresses.Outputs[coinIndex].Amount < 546 {
+					println("not enough money to send error message")
+					return nil
+				}
+				if err := database.SendToTwitterAddress(memo.UTXO{Input: memo.TxInput{
+					Value:        data.Addresses.Outputs[coinIndex].Amount,
+					PrevOutHash:  hs.GetTxHash(data.Addresses.Hash),
+					PrevOutIndex: coinIndex,
+					PkHash:       wallet.GetAddressFromString(b.Addresses[0]).GetPkHash(),
+				}}, b.Key, wallet.GetAddressFromString(senderAddress), errMsg); err != nil {
+					return jerr.Get("error sending money back", err)
+				}
+				return nil
+			}
+			return jerr.Get("error getting linked-"+senderAddress+"-"+twitterName, err)
+		} else {
+			fieldName := searchString
+			stringKey := searchValue
+			println("Field name: " + string(fieldName))
+			println("Private Key: " + string(stringKey))
+			//get the address object from the private key
+			key,err := wallet.ImportPrivateKey(string(stringKey))
+			if err != nil {
+				return jerr.Get("error importing private key", err)
+			}
+			address := key.GetAddress()
+			println("Address: " + address.GetEncoded())
+			inputGetter := database.InputGetter{
+				Address: address,
+				UTXOs:   nil,
+			}
+			//use the address object of the spawned key to get the outputs array
+			outputs,err := inputGetter.GetUTXOs(nil)
+			if err != nil {
+				return jerr.Get("error getting utxos", err)
+			}
+			//use the outputs array to get the amount (the function only returns outputs without a spend)
+			for _,output := range outputs {
+				if err := database.FundTwitterAddress(memo.UTXO{Input: memo.TxInput{
+					Value:        output.Input.Value,
+					PrevOutHash:  output.Input.PrevOutHash,
+					PrevOutIndex: output.Input.PrevOutIndex,
+					PkHash:       address.GetPkHash(),
+				}}, key, wallet.GetAddressFromString(senderAddress)); err != nil {
+					return jerr.Get("error sending funds back", err)
+				}
+			}
+		}
+		//delete the field from the database, and restart the stream without it
+		err = b.Db.Delete([]byte(searchString), nil)
+		if err != nil {
+			return jerr.Get("error deleting "+ searchString, err)
+		}
+		//get num streams from database
+		numStream,err := b.Db.Get([]byte("memobot-num-streams"), nil)
+		if err != nil {
+			return jerr.Get("error getting memobot-num-streams", err)
+		}
+		numStreamUint,err := strconv.ParseUint(string(numStream), 10, 64)
+		if err != nil {
+			return jerr.Get("error converting memobot-num-streams to uint", err)
+		}
+		//update the database to have 1 less stream
+		err = b.Db.Put([]byte("memobot-num-streams"), []byte(strconv.FormatUint(uint64(numStreamUint-1), 10)), nil)
+		if err != nil {
+			return jerr.Get("error updating memobot-num-streams", err)
+		}
+		err = b.UpdateStream()
+		if err != nil {
+			return jerr.Get("error updating stream", err)
 		}
 	} else {
 		fmt.Printf("\n\nMessage not in correct format\n\n")
