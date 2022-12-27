@@ -17,6 +17,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type Bot struct {
@@ -62,11 +63,15 @@ func (b *Bot) Listen() error {
 	}
 	fmt.Println("Listening for memos...")
 	//client.WithLog(log.Println)
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
 		if err = client.Run(); err != nil {
 			b.ErrorChan <- jerr.Get("error running graphql client", err)
 		}
+		defer wg.Done()
 	}()
+	wg.Wait()
 	return jerr.Get("error in listen", <-b.ErrorChan)
 }
 
