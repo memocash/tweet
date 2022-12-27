@@ -105,6 +105,17 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 			coinIndex = uint32(i)
 		}
 	}
+	defer func() {
+		//add the transaction hash to the database
+		if err := b.Db.Put([]byte("completed-"+data.Addresses.Hash), []byte{}, nil); err != nil {
+			b.ErrorChan <- jerr.Get("error adding tx hash to database", err)
+		}
+	}()
+	//check if the transaction is already in the database
+	if _, err := b.Db.Get([]byte("completed-"+data.Addresses.Hash), nil); err == nil {
+		println("Already completed tx: " + data.Addresses.Hash)
+		return nil
+	}
 	//use regex library to check if message matches the format "CREATE TWITTER {twittername}" tweet names are a maximum of 15 characters
 	match, _ := regexp.MatchString("^CREATE TWITTER \\{[a-zA-Z0-9_]{1,15}}$", message)
 	if match {
