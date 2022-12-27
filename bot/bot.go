@@ -117,9 +117,9 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 		return nil
 	}
 	//use regex library to check if message matches the format "CREATE TWITTER {twittername}" tweet names are a maximum of 15 characters
-	match, _ := regexp.MatchString("^CREATE TWITTER \\{[a-zA-Z0-9_]{1,15}}$", message)
+	match, _ := regexp.MatchString("^CREATE TWITTER [a-zA-Z0-9_]{1,15}$", message)
 	if match {
-		twitterName := regexp.MustCompile("^CREATE TWITTER \\{([a-zA-Z0-9_]{1,15})}$").FindStringSubmatch(message)[1]
+		twitterName := regexp.MustCompile("^CREATE TWITTER ([a-zA-Z0-9_]{1,15})$").FindStringSubmatch(message)[1]
 		//check if the value of the transaction is less than 5,000 or this address already has a bot for this account in the database
 		botExists := false
 		iter := b.Db.NewIterator(util.BytesPrefix([]byte("linked-"+senderAddress+"-"+twitterName)), nil)
@@ -216,11 +216,11 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 			return jerr.Get("error updating stream after new tx", err)
 		}
 		println("done")
-	} else if regexp.MustCompile("^WITHDRAW TWITTER \\{([a-zA-Z0-9_]{1,15})}$").MatchString(message) {
+	} else if regexp.MustCompile("^WITHDRAW TWITTER ([a-zA-Z0-9_]{1,15})$").MatchString(message) {
 		//check the database for each field that matches linked-<senderAddress>-<twitterName>
 		//if there is a match, print out the address and key
 		//if there is no match, print out an error message
-		twitterName := regexp.MustCompile("^WITHDRAW TWITTER \\{([a-zA-Z0-9_]{1,15})}$").FindStringSubmatch(message)[1]
+		twitterName := regexp.MustCompile("^WITHDRAW TWITTER ([a-zA-Z0-9_]{1,15})$").FindStringSubmatch(message)[1]
 		searchString := "linked-" + senderAddress + "-" + twitterName
 		//refund if this field doesn't exist
 		println("here")
