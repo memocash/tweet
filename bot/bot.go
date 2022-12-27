@@ -28,6 +28,7 @@ type Bot struct {
 	Db          *leveldb.DB
 	Stream      *tweets.Stream
 	ErrorChan   chan error
+	Mutex       sync.Mutex
 }
 
 func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey, tweetClient *twitter.Client, db *leveldb.DB) *Bot {
@@ -63,19 +64,17 @@ func (b *Bot) Listen() error {
 	}
 	fmt.Println("Listening for memos...")
 	//client.WithLog(log.Println)
-	var wg sync.WaitGroup
-	wg.Add(1)
 	go func() {
 		if err = client.Run(); err != nil {
 			b.ErrorChan <- jerr.Get("error running graphql client", err)
 		}
-		defer wg.Done()
 	}()
-	wg.Wait()
 	return jerr.Get("error in listen", <-b.ErrorChan)
 }
 
 func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
+	b.Mutex.Lock()
+	defer b.Mutex.Unlock()
 	if errValue != nil {
 		return jerr.Get("error in subscription", errValue)
 	}
