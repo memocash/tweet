@@ -25,12 +25,11 @@ var transferCmd = &cobra.Command{
 		//before starting the stream, ge the latest tweets newer than the last tweet in the db
 		for _, streamConfig := range streamConfigs {
 			accountKey := obj.GetAccountKeyFromArgs([]string{streamConfig.Key, streamConfig.Name})
-			err := tweets.GetSkippedTweets(accountKey,tweets.Connect(), db, false, false)
+			err := tweets.GetSkippedTweets(accountKey,tweets.Connect(), db, link, date)
 			if err != nil {
 				jerr.Get("error getting skipped tweets", err).Print()
 			}
 		}
-
 		stream, err := tweets.NewStream(db)
 		if err != nil {
 			jerr.Get("error getting new tweet stream", err).Fatal()
