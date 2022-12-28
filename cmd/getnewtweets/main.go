@@ -1,12 +1,14 @@
 package getnewtweets
 
 import (
+	"fmt"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/database"
 	"github.com/memocash/tweet/tweets"
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/spf13/cobra"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 var link bool = false
@@ -24,8 +26,15 @@ var transferCmd = &cobra.Command{
 		streamConfigs := config.GetConfig().Streams
 		//before starting the stream, ge the latest tweets newer than the last tweet in the db
 		for _, streamConfig := range streamConfigs {
-			//create an AccountKey object from the streamconfig
 			accountKey := obj.GetAccountKeyFromArgs([]string{streamConfig.Key, streamConfig.Name})
+			//check if there are any transferred tweets with the prefix containing this address and this screenName
+			savedPrefix := fmt.Sprintf("saved-%s-%s", accountKey.Address, accountKey.Account)
+			iter := db.NewIterator(util.BytesPrefix([]byte(savedPrefix)), nil)
+			tweetsFound := iter.First()
+			iter.Release()
+			if !tweetsFound {
+				continue
+			}
 			txList, err := tweets.GetNewTweets(streamConfig.Name,tweets.Connect(),db)
 			if err != nil {
 				jerr.Get("error getting tweets since the bot was last run", err).Fatal()

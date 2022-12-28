@@ -101,7 +101,7 @@ func GetNewTweets(screenName string, client *twitter.Client, db *leveldb.DB) ([]
 		prefix := fmt.Sprintf("tweets-%s-%019d", screenName, tweet.ID)
 		tweetTx, _ := json.Marshal(obj.TweetTx{Tweet: &tweets[i], TxHash: nil})
 		if err := db.Put([]byte(prefix), tweetTx, nil); err != nil {
-			return nil, jerr.Get("error saving old tweet", err)
+			return nil, jerr.Get("error saving tweet posted since last time the stream was opened", err)
 		}
 		tweetTxs = append(tweetTxs, obj.TweetTx{Tweet: &tweets[i], TxHash: nil})
 	}
