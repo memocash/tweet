@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type Bot struct {
@@ -97,12 +98,14 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 	for _, input := range data.Addresses.Inputs {
 		if input.Output.Lock.Address != b.Addresses[0] {
 			senderAddress = input.Output.Lock.Address
+			break
 		}
 	}
 	coinIndex := uint32(0)
 	for i, output := range data.Addresses.Outputs {
 		if output.Lock.Address == b.Addresses[0] {
 			coinIndex = uint32(i)
+			break
 		}
 	}
 	defer func() {
@@ -116,6 +119,9 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 		println("Already completed tx: " + data.Addresses.Hash)
 		return nil
 	}
+	//if senderAddress == b.Addresses[0] || senderAddress == "" {
+	//	return nil
+	//}
 	//use regex library to check if message matches the format "CREATE TWITTER {twittername}" tweet names are a maximum of 15 characters
 	match, _ := regexp.MatchString("^CREATE TWITTER [a-zA-Z0-9_]{1,15}$", message)
 	if match {
@@ -268,14 +274,19 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 			}
 			//use the outputs array to get the amount (the function only returns outputs without a spend)
 			for _,output := range outputs {
+				if output.Input.Value < 546 {
+					continue
+				}
 				if err := database.FundTwitterAddress(memo.UTXO{Input: memo.TxInput{
 					Value:        output.Input.Value,
 					PrevOutHash:  output.Input.PrevOutHash,
 					PrevOutIndex: output.Input.PrevOutIndex,
-					PkHash:       address.GetPkHash(),
+					PkHash:       output.Input.PkHash,
 				}}, key, wallet.GetAddressFromString(senderAddress)); err != nil {
 					return jerr.Get("error sending funds back", err)
 				}
+				//wait one second
+				time.Sleep(time.Second)
 			}
 		}
 		//delete the field from the database, and restart the stream without it
@@ -303,6 +314,17 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 		}
 	} else {
 		fmt.Printf("\n\nMessage not in correct format\n\n")
+		sentToMainBot := false
+		//check all the outputs to see if any of them match the bot's address, if not, return nil, if so, continue with the function
+		for _,output := range data.Addresses.Outputs {
+			if output.Lock.Address == b.Addresses[0] {
+				sentToMainBot = true
+				break
+			}
+		}
+		if !sentToMainBot {
+			return nil
+		}
 		//handle sending back money
 		//not enough to send back
 		if data.Addresses.Outputs[coinIndex].Amount < 546 {
