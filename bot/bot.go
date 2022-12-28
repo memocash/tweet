@@ -132,12 +132,20 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 		for iter.Next() {
 			botExists = true
 		}
-		if botExists || data.Addresses.Outputs[coinIndex].Amount < 5000 {
+		iter.Release()
+		//check if this twitter account actually exists
+		twitterExists := false
+		if _, _, err := b.TweetClient.Users.Show(&twitter.UserShowParams{ScreenName: twitterName}); err == nil {
+			twitterExists = true
+		}
+		if !twitterExists || botExists || data.Addresses.Outputs[coinIndex].Amount < 5000 {
 			if data.Addresses.Outputs[coinIndex].Amount < 546 {
 				return nil
 			}
 			errMsg := ""
-			if botExists {
+			if !twitterExists {
+				errMsg = fmt.Sprintf("Twitter account @%s does not exist", twitterName)
+			}else if botExists {
 				errMsg = fmt.Sprintf("You already have a bot for the account @%s", twitterName)
 			} else {
 				errMsg = fmt.Sprintf("You need to send at least 5,000 satoshis to create a bot for the account @%s", twitterName)
@@ -154,6 +162,9 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 			return nil
 		}
 		fmt.Printf("\n\n%s\n\n", message)
+
+
+
 		println(b.Addresses[0])
 		numStreamBytes, err := b.Db.Get([]byte("memobot-num-streams"), nil)
 		if err != nil {
