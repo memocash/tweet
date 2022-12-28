@@ -17,7 +17,7 @@ import (
 
 func GetAllTweets(screenName string, client *twitter.Client, db *leveldb.DB) error {
 	for {
-		tweets, err := GetOldTweets(screenName, client, db)
+		tweets, err := getOldTweets(screenName, client, db)
 		if err != nil {
 			return jerr.Get("error getting old tweets", err)
 		}
@@ -27,7 +27,7 @@ func GetAllTweets(screenName string, client *twitter.Client, db *leveldb.DB) err
 	}
 }
 
-func GetOldTweets(screenName string, client *twitter.Client, db *leveldb.DB) ([]obj.TweetTx, error) {
+func getOldTweets(screenName string, client *twitter.Client, db *leveldb.DB) ([]obj.TweetTx, error) {
 	var userTimelineParams *twitter.UserTimelineParams
 	excludeReplies := false
 	//check if there are any tweetTx objects with the prefix containing this address and this screenName
@@ -68,7 +68,7 @@ func GetOldTweets(screenName string, client *twitter.Client, db *leveldb.DB) ([]
 	}
 	return tweetTxs, nil
 }
-func GetNewTweets(screenName string, client *twitter.Client, db *leveldb.DB) ([]obj.TweetTx, error) {
+func getNewTweets(screenName string, client *twitter.Client, db *leveldb.DB) ([]obj.TweetTx, error) {
 	var userTimelineParams *twitter.UserTimelineParams
 	excludeReplies := false
 	//check if there are any tweetTx objects with the prefix containing this address and this screenName
@@ -106,6 +106,29 @@ func GetNewTweets(screenName string, client *twitter.Client, db *leveldb.DB) ([]
 		tweetTxs = append(tweetTxs, obj.TweetTx{Tweet: &tweets[i], TxHash: nil})
 	}
 	return tweetTxs, nil
+}
+
+func GetSkippedTweets(accountKey obj.AccountKey, client *twitter.Client, db *leveldb.DB, link bool, date bool) error {
+	//check if there are any transferred tweets with the prefix containing this address and this screenName
+	savedPrefix := fmt.Sprintf("saved-%s-%s", accountKey.Address, accountKey.Account)
+	iter := db.NewIterator(util2.BytesPrefix([]byte(savedPrefix)), nil)
+	tweetsFound := iter.First()
+	iter.Release()
+	if !tweetsFound {
+		return nil
+	}
+	txList, err := getNewTweets(accountKey.Account, client, db)
+	if err != nil {
+		return jerr.Get("error getting tweets since the bot was last run", err)
+	}
+	numLeft := len(txList)
+	for numLeft > 0 {
+		if _, err = Transfer(accountKey, db, link, date); err != nil {
+			return jerr.Get("fatal error transferring tweets", err)
+		}
+		numLeft -= 20
+	}
+	return nil
 }
 func Connect() *twitter.Client {
 	conf := config2.GetTwitterAPIConfig()
