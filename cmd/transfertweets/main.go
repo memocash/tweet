@@ -26,7 +26,7 @@ var transferCmd = &cobra.Command{
 			jerr.Get("error opening db", err).Fatal()
 		}
 		defer db.Close()
-		if err := tweets.GetAllTweets(accountKey.Account, client, db); err != nil {
+		if _,err := tweets.GetAllTweets(accountKey.Account, client, db); err != nil {
 			jerr.Get("error getting all tweets", err).Fatal()
 		}
 		if _, err = tweets.Transfer(accountKey, db, link, date); err != nil {

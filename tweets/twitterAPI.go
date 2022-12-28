@@ -15,15 +15,17 @@ import (
 	"strconv"
 )
 
-func GetAllTweets(screenName string, client *twitter.Client, db *leveldb.DB) error {
+func GetAllTweets(screenName string, client *twitter.Client, db *leveldb.DB) (int, error) {
+	var numTweets = 0
 	for {
 		tweets, err := getOldTweets(screenName, client, db)
 		if err != nil {
-			return jerr.Get("error getting old tweets", err)
+			return numTweets, jerr.Get("error getting old tweets", err)
 		}
 		if len(tweets) == 1 {
-			return nil
+			return numTweets, nil
 		}
+		numTweets += len(tweets)
 	}
 }
 
