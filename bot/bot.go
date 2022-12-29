@@ -142,17 +142,9 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 		if accountKeyPointer != nil {
 			accountKey := *accountKeyPointer
 			client := tweets.Connect()
-			numTweets, err := tweets.GetAllTweets(accountKey.Account, client, b.Db)
+			err = tweets.GetSkippedTweets(accountKey, client, b.Db, true, true)
 			if err != nil {
-				jerr.Get("error getting all tweets", err).Fatal()
-			}
-			println("Transferred " + strconv.Itoa(numTweets) + " tweets to new bot")
-			for numTweets > 0 {
-				println("numTweets: " + strconv.Itoa(numTweets))
-				if _, err = tweets.Transfer(accountKey, b.Db, true, true); err != nil {
-					jerr.Get("fatal error transferring tweets", err).Fatal()
-				}
-				numTweets -= 20
+				return jerr.Get("error getting skipped tweets", err)
 			}
 			err = b.UpdateStream()
 			if err != nil {
