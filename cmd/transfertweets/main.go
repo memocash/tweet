@@ -2,10 +2,10 @@ package transfertweets
 
 import (
 	"github.com/jchavannes/jgo/jerr"
-	util2 "github.com/memocash/tweet/database/util"
+	"github.com/memocash/tweet/database"
 	"github.com/memocash/tweet/tweets"
+	"github.com/memocash/tweet/tweets/obj"
 	"github.com/spf13/cobra"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var link bool = false
@@ -18,19 +18,20 @@ var transferCmd = &cobra.Command{
 		" from the twitter account and make the oldest 20 into memo posts. After it will transfer 20 each time" +
 		"it is run. Deleting the tweetArchive.json file will cause it to restart from the beginning.",
 	Args: cobra.ExactArgs(2),
-	RunE: func(c *cobra.Command, args []string) error {
-		accountKey := tweets.GetAccountKeyFromArgs(args)
+	Run: func(c *cobra.Command, args []string) {
+		accountKey := obj.GetAccountKeyFromArgs(args)
 		client := tweets.Connect()
-		fileName := "tweets.db"
-		db, err := leveldb.OpenFile(fileName, nil)
-
+		db, err := database.GetDb()
 		if err != nil {
-			return jerr.Get("error opening db", err)
+			jerr.Get("error opening db", err).Fatal()
 		}
-		tweets.GetAllTweets(accountKey.Account, client, db)
-		_, _ = util2.TransferTweets(accountKey, db, link, date)
 		defer db.Close()
-		return nil
+		if _,err := tweets.GetAllTweets(accountKey.Account, client, db); err != nil {
+			jerr.Get("error getting all tweets", err).Fatal()
+		}
+		if _, err = tweets.Transfer(accountKey, db, link, date); err != nil {
+			jerr.Get("fatal error transferring tweets", err).Fatal()
+		}
 	},
 }
 

@@ -1,4 +1,4 @@
-package tweets
+package obj
 
 import (
 	"github.com/jchavannes/jgo/jlog"

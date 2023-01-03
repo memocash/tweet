@@ -1,11 +1,14 @@
 package getnewtweets
 
 import (
+	"fmt"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/tweet/config"
-	"github.com/memocash/tweet/tweetstream"
+	"github.com/memocash/tweet/database"
+	"github.com/memocash/tweet/tweets"
+	"github.com/memocash/tweet/tweets/obj"
 	"github.com/spf13/cobra"
-	"github.com/syndtr/goleveldb/leveldb"
+	util2 "github.com/syndtr/goleveldb/leveldb/util"
 )
 
 var link bool = false
@@ -15,24 +18,34 @@ var transferCmd = &cobra.Command{
 	Use:   "getnewtweets",
 	Short: "Listens for new tweets on an account",
 	Long:  "Prints out each new tweet as it comes in. ",
-	RunE: func(c *cobra.Command, args []string) error {
-		streamToken,err := tweetstream.GetStreamingToken()
+	Run: func(c *cobra.Command, args []string) {
+		db, err := database.GetDb()
 		if err != nil {
-			return jerr.Get("error getting streaming token", err)
-		}
-		api := tweetstream.FetchTweets(streamToken.AccessToken)
-
-		fileName := "tweets.db"
-		db, err := leveldb.OpenFile(fileName, nil)
-		if err != nil {
-			return jerr.Get("error opening db", err)
+			jerr.Get("fatal error getting db", err).Fatal()
 		}
 		streamConfigs := config.GetConfig().Streams
-		tweetstream.ResetRules(api)
-		tweetstream.FilterAccount(api, streamConfigs)
-		tweetstream.InitiateStream(api, streamConfigs, db)
-		tweetstream.ResetRules(api)
-		return nil
+		//before starting the stream, ge the latest tweets newer than the last tweet in the db
+		for _, streamConfig := range streamConfigs {
+			accountKey := obj.GetAccountKeyFromArgs([]string{streamConfig.Key, streamConfig.Name})
+			//check if there are any transferred tweets with the prefix containing this address and this screenName
+			savedPrefix := fmt.Sprintf("saved-%s-%s", accountKey.Address, accountKey.Account)
+			iter := db.NewIterator(util2.BytesPrefix([]byte(savedPrefix)), nil)
+			tweetsFound := iter.First()
+			iter.Release()
+			if tweetsFound {
+				err := tweets.GetSkippedTweets(accountKey,tweets.Connect(), db, link, date)
+				if err != nil {
+					jerr.Get("error getting skipped tweets", err).Print()
+				}
+			}
+		}
+		stream, err := tweets.NewStream(db)
+		if err != nil {
+			jerr.Get("error getting new tweet stream", err).Fatal()
+		}
+		if err := stream.InitiateStream(streamConfigs); err != nil {
+			jerr.Get("error twitter initiate stream get new tweets", err).Fatal()
+		}
 	},
 }
 
