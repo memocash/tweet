@@ -12,8 +12,8 @@ import (
 	"github.com/memocash/index/ref/bitcoin/tx/parse"
 	"github.com/memocash/index/ref/bitcoin/tx/script"
 	"github.com/memocash/index/ref/bitcoin/wallet"
+	"github.com/memocash/index/client/example/db"
 	"github.com/syndtr/goleveldb/leveldb"
-	"io/ioutil"
 	"net/http"
 	"time"
 )
@@ -56,54 +56,22 @@ func (g *InputGetter) SetPkHashesToUse([][]byte) {
 }
 
 func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
-	if len(g.UTXOs) != 0 {
-		return g.UTXOs, nil
-	}
-	jsonData := map[string]string{
-		"query": `
-            {
-                address (address: "` + g.Address.GetEncoded() + `") {
-                    outputs {
-						tx {
-							seen
-						}
-						hash
-						index
-						amount
-						spends {
-							hash
-						    index
-						}
-					}
-                }
-            }
-        `,
-	}
-	jsonValue, _ := json.Marshal(jsonData)
-	request, err := http.NewRequest("POST", "http://localhost:26770/graphql", bytes.NewBuffer(jsonValue))
-	request.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Timeout: time.Second * 10}
-	response, err := client.Do(request)
-	defer response.Body.Close()
+	client,err := db.GetClient()
 	if err != nil {
-		return nil, jerr.Get("The HTTP request failed with error %s\n", err)
+		return nil, jerr.Get("error getting client", err)
 	}
-	data, _ := ioutil.ReadAll(response.Body)
-	var dataStruct = struct {
-		Data struct {
-			Address Address `json:"address"`
-		} `json:"data"`
-	}{}
-	if err := json.Unmarshal(data, &dataStruct); err != nil {
-		return nil, jerr.Get("error unmarshalling json", err)
+	address := g.Address.GetAddr()
+	outputs, err := client.GetUtxos(&address)
+	if err != nil {
+		return nil, jerr.Get("error getting utxos", err)
 	}
+	var utxos []memo.UTXO
 	pkHash := g.Address.GetPkHash()
 	pkScript, err := script.P2pkh{PkHash: pkHash}.Get()
 	if err != nil {
 		return nil, jerr.Get("error getting pk script", err)
 	}
-	var utxos []memo.UTXO
-	for _, output := range dataStruct.Data.Address.Outputs {
+	for _, output := range outputs {
 		if len(output.Spends) > 0 {
 			continue
 		}
