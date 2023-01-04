@@ -47,6 +47,7 @@ func Transfer(accountKey obj.AccountKey, db *leveldb.DB, appendLink bool, append
 			}
 		}
 	}
+	iter.Release()
 	numTransferred := 0
 	for _, tweet := range tweetList {
 		match, _ := regexp.MatchString("https://t.co/[a-zA-Z0-9]*$", tweet.Tweet.Text)
@@ -61,6 +62,7 @@ func Transfer(accountKey obj.AccountKey, db *leveldb.DB, appendLink bool, append
 				tweet.Tweet.Text += fmt.Sprintf("\n%s", media.MediaURL)
 			}
 		}
+		println("saving tweet")
 		if err := database.SaveTweet(accountKey, tweet, db, appendLink, appendDate); err != nil {
 			return numTransferred, jerr.Get("error streaming tweets for transfer", err)
 		}

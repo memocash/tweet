@@ -13,7 +13,6 @@ import (
 	"golang.org/x/oauth2/clientcredentials"
 	"log"
 	"strconv"
-	"time"
 )
 
 func GetAllTweets(screenName string, client *twitter.Client, db *leveldb.DB) (int, error) {
@@ -129,8 +128,6 @@ func getNumSavedTweets(accountKey obj.AccountKey, db *leveldb.DB) int {
 }
 func GetSkippedTweets(accountKey obj.AccountKey, client *twitter.Client, db *leveldb.DB, link bool, date bool) error {
 	println("getting skipped tweets")
-	//wait 1 second
-	time.Sleep(time.Second)
 	txList, err := getNewTweets(accountKey, client, db)
 	if err != nil {
 		return jerr.Get("error getting tweets since the bot was last run", err)
@@ -143,31 +140,34 @@ func GetSkippedTweets(accountKey obj.AccountKey, client *twitter.Client, db *lev
 		}
 	}
 	println("saving skipped tweets")
-	_, err = Transfer(accountKey, db, link, date)
-	if err != nil {
-		return jerr.Get("fatal error transferring tweets", err)
-	}
-	////call transfer until the tweet with the ID of the newest tweet in txList is found, or when we've saved 100 tweets
-	//totalSaved := 0
-	//for {
-	//	if totalSaved >= 20 {
-	//		break
-	//	}
-	//	//check if the tweet with the ID of the newest tweet in txList is in the database
-	//	prefix := fmt.Sprintf("saved-%s-%s-%019d", accountKey.Address, accountKey.Account, tweetID)
-	//	_,err := db.Get([]byte(prefix), nil)
-	//	if err == nil {
-	//		break
-	//	}
-	//	if err != leveldb.ErrNotFound {
-	//		return jerr.Get("error getting tweet from database", err)
-	//	}
-	//	numSaved, err := Transfer(accountKey, db, link, date)
-	//	if err != nil {
-	//		return jerr.Get("fatal error transferring tweets", err)
-	//	}
-	//	totalSaved += numSaved
+	//_, err = Transfer(accountKey, db, link, date)
+	//if err != nil {
+	//	return jerr.Get("fatal error transferring tweets", err)
 	//}
+	////call transfer until the tweet with the ID of the newest tweet in txList is found, or when we've saved 100 tweets
+	totalSaved := 0
+	for {
+		if totalSaved >= 100 {
+			break
+		}
+		//check if the tweet with the ID of the newest tweet in txList is in the database
+		prefix := fmt.Sprintf("saved-%s-%s-%019d", accountKey.Address, accountKey.Account, tweetID)
+		_,err := db.Get([]byte(prefix), nil)
+		if err == nil {
+			break
+		}
+		if err != leveldb.ErrNotFound {
+			return jerr.Get("error getting tweet from database", err)
+		}
+		numSaved, err := Transfer(accountKey, db, link, date)
+		if err != nil {
+			return jerr.Get("fatal error transferring tweets", err)
+		}
+		if numSaved == 0 {
+			break
+		}
+		totalSaved += numSaved
+	}
 	return nil
 }
 func Connect() *twitter.Client {
