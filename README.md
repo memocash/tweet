@@ -5,6 +5,8 @@
 
 ## Example Config
 
+Put in `./config.yaml`:
+
 ```yaml
 BOT_SEED: hotel obvious agent lecture gadget evil jealous keen fragile before damp clarify
 TWITTER_API:
