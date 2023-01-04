@@ -6,7 +6,7 @@
 ## Example Config
 
 ```yaml
-BOT_SEED: witch collapse practice feed shame open despair creek road again ice least
+BOT_SEED: hotel obvious agent lecture gadget evil jealous keen fragile before damp clarify
 TWITTER_API:
   CONSUMER_KEY: 1234567890
   CONSUMER_SECRET: abcdefghijklmnopqrstuvwxyz
