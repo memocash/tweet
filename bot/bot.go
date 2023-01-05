@@ -33,6 +33,7 @@ type Bot struct {
 }
 
 func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey, tweetClient *twitter.Client, db *leveldb.DB) *Bot {
+
 	return &Bot{
 		Mnemonic:    mnemonic,
 		Addresses:   addresses,
@@ -160,7 +161,6 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 		twitterName := regexp.MustCompile("^WITHDRAW TWITTER ([a-zA-Z0-9_]{1,15})$").FindStringSubmatch(message)[1]
 		searchString := "linked-" + senderAddress + "-" + twitterName
 		//refund if this field doesn't exist
-		println("here")
 		searchValue,err := b.Db.Get([]byte(searchString), nil)
 		if err != nil {
 			if err == leveldb.ErrNotFound {
@@ -279,13 +279,10 @@ func (b *Bot) UpdateStream() error {
 		if err != nil {
 			return jerr.Get("error getting utxos", err)
 		}
-		//if the balance is greater than 0, add the twitterName and newKey to the streamArray
+		//if the balance is greater than 800, add the twitterName and newKey to the streamArray
 		balance := int64(0)
 		for _,output := range outputs {
-			if output.Input.Value > 0 {
-				balance += output.Input.Value
-				break
-			}
+			balance += output.Input.Value
 		}
 		if balance > 800 {
 			streamArray = append(streamArray, config.Stream{Key: newKey, Name: twitterName})
@@ -310,9 +307,9 @@ func createBot(b *Bot, twitterName string, senderAddress string, data Subscripti
 	//check if the value of the transaction is less than 5,000 or this address already has a bot for this account in the database
 	botExists := false
 	_, err := b.Db.Get([]byte("linked-"+senderAddress+"-"+twitterName), nil)
-	if err != nil {
+	if err != nil && err != leveldb.ErrNotFound {
 		return nil, jerr.Get("error getting bot from database", err)
-	}else{
+	}else if err != leveldb.ErrNotFound{
 		botExists = true
 	}
 	//check if this twitter account actually exists
@@ -384,6 +381,7 @@ func createBot(b *Bot, twitterName string, senderAddress string, data Subscripti
 	}
 	if !botExists {
 		newWallet := database.NewWallet(newAddr, newKey)
+
 		profile, err := tweets.GetProfile(twitterName, b.TweetClient)
 		if err != nil {
 			return nil, jerr.Get("fatal error getting profile", err)

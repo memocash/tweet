@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/jchavannes/jgo/jerr"
+	"github.com/memocash/index/client/example/db"
+	"github.com/memocash/index/client/lib"
 	"github.com/memocash/index/ref/bitcoin/memo"
 	"github.com/memocash/index/ref/bitcoin/tx/gen"
 	"github.com/memocash/index/ref/bitcoin/tx/hs"
 	"github.com/memocash/index/ref/bitcoin/tx/parse"
 	"github.com/memocash/index/ref/bitcoin/tx/script"
 	"github.com/memocash/index/ref/bitcoin/wallet"
-	"github.com/memocash/index/client/example/db"
 	"github.com/syndtr/goleveldb/leveldb"
 	"net/http"
 	"time"
@@ -56,10 +57,12 @@ func (g *InputGetter) SetPkHashesToUse([][]byte) {
 }
 
 func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
-	client,err := db.GetClient()
+	database, err := db.NewDatabase()
 	if err != nil {
-		return nil, jerr.Get("error getting client", err)
+		return nil, jerr.Get("error getting database", err)
 	}
+	defer database.Db.Close()
+	client := lib.NewClient(database)
 	address := g.Address.GetAddr()
 	outputs, err := client.GetUtxos(&address)
 	if err != nil {
@@ -72,9 +75,6 @@ func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
 		return nil, jerr.Get("error getting pk script", err)
 	}
 	for _, output := range outputs {
-		if len(output.Spends) > 0 {
-			continue
-		}
 		utxos = append(utxos, memo.UTXO{
 			Input: memo.TxInput{
 				PkScript:     pkScript,
@@ -156,6 +156,9 @@ func FundTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Ad
 			Keys: []wallet.PrivateKey{key},
 		},
 	})
+	if err != nil {
+		return jerr.Get("error generating memo tx", err)
+	}
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
 	completeTransaction(memoTx, err)
