@@ -70,7 +70,7 @@ func getOldTweets(screenName string, client *twitter.Client, db *leveldb.DB) ([]
 	}
 	return tweetTxs, nil
 }
-func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, db *leveldb.DB) ([]obj.TweetTx, error) {
+func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, db *leveldb.DB, numTweets int) ([]obj.TweetTx, error) {
 	var userTimelineParams *twitter.UserTimelineParams
 	excludeReplies := false
 	//check if there are any tweetTx objects with the prefix containing this address and this screenName
@@ -92,7 +92,7 @@ func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, db *leveldb
 		iter.Release()
 	}
 	// Query to Twitter API for all tweets after IdInfo.id
-	userTimelineParams = &twitter.UserTimelineParams{ScreenName: accountKey.Account, ExcludeReplies: &excludeReplies, SinceID: maxID, Count: 100}
+	userTimelineParams = &twitter.UserTimelineParams{ScreenName: accountKey.Account, ExcludeReplies: &excludeReplies, SinceID: maxID, Count: numTweets}
 	tweets, _, err := client.Timelines.UserTimeline(userTimelineParams)
 	if err != nil {
 		return nil, jerr.Get("error getting old tweets from user timeline", err)
@@ -126,9 +126,9 @@ func getNumSavedTweets(accountKey obj.AccountKey, db *leveldb.DB) int {
 	iter.Release()
 	return numTweets
 }
-func GetSkippedTweets(accountKey obj.AccountKey, client *twitter.Client, db *leveldb.DB, link bool, date bool) error {
+func GetSkippedTweets(accountKey obj.AccountKey, client *twitter.Client, db *leveldb.DB, link bool, date bool, numTweets int) error {
 	println("getting skipped tweets")
-	txList, err := getNewTweets(accountKey, client, db)
+	txList, err := getNewTweets(accountKey, client, db, numTweets)
 	if err != nil {
 		return jerr.Get("error getting tweets since the bot was last run", err)
 	}
@@ -147,7 +147,7 @@ func GetSkippedTweets(accountKey obj.AccountKey, client *twitter.Client, db *lev
 	////call transfer until the tweet with the ID of the newest tweet in txList is found, or when we've saved 100 tweets
 	totalSaved := 0
 	for {
-		if totalSaved >= 100 {
+		if totalSaved >= numTweets {
 			break
 		}
 		//check if the tweet with the ID of the newest tweet in txList is in the database

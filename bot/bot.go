@@ -132,8 +132,21 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 		if err != nil {
 			return jerr.Get("error updating stream", err)
 		}
-	} else if regexp.MustCompile("^CREATE TWITTER ([a-zA-Z0-9_]{1,15}) --history$").MatchString(message) {
-		twitterName := regexp.MustCompile("^CREATE TWITTER ([a-zA-Z0-9_]{1,15}) --history$").FindStringSubmatch(message)[1]
+	} else if regexp.MustCompile("^CREATE TWITTER ([a-zA-Z0-9_]{1,15}) --history( [0-9]+)?$").MatchString(message) {
+		var numTweets int
+		if regexp.MustCompile("^CREATE TWITTER ([a-zA-Z0-9_]{1,15}) --history [0-9]+$").MatchString(message) {
+			numTweets, _ = strconv.Atoi(regexp.MustCompile("^CREATE TWITTER ([a-zA-Z0-9_]{1,15}) --history ([0-9]+)$").FindStringSubmatch(message)[2])
+		} else {
+			numTweets = 100
+		}
+		if numTweets > 1000 {
+			err = refund(data, b, coinIndex, senderAddress, "Number of tweets must be less than 1000")
+			if err != nil {
+				return jerr.Get("error refunding", err)
+			}
+			return nil
+		}
+		twitterName := regexp.MustCompile("^CREATE TWITTER ([a-zA-Z0-9_]{1,15}) --history( [0-9]+)?$").FindStringSubmatch(message)[1]
 		accountKeyPointer, err := createBot(b, twitterName, senderAddress, data, coinIndex)
 		if err != nil {
 			return jerr.Get("error creating bot", err)
@@ -142,7 +155,7 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 		if accountKeyPointer != nil {
 			accountKey := *accountKeyPointer
 			client := tweets.Connect()
-			err = tweets.GetSkippedTweets(accountKey, client, b.Db, true, true)
+			err = tweets.GetSkippedTweets(accountKey, client, b.Db, true, true, numTweets)
 			if err != nil {
 				return jerr.Get("error getting skipped tweets", err)
 			}
@@ -165,22 +178,15 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 		if err != nil {
 			if err == leveldb.ErrNotFound {
 				//handle refund
-				errMsg := "No linked address found for " + senderAddress + "-" + twitterName
-				print("\n\n\nSending error message: " + errMsg + "\n\n\n")
-				if data.Addresses.Outputs[coinIndex].Amount < 546 {
-					println("not enough money to send error message")
-					return nil
-				}
-				if err := database.SendToTwitterAddress(memo.UTXO{Input: memo.TxInput{
-					Value:        data.Addresses.Outputs[coinIndex].Amount,
-					PrevOutHash:  hs.GetTxHash(data.Addresses.Hash),
-					PrevOutIndex: coinIndex,
-					PkHash:       wallet.GetAddressFromString(b.Addresses[0]).GetPkHash(),
-				}}, b.Key, wallet.GetAddressFromString(senderAddress), errMsg); err != nil {
-					return jerr.Get("error sending money back", err)
+				errMsg := "No linked address found for " + senderAddress + "-"+ twitterName
+				err = refund(data, b, coinIndex, senderAddress, errMsg)
+				if err != nil {
+					return jerr.Get("error refunding", err)
 				}
 				return nil
 			}
+			errMsg := "Error accessing database looking for existing linked address"
+			_ = refund(data, b, coinIndex, senderAddress, errMsg)
 			return jerr.Get("error getting linked-"+senderAddress+"-"+twitterName, err)
 		} else {
 			fieldName := searchString
@@ -223,41 +229,47 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 			return jerr.Get("error updating stream", err)
 		}
 	} else {
-		err = b.UpdateStream()
+		errMsg := "Invalid command. Please use the following format: CREATE TWITTER <twitterName> --history <numTweets> or WITHDRAW TWITTER <twitterName>"
+		err = refund(data, b, coinIndex, senderAddress, errMsg)
 		if err != nil {
-			return jerr.Get("error updating stream", err)
+			return jerr.Get("error refunding", err)
 		}
-		fmt.Printf("\n\nMessage not in correct format\n\n")
-		sentToMainBot := false
-		//check all the outputs to see if any of them match the bot's address, if not, return nil, if so, continue with the function
-		for _,output := range data.Addresses.Outputs {
-			if output.Lock.Address == b.Addresses[0] {
-				sentToMainBot = true
-				break
-			}
-		}
-		if !sentToMainBot {
-			return nil
-		}
-		//handle sending back money
-		//not enough to send back
-		if data.Addresses.Outputs[coinIndex].Amount < 546 {
-			return nil
-		}
-		//create a transaction with the sender address and the amount of the transaction
-		if err := database.SendToTwitterAddress(memo.UTXO{Input: memo.TxInput{
-			Value:        data.Addresses.Outputs[coinIndex].Amount,
-			PrevOutHash:  hs.GetTxHash(data.Addresses.Hash),
-			PrevOutIndex: coinIndex,
-			PkHash:       wallet.GetAddressFromString(b.Addresses[0]).GetPkHash(),
-		}}, b.Key, wallet.GetAddressFromString(senderAddress), "Message was not in correct format"); err != nil {
-			return jerr.Get("error sending money back", err)
-		}
-		return nil
 	}
 	return nil
 }
-
+func refund(data Subscription, b *Bot, coinIndex uint32, senderAddress string, errMsg string) error {
+	err := b.UpdateStream()
+	if err != nil {
+		return jerr.Get("error updating stream", err)
+	}
+	fmt.Printf("\n\nSending error message: %s\n\n", errMsg)
+	sentToMainBot := false
+	//check all the outputs to see if any of them match the bot's address, if not, return nil, if so, continue with the function
+	for _,output := range data.Addresses.Outputs {
+		if output.Lock.Address == b.Addresses[0] {
+			sentToMainBot = true
+			break
+		}
+	}
+	if !sentToMainBot {
+		return nil
+	}
+	//handle sending back money
+	//not enough to send back
+	if data.Addresses.Outputs[coinIndex].Amount < 546 {
+		return nil
+	}
+	//create a transaction with the sender address and the amount of the transaction
+	if err := database.SendToTwitterAddress(memo.UTXO{Input: memo.TxInput{
+		Value:        data.Addresses.Outputs[coinIndex].Amount,
+		PrevOutHash:  hs.GetTxHash(data.Addresses.Hash),
+		PrevOutIndex: coinIndex,
+		PkHash:       wallet.GetAddressFromString(b.Addresses[0]).GetPkHash(),
+	}}, b.Key, wallet.GetAddressFromString(senderAddress), errMsg); err != nil {
+		return jerr.Get("error sending money back", err)
+	}
+	return nil
+}
 func (b *Bot) UpdateStream() error {
 	//create an array of {twitterName, newKey} objects by searching through the linked-<senderAddress>-<twitterName> fields
 	streamArray := make([]config.Stream, 0)

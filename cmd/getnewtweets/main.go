@@ -33,7 +33,7 @@ var transferCmd = &cobra.Command{
 			tweetsFound := iter.First()
 			iter.Release()
 			if tweetsFound {
-				err := tweets.GetSkippedTweets(accountKey,tweets.Connect(), db, link, date)
+				err := tweets.GetSkippedTweets(accountKey,tweets.Connect(), db, link, date, 100)
 				if err != nil {
 					jerr.Get("error getting skipped tweets", err).Print()
 				}
