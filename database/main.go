@@ -148,8 +148,33 @@ func MakeReply(wallet Wallet, parentHash []byte, message string) ([]byte, error)
 func FundTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Address) error {
 	memoTx, err := gen.Tx(gen.TxRequest{
 		InputsToUse: []memo.UTXO{utxo},
+		Change: wallet.Change{
+			Main: key.GetAddress(),
+		},
 		Outputs: []*memo.Output{{
 			Amount: memo.GetMaxSendFromCount(utxo.Input.Value, 1),
+			Script: script.P2pkh{PkHash: address.GetPkHash()},
+		}},
+		KeyRing: wallet.KeyRing{
+			Keys: []wallet.PrivateKey{key},
+		},
+	})
+	if err != nil {
+		return jerr.Get("error generating memo tx", err)
+	}
+	txInfo := parse.GetTxInfo(memoTx)
+	txInfo.Print()
+	completeTransaction(memoTx, err)
+	return nil
+}
+func PartialFund(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Address, amount int64) error {
+	memoTx, err := gen.Tx(gen.TxRequest{
+		InputsToUse: []memo.UTXO{utxo},
+		Change: wallet.Change{
+			Main: key.GetAddress(),
+		},
+		Outputs: []*memo.Output{{
+			Amount: memo.GetMaxSendFromCount(amount, 1),
 			Script: script.P2pkh{PkHash: address.GetPkHash()},
 		}},
 		KeyRing: wallet.KeyRing{

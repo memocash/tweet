@@ -197,11 +197,11 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 			println("account key pointer is nil, not transferring tweets")
 			return nil
 		}
-	} else if regexp.MustCompile("^WITHDRAW TWITTER ([a-zA-Z0-9_]{1,15})$").MatchString(message) {
+	} else if regexp.MustCompile("^WITHDRAW TWITTER ([a-zA-Z0-9_]{1,15})( [0-9]+)?$").MatchString(message) {
 		//check the database for each field that matches linked-<senderAddress>-<twitterName>
 		//if there is a match, print out the address and key
 		//if there is no match, print out an error message
-		twitterName := regexp.MustCompile("^WITHDRAW TWITTER ([a-zA-Z0-9_]{1,15})$").FindStringSubmatch(message)[1]
+		twitterName := regexp.MustCompile("^WITHDRAW TWITTER ([a-zA-Z0-9_]{1,15})( [0-9]+)?$").FindStringSubmatch(message)[1]
 		searchString := "linked-" + senderAddress + "-" + twitterName
 		//refund if this field doesn't exist
 		searchValue,err := b.Db.Get([]byte(searchString), nil)
@@ -239,19 +239,50 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 			if err != nil {
 				return jerr.Get("error getting utxos", err)
 			}
-			//use the outputs array to get the amount (the function only returns outputs without a spend)
+			//check if the message contains a number
+			var amount int64
+			var totalBalance int64 = 0
+			for _, output := range outputs {
+				if output.Input.Value < 546 {
+					continue
+				}
+				totalBalance += output.Input.Value
+			}
+			if regexp.MustCompile("^WITHDRAW TWITTER ([a-zA-Z0-9_]{1,15}) [0-9]+$").MatchString(message) {
+				amount, _ = strconv.ParseInt(regexp.MustCompile("^WITHDRAW TWITTER ([a-zA-Z0-9_]{1,15}) ([0-9]+)$").FindStringSubmatch(message)[2], 10, 64)
+				if amount > totalBalance {
+					err = refund(data, b, coinIndex, senderAddress, "Cannot withdraw more than the total balance")
+					if err != nil {
+						return jerr.Get("error refunding", err)
+					}
+					return nil
+				}
+			} else {
+				amount = totalBalance
+			}
 			for _,output := range outputs {
 				if output.Input.Value < 546 {
 					continue
 				}
-				if err := database.FundTwitterAddress(memo.UTXO{Input: memo.TxInput{
+				if amount <= 0 {
+					break
+				}
+				var value int64
+				if output.Input.Value >= amount {
+					value = amount
+				}
+				if output.Input.Value < amount {
+					value = output.Input.Value
+				}
+				if err := database.PartialFund(memo.UTXO{Input: memo.TxInput{
 					Value:        output.Input.Value,
 					PrevOutHash:  output.Input.PrevOutHash,
 					PrevOutIndex: output.Input.PrevOutIndex,
 					PkHash:       output.Input.PkHash,
-				}}, key, wallet.GetAddressFromString(senderAddress)); err != nil {
+				}}, key, wallet.GetAddressFromString(senderAddress), value); err != nil {
 					return jerr.Get("error sending funds back", err)
 				}
+				amount -= value
 			}
 		}
 		err = b.UpdateStream()
