@@ -123,8 +123,23 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 	//use regex library to check if message matches the format "CREATE TWITTER {twittername}" tweet names are a maximum of 15 characters
 	match, _ := regexp.MatchString("^CREATE TWITTER [a-zA-Z0-9_]{1,15}$", message)
 	if match {
+		//check how many streams are running
+		streams, err := b.Db.Get([]byte("memobot-running-count"), nil)
+		if err != nil {
+			return jerr.Get("error getting running count", err)
+		}
+		//convert the byte array to an int
+		numStreams, err := strconv.Atoi(string(streams))
+		//if there are more than 25 streams running, refund and return
+		if numStreams >= 25 {
+			err := refund(data, b, coinIndex, senderAddress, "There are too many streams running, please try again later")
+			if err != nil {
+				return jerr.Get("error refunding", err)
+			}
+			return nil
+		}
 		twitterName := regexp.MustCompile("^CREATE TWITTER ([a-zA-Z0-9_]{1,15})$").FindStringSubmatch(message)[1]
-		_, err := createBot(b, twitterName, senderAddress, data, coinIndex)
+		_, err = createBot(b, twitterName, senderAddress, data, coinIndex)
 		if err != nil {
 			return jerr.Get("error creating bot", err)
 		}
@@ -133,6 +148,21 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 			return jerr.Get("error updating stream", err)
 		}
 	} else if regexp.MustCompile("^CREATE TWITTER ([a-zA-Z0-9_]{1,15}) --history( [0-9]+)?$").MatchString(message) {
+		//check how many streams are running
+		streams, err := b.Db.Get([]byte("memobot-running-count"), nil)
+		if err != nil {
+			return jerr.Get("error getting running count", err)
+		}
+		//convert the byte array to an int
+		numStreams, err := strconv.Atoi(string(streams))
+		//if there are more than 25 streams running, refund and return
+		if numStreams >= 25 {
+			err := refund(data, b, coinIndex, senderAddress, "There are too many streams running, please try again later")
+			if err != nil {
+				return jerr.Get("error refunding", err)
+			}
+			return nil
+		}
 		var numTweets int
 		if regexp.MustCompile("^CREATE TWITTER ([a-zA-Z0-9_]{1,15}) --history [0-9]+$").MatchString(message) {
 			numTweets, _ = strconv.Atoi(regexp.MustCompile("^CREATE TWITTER ([a-zA-Z0-9_]{1,15}) --history ([0-9]+)$").FindStringSubmatch(message)[2])
@@ -306,6 +336,10 @@ func (b *Bot) UpdateStream() error {
 	iter.Release()
 	if err := iter.Error(); err != nil {
 		return jerr.Get("error iterating through database", err)
+	}
+	err := b.Db.Put([]byte("memobot-running-count"), []byte(strconv.FormatUint(uint64(len(streamArray)), 10)), nil)
+	if err != nil {
+		return jerr.Get("error updating running count", err)
 	}
 	go func() {
 		if err := b.Stream.InitiateStream(streamArray); err != nil {

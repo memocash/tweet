@@ -43,6 +43,17 @@ var memobotCmd = &cobra.Command{
 				return jerr.Get("error creating memobot-num-streams field", err)
 			}
 		}
+		fieldExists, err = db.Has([]byte("memobot-running-count"), nil)
+		if err != nil {
+			return jerr.Get("error checking if memobot-running-count field exists", err)
+		}
+		//if it doesn't, create it and set it to 0
+		if !fieldExists {
+			err = db.Put([]byte("memobot-running-count"), []byte("0"), nil)
+			if err != nil {
+				return jerr.Get("error creating memobot-num-streams field", err)
+			}
+		}
 		//get the number of streams from the database
 		numStreamsBytes, err := db.Get([]byte("memobot-num-streams"), nil)
 		if err != nil {
