@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/dghubble/go-twitter/twitter"
 	"github.com/hasura/go-graphql-client"
@@ -120,8 +121,8 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 		println("Already completed tx: " + data.Addresses.Hash)
 		return nil
 	}
-	//use regex library to check if message matches the format "CREATE TWITTER {twittername}" tweet names are a maximum of 15 characters
-	match, _ := regexp.MatchString("^CREATE TWITTER [a-zA-Z0-9_]{1,15}$", message)
+
+	match, _ := regexp.MatchString("^CREATE TWITTER ([a-zA-Z0-9_]{1,15})(( --history( [0-9]+)?)?( --nolink)?( --date)?)*$", message)
 	if match {
 		//check how many streams are running
 		streams, err := b.Db.Get([]byte("memobot-running-count"), nil)
@@ -138,45 +139,52 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 			}
 			return nil
 		}
-		twitterName := regexp.MustCompile("^CREATE TWITTER ([a-zA-Z0-9_]{1,15})$").FindStringSubmatch(message)[1]
-		_, err = createBot(b, twitterName, senderAddress, data, coinIndex)
-		if err != nil {
-			return jerr.Get("error creating bot", err)
-		}
-		err = b.UpdateStream()
-		if err != nil {
-			return jerr.Get("error updating stream", err)
-		}
-	} else if regexp.MustCompile("^CREATE TWITTER ([a-zA-Z0-9_]{1,15}) --history( [0-9]+)?$").MatchString(message) {
-		//check how many streams are running
-		streams, err := b.Db.Get([]byte("memobot-running-count"), nil)
-		if err != nil {
-			return jerr.Get("error getting running count", err)
-		}
-		//convert the byte array to an int
-		numStreams, err := strconv.Atoi(string(streams))
-		//if there are more than 25 streams running, refund and return
-		if numStreams >= 25 {
-			err := refund(data, b, coinIndex, senderAddress, "There are too many streams running, please try again later")
-			if err != nil {
-				return jerr.Get("error refunding", err)
+		//split the message into an array of strings
+		splitMessage := strings.Split(message, " ")
+		//get the twitter name from the message
+		twitterName := splitMessage[2]
+		//check if --history is in the message
+		history := false
+		link := true
+		date := false
+		var historyNum = 100
+		for index, word := range splitMessage {
+			if word == "--history" {
+				history = true
+				if len(splitMessage) > index+1 {
+					historyNum,err = strconv.Atoi(splitMessage[index+1])
+					if err != nil {
+						continue
+					}
+				}
 			}
-			return nil
+			if word == "--nolink" {
+				link = false
+			}
+			if word == "--date" {
+				date = true
+			}
 		}
-		var numTweets int
-		if regexp.MustCompile("^CREATE TWITTER ([a-zA-Z0-9_]{1,15}) --history [0-9]+$").MatchString(message) {
-			numTweets, _ = strconv.Atoi(regexp.MustCompile("^CREATE TWITTER ([a-zA-Z0-9_]{1,15}) --history ([0-9]+)$").FindStringSubmatch(message)[2])
-		} else {
-			numTweets = 100
-		}
-		if numTweets > 1000 {
+		if historyNum > 1000 {
 			err = refund(data, b, coinIndex, senderAddress, "Number of tweets must be less than 1000")
 			if err != nil {
 				return jerr.Get("error refunding", err)
 			}
 			return nil
 		}
-		twitterName := regexp.MustCompile("^CREATE TWITTER ([a-zA-Z0-9_]{1,15}) --history( [0-9]+)?$").FindStringSubmatch(message)[1]
+		//write date and link into flags-senderAddress-twitterName
+		type Flags struct {
+			Link bool `json:"link"`
+			Date bool `json:"date"`
+		}
+		flags := Flags{Link: link, Date: date}
+		flagsBytes, err := json.Marshal(flags)
+		if err != nil {
+			return jerr.Get("error marshaling flags", err)
+		}
+		if err := b.Db.Put([]byte("flags-"+senderAddress+"-"+twitterName), flagsBytes, nil); err != nil {
+			return jerr.Get("error putting flags into database", err)
+		}
 		accountKeyPointer, err := createBot(b, twitterName, senderAddress, data, coinIndex)
 		if err != nil {
 			return jerr.Get("error creating bot", err)
@@ -184,10 +192,13 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 		//transfer all the tweets from the twitter account to the new bot
 		if accountKeyPointer != nil {
 			accountKey := *accountKeyPointer
-			client := tweets.Connect()
-			err = tweets.GetSkippedTweets(accountKey, client, b.Db, true, true, numTweets)
-			if err != nil {
-				return jerr.Get("error getting skipped tweets", err)
+			if history {
+				client := tweets.Connect()
+				err = tweets.GetSkippedTweets(accountKey, client, b.Db, link, date, historyNum)
+				if err != nil {
+					return jerr.Get("error getting skipped tweets", err)
+				}
+
 			}
 			err = b.UpdateStream()
 			if err != nil {
@@ -337,6 +348,7 @@ func (b *Bot) UpdateStream() error {
 	iter := b.Db.NewIterator(util.BytesPrefix([]byte("linked-")), nil)
 	for iter.Next() {
 		//find the twitterName at the end of the linked-<senderAddress>-<twitterName> field
+		senderAddress := strings.Split(string(iter.Key()), "-")[1]
 		twitterName := strings.Split(string(iter.Key()), "-")[2]
 		newKey := string(iter.Value())
 		walletKey,err := wallet.ImportPrivateKey(newKey)
@@ -358,7 +370,7 @@ func (b *Bot) UpdateStream() error {
 			balance += output.Input.Value
 		}
 		if balance > 800 {
-			streamArray = append(streamArray, config.Stream{Key: newKey, Name: twitterName})
+			streamArray = append(streamArray, config.Stream{Key: newKey, Name: twitterName, Sender: senderAddress})
 		}
 	}
 	for _, stream := range streamArray {

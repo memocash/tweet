@@ -23,6 +23,7 @@ func (t TwitterAPI) IsSet() bool {
 type Stream struct {
 	Key  string `mapstructure:"KEY"`
 	Name string `mapstructure:"NAME"`
+	Sender string `mapstructure:"SENDER"`
 }
 
 var _config Config
