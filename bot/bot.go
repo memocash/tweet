@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type Bot struct {
@@ -62,8 +63,9 @@ func (b *Bot) Listen() error {
 	if b.Stream, err = tweets.NewStream(b.Db); err != nil {
 		return jerr.Get("error getting new tweet stream", err)
 	}
-	if err := b.UpdateStream(); err != nil {
-		return jerr.Get("error updating stream bot start", err)
+	err = b.SafeUpdate()
+	if err != nil {
+		return jerr.Get("error updating stream", err)
 	}
 	fmt.Println("Listening for memos...")
 	//client.WithLog(log.Println)
@@ -200,7 +202,7 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 				}
 
 			}
-			err = b.UpdateStream()
+			err = b.SafeUpdate()
 			if err != nil {
 				return jerr.Get("error updating stream", err)
 			}
@@ -299,7 +301,7 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 				amount -= value
 			}
 		}
-		err = b.UpdateStream()
+		err = b.SafeUpdate()
 		if err != nil {
 			return jerr.Get("error updating stream", err)
 		}
@@ -313,7 +315,7 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 	return nil
 }
 func refund(data Subscription, b *Bot, coinIndex uint32, senderAddress string, errMsg string) error {
-	err := b.UpdateStream()
+	err := b.SafeUpdate()
 	if err != nil {
 		return jerr.Get("error updating stream", err)
 	}
@@ -342,6 +344,23 @@ func refund(data Subscription, b *Bot, coinIndex uint32, senderAddress string, e
 		PkHash:       wallet.GetAddressFromString(b.Addresses[0]).GetPkHash(),
 	}}, b.Key, wallet.GetAddressFromString(senderAddress), errMsg); err != nil {
 		return jerr.Get("error sending money back", err)
+	}
+	return nil
+}
+func (b *Bot) SafeUpdate() error {
+	err := b.UpdateStream()
+	var waitCount = 1
+	for err != nil && waitCount < 30 {
+		if !jerr.HasErrorPart(err, "DuplicateRule") {
+			return jerr.Get("error updating stream", err)
+		}
+		fmt.Printf("\n\n\nError updating stream: %s\n\n\n", err.Error())
+		err = b.UpdateStream()
+		time.Sleep(time.Duration(waitCount) * time.Second)
+		waitCount *= 2
+	}
+	if err != nil {
+		return jerr.Get("error updating stream", err)
 	}
 	return nil
 }
