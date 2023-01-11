@@ -8,7 +8,6 @@ import (
 	"github.com/memocash/tweet/database"
 	"github.com/memocash/tweet/tweets"
 	"github.com/spf13/cobra"
-	"strconv"
 )
 
 var memobotCmd = &cobra.Command{
@@ -54,16 +53,13 @@ var memobotCmd = &cobra.Command{
 				return jerr.Get("error creating memobot-num-streams field", err)
 			}
 		}
-		//get the number of streams from the database
-		numStreamsBytes, err := db.Get([]byte("memobot-num-streams"), nil)
-		if err != nil {
-			return jerr.Get("error getting memobot-num-streams field", err)
-		}
-		numStreamsUint, err := strconv.ParseUint(string(numStreamsBytes), 10, 64)
-		println("num streams: ", numStreamsUint)
-
 		botAddress := botKey.GetPublicKey().GetAddress().GetEncoded()
 		memoBot := bot.NewBot(mnemonic, []string{botAddress}, *botKey, tweets.Connect(), db)
+		cryptBytes,err  := database.GenerateEncryptionKeyFromPassword(config.GetConfig().BotCrypt)
+		if err != nil {
+			return jerr.Get("error generating encryption key", err)
+		}
+		memoBot.Crypt = string(cryptBytes)
 		if err = memoBot.Listen(); err != nil {
 			return jerr.Get("error listening for transactions", err)
 		}

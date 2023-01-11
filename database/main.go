@@ -2,6 +2,9 @@ package database
 
 import (
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -15,6 +18,8 @@ import (
 	"github.com/memocash/index/ref/bitcoin/tx/script"
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
+	"golang.org/x/crypto/scrypt"
+	"io"
 	"net/http"
 	"time"
 )
@@ -284,4 +289,53 @@ func completeTransaction(memoTx *memo.Tx, err error) {
 	if err != nil {
 		jerr.Get("The HTTP request failed with error %s\n", err).Fatal()
 	}
+}
+
+
+var salt = []byte{0xfe, 0xa9, 0xe9, 0x4c, 0xd9, 0x84, 0x50, 0x3d}
+
+func SetSalt(newSalt []byte) {
+	salt = newSalt
+}
+
+// https://golang.org/pkg/crypto/cipher/#example_NewCFBEncrypter
+func Encrypt(value []byte, key []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return []byte{}, jerr.Get("error getting new cipher", err)
+	}
+	encryptedValue := make([]byte, aes.BlockSize+len(value))
+	iv := encryptedValue[:aes.BlockSize]
+	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+		return []byte{}, jerr.Get("error reading random data for iv", err)
+	}
+	stream := cipher.NewCFBEncrypter(block, iv)
+	stream.XORKeyStream(encryptedValue[aes.BlockSize:], value)
+	return encryptedValue, nil
+}
+
+// https://golang.org/pkg/crypto/cipher/#example_NewCFBDecrypter
+func Decrypt(value []byte, key []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return []byte{}, jerr.Get("error getting new cipher", err)
+	}
+	if len(value) < aes.BlockSize {
+		return []byte{}, jerr.New("ciphertext too short")
+	}
+	iv := value[:aes.BlockSize]
+	decryptedValue := make([]byte, len(value) - aes.BlockSize)
+	copy(decryptedValue, value[aes.BlockSize:])
+	stream := cipher.NewCFBDecrypter(block, iv)
+	stream.XORKeyStream(decryptedValue, decryptedValue)
+	return decryptedValue, nil
+}
+
+// https://godoc.org/golang.org/x/crypto/scrypt#example-package
+func GenerateEncryptionKeyFromPassword(password string) ([]byte, error) {
+	dk, err := scrypt.Key([]byte(password), salt, 1<<15, 8, 1, 32)
+	if err != nil {
+		return []byte{}, jerr.Get("error generating key", err)
+	}
+	return dk, nil
 }

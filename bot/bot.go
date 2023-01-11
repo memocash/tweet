@@ -31,6 +31,7 @@ type Bot struct {
 	Stream      *tweets.Stream
 	ErrorChan   chan error
 	Mutex       sync.Mutex
+	Crypt       string
 }
 
 func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey, tweetClient *twitter.Client, db *leveldb.DB) *Bot {
@@ -47,7 +48,6 @@ func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey
 
 func (b *Bot) Listen() error {
 	println("Listening to address: " + b.Addresses[0])
-	println("Listening to key: " + b.Key.GetBase58Compressed())
 	client := graphql.NewSubscriptionClient("ws://127.0.0.1:26770/graphql")
 	defer client.Close()
 	var subscription = new(Subscription)
@@ -233,9 +233,12 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 			fieldName := searchString
 			stringKey := searchValue
 			println("Field name: " + string(fieldName))
-			println("Private Key: " + string(stringKey))
 			//get the address object from the private key
-			key,err := wallet.ImportPrivateKey(string(stringKey))
+			decryptedKey,err := database.Decrypt(stringKey, []byte(b.Crypt))
+			if err != nil {
+				return jerr.Get("error decrypting key", err)
+			}
+			key,err := wallet.ImportPrivateKey(string(decryptedKey))
 			if err != nil {
 				return jerr.Get("error importing private key", err)
 			}
@@ -350,8 +353,13 @@ func (b *Bot) UpdateStream() error {
 		//find the twitterName at the end of the linked-<senderAddress>-<twitterName> field
 		senderAddress := strings.Split(string(iter.Key()), "-")[1]
 		twitterName := strings.Split(string(iter.Key()), "-")[2]
-		newKey := string(iter.Value())
-		walletKey,err := wallet.ImportPrivateKey(newKey)
+		//decrypt
+		decryptedKeyByte, err := database.Decrypt(iter.Value(), []byte(b.Crypt))
+		if err != nil {
+			return jerr.Get("error decrypting", err)
+		}
+		decryptedKey := string(decryptedKeyByte)
+		walletKey,err := wallet.ImportPrivateKey(decryptedKey)
 		if err != nil {
 			return jerr.Get("error importing private key", err)
 		}
@@ -370,11 +378,16 @@ func (b *Bot) UpdateStream() error {
 			balance += output.Input.Value
 		}
 		if balance > 800 {
-			streamArray = append(streamArray, config.Stream{Key: newKey, Name: twitterName, Sender: senderAddress})
+			streamArray = append(streamArray, config.Stream{Key: decryptedKey, Name: twitterName, Sender: senderAddress})
 		}
 	}
 	for _, stream := range streamArray {
-		println("streaming " + stream.Name + " to key " + stream.Key)
+		streamKey,err := wallet.ImportPrivateKey(stream.Key)
+		if err != nil {
+			return jerr.Get("error importing private key", err)
+		}
+		streamAddress := streamKey.GetAddress()
+		println("streaming " + stream.Name + " to address " + streamAddress.GetEncoded())
 	}
 	iter.Release()
 	if err := iter.Error(); err != nil {
@@ -442,11 +455,16 @@ func createBot(b *Bot, twitterName string, senderAddress string, data Subscripti
 	numStreamUint := uint(numStream)
 	if botExists {
 		//get the key from the database
+		//decrypt
 		rawKey,err := b.Db.Get([]byte("linked-"+senderAddress+"-"+twitterName), nil)
 		if err != nil {
 			return nil, jerr.Get("error getting key from database", err)
 		}
-		newKey,err = wallet.ImportPrivateKey(string(rawKey))
+		decryptedKey,err := database.Decrypt(rawKey, []byte(b.Crypt))
+		if err != nil {
+			return nil, jerr.Get("error decrypting key", err)
+		}
+		newKey,err = wallet.ImportPrivateKey(string(decryptedKey))
 		if err != nil {
 			return nil, jerr.Get("error importing private key", err)
 		}
@@ -496,7 +514,6 @@ func createBot(b *Bot, twitterName string, senderAddress string, data Subscripti
 			println("updated profile pic")
 		}
 	}
-	println("Stream Key: " + newKey.GetBase58Compressed())
 	println("Stream Address: " + newAddr.GetEncoded())
 	if !botExists{
 		err = b.Db.Put([]byte("memobot-num-streams"), []byte(strconv.FormatUint(uint64(numStreamUint+1), 10)), nil)
@@ -504,7 +521,12 @@ func createBot(b *Bot, twitterName string, senderAddress string, data Subscripti
 			return nil, jerr.Get("error putting num-streams", err)
 		}
 		//add a field to the database that links the sending address and twitter name to the new key
-		err = b.Db.Put([]byte("linked-"+senderAddress+"-"+twitterName), []byte(newKey.GetBase58Compressed()), nil)
+		//encrypt
+		encryptedKey,err := database.Encrypt([]byte(newKey.GetBase58Compressed()), []byte(b.Crypt))
+		if err != nil {
+			return nil, jerr.Get("error encrypting key", err)
+		}
+		err = b.Db.Put([]byte("linked-"+senderAddress+"-"+twitterName), encryptedKey, nil)
 		if err != nil {
 			return nil, jerr.Get("error updating linked-"+senderAddress+"-"+twitterName, err)
 		}

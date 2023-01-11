@@ -7,6 +7,7 @@ import (
 
 type Config struct {
 	BotSeed    string     `mapstructure:"BOT_SEED"`
+	BotCrypt   string     `mapstructure:"BOT_CRYPT"`
 	Streams    []Stream   `mapstructure:"STREAMS"`
 	TwitterAPI TwitterAPI `mapstructure:"TWITTER_API"`
 }
