@@ -15,7 +15,7 @@ func SaveTweet(accountKey obj.AccountKey, tweet obj.TweetTx, db *leveldb.DB, app
 	if tweet.Tweet == nil {
 		return jerr.New("tweet is nil")
 	}
-	wlt := NewWallet(accountKey.Address, accountKey.Key)
+	wlt := NewWallet(accountKey.Address, accountKey.Key, db)
 	tweetLink := fmt.Sprintf("\nhttps://twitter.com/twitter/status/%d\n", tweet.Tweet.ID)
 	tweetDate := fmt.Sprintf("\n%s\n", tweet.Tweet.CreatedAt)
 	tweetText := tweet.Tweet.Text

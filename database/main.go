@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/jchavannes/jgo/jerr"
-	"github.com/memocash/index/client/example/db"
 	"github.com/memocash/index/client/lib"
 	"github.com/memocash/index/ref/bitcoin/memo"
 	"github.com/memocash/index/ref/bitcoin/tx/gen"
@@ -56,6 +55,7 @@ type Tx struct {
 type InputGetter struct {
 	Address wallet.Address
 	UTXOs   []memo.UTXO
+	Db 	*leveldb.DB
 }
 
 
@@ -64,14 +64,17 @@ func (g *InputGetter) SetPkHashesToUse([][]byte) {
 }
 
 func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
-	database, err := db.NewDatabase()
-	if err != nil {
-		return nil, jerr.Get("error getting database", err)
-	}
-	defer database.Db.Close()
-	client := lib.NewClient(database)
+	database := Database{Db: g.Db}
+	//if err != nil {
+	//	return nil, jerr.Get("error getting database", err)
+	//}
+	//print the contents of g.Db
+	client := lib.NewClient("http://localhost:26770/graphql", &database)
+
 	address := g.Address.GetAddr()
 	outputs, err := client.GetUtxos(&address)
+	balance, err := client.GetBalance(&address)
+	println("balance: ", balance)
 	if err != nil {
 		return nil, jerr.Get("error getting utxos", err)
 	}
@@ -123,11 +126,11 @@ type Wallet struct {
 	Getter  gen.InputGetter
 }
 
-func NewWallet(address wallet.Address, key wallet.PrivateKey) Wallet {
+func NewWallet(address wallet.Address, key wallet.PrivateKey, db *leveldb.DB) Wallet {
 	return Wallet{
 		Address: address,
 		Key:     key,
-		Getter:  &InputGetter{Address: address},
+		Getter:  &InputGetter{Address: address, Db: db},
 	}
 }
 

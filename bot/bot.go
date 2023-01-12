@@ -249,6 +249,7 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 			inputGetter := database.InputGetter{
 				Address: address,
 				UTXOs:   nil,
+				Db:      b.Db,
 			}
 			//use the address object of the spawned key to get the outputs array
 			outputs,err := inputGetter.GetUTXOs(nil)
@@ -290,6 +291,7 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 				if output.Input.Value < amount {
 					value = output.Input.Value
 				}
+				println("\n\n\nValue: " + strconv.FormatInt(value, 10))
 				if err := database.PartialFund(memo.UTXO{Input: memo.TxInput{
 					Value:        output.Input.Value,
 					PrevOutHash:  output.Input.PrevOutHash,
@@ -386,6 +388,7 @@ func (b *Bot) UpdateStream() error {
 		inputGetter := database.InputGetter{
 			Address: walletKey.GetAddress(),
 			UTXOs:   nil,
+			Db: 	b.Db,
 		}
 		outputs,err := inputGetter.GetUTXOs(nil)
 		if err != nil {
@@ -506,7 +509,7 @@ func createBot(b *Bot, twitterName string, senderAddress string, data Subscripti
 		return nil, jerr.Get("error funding twitter address", err)
 	}
 	if !botExists {
-		newWallet := database.NewWallet(newAddr, newKey)
+		newWallet := database.NewWallet(newAddr, newKey, b.Db)
 
 		profile, err := tweets.GetProfile(twitterName, b.TweetClient)
 		if err != nil {

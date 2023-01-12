@@ -20,7 +20,7 @@ func GetClient() (*lib.Client, error) {
 	if err != nil {
 		return nil, jerr.Get("error getting database", err)
 	}
-	return lib.NewClient(database), nil
+	return lib.NewClient("http://localhost:26770/graphql", database), nil
 }
 
 func NewDatabase() (*Database, error) {
@@ -45,53 +45,29 @@ func (d *Database) GetAddressBalance(address *wallet.Addr) (int64, error) {
 	return balance, nil
 }
 
-func (d *Database) GetAddressHeight(address *wallet.Addr) (int64, error) {
-	iter := d.Db.NewIterator(util.BytesPrefix([]byte("output-"+ address.String())), nil)
-	var txhashes []string
-	for iter.Next() {
-		//get txhash from the name of the output
-		txhash := strings.Split(string(iter.Key()), "-")[2]
-		txhashes = append(txhashes, txhash)
+func (d *Database) SetAddressHeight(address *wallet.Addr, height int64) error {
+	err := d.Db.Put([]byte("addressheight-"+ address.String()), []byte(fmt.Sprintf("%d", height)), nil)
+	if err != nil {
+		return jerr.Get("error setting address height", err)
 	}
-	iter.Release()
-	err := iter.Error()
+	return nil
+}
+
+func (d *Database) GetAddressHeight(address *wallet.Addr) (int64, error) {
+	height, err := d.Db.Get([]byte("addressheight-"+ address.String()), nil)
+	if err != nil {
+		if err == leveldb.ErrNotFound {
+			return 0, nil
+		}
+		return 0, jerr.Get("error getting address height", err)
+	}
+	//convert byte array to int64
+	var heightInt int64
+	_, err = fmt.Sscanf(string(height), "%d", &heightInt)
 	if err != nil {
 		return 0, jerr.Get("error getting address height", err)
 	}
-	var blockHashes []string
-	for _, txhash := range txhashes {
-		iter := d.Db.NewIterator(util.BytesPrefix([]byte("txblock-"+ txhash)), nil)
-		for iter.Next() {
-			blockHash := strings.Split(string(iter.Key()), "-")[2]
-			blockHashes = append(blockHashes, blockHash)
-		}
-		iter.Release()
-		err := iter.Error()
-		if err != nil {
-			return 0, jerr.Get("error getting address height", err)
-		}
-	}
-	var heights []int64
-	for _, blockHash := range blockHashes {
-		block,err := d.Db.Get([]byte("block-"+ blockHash), nil)
-		if err != nil {
-			return 0, jerr.Get("error getting address height", err)
-		}
-		var blockData graph.Block
-		err = json.Unmarshal(block, &blockData)
-		if err != nil {
-			return 0, jerr.Get("error getting address height", err)
-		}
-		heights = append(heights, blockData.Height)
-	}
-	var max int64 = 0
-	for _, height := range heights {
-		if height > max {
-			max = height
-		}
-	}
-	//using this list of txhashes, get all the blocks, and get the max height
-	return max, nil
+	return heightInt, nil
 }
 
 func (d *Database) GetUtxos(address *wallet.Addr) ([]graph.Output, error) {
@@ -142,6 +118,8 @@ func (d *Database) SaveTxs(txs []graph.Tx) error {
 		for _, output := range tx.Outputs {
 			//output-address-txhash-index
 			key := []byte(fmt.Sprintf("output-%s-%s-%d", output.Lock.Address, tx.Hash, output.Index))
+			println(string(key))
+			output.Tx.Hash = tx.Hash
 			value, err := json.MarshalIndent(output, "", "  ")
 			if err != nil {
 				return jerr.Get("error saving tx", err)
@@ -155,7 +133,6 @@ func (d *Database) SaveTxs(txs []graph.Tx) error {
 			//txblock-txhash-blockhash
 			//this lets us search the database by txhash and will tell us what block it's in
 			key := []byte(fmt.Sprintf("txblock-%s-%s", tx.Hash, block.Hash))
-			println("saving txblock", string(key))
 			err := d.Db.Put(key, nil, nil)
 			if err != nil {
 				return jerr.Get("error saving tx", err)

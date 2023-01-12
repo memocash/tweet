@@ -18,7 +18,7 @@ var profilePicCmd = &cobra.Command{
 		if err != nil {
 			jerr.Get("fatal error getting profile", err).Fatal()
 		}
-		err = database.UpdateProfilePic(database.NewWallet(accountKey.Address, accountKey.Key), profile.ProfilePic)
+		err = database.UpdateProfilePic(database.NewWallet(accountKey.Address, accountKey.Key, nil), profile.ProfilePic)
 		if err != nil {
 			jerr.Get("fatal error updating profile pic", err).Fatal()
 		}
