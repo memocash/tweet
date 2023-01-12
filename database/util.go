@@ -24,7 +24,7 @@ func GetClient() (*lib.Client, error) {
 }
 
 func NewDatabase() (*Database, error) {
-	db, err := leveldb.OpenFile("tweet.db", nil)
+	db, err := leveldb.OpenFile("tweets.db", nil)
 	if err != nil {
 		return nil, jerr.Get("error opening database", err)
 	}

@@ -17,14 +17,15 @@ var testCmd = &cobra.Command{
 			jerr.Get("error getting database client", err).Fatal()
 		}
 		//create a wallet.Address object
-		address,err := wallet.GetAddrFromString("1EVenAyKGr1TgEetVVKg5x2GysDhoGmBPM")
+		address,err := wallet.GetAddrFromString("1DHZohwLk7qQocABkHoZCU6vyhRPYY4njV")
 		if err != nil {
 			jerr.Get("error getting address", err).Fatal()
 		}
-		_,err  = client.GetUtxos(address)
+		utxos,err  := client.GetUtxos(address)
 		if err != nil {
 			jerr.Get("error getting utxos", err).Fatal()
 		}
+		println("utxos",len(utxos))
 		height, err := client.Database.GetAddressHeight(address)
 		if err != nil {
 			jerr.Get("error getting address height", err).Fatal()
