@@ -34,22 +34,15 @@ func NewDatabase() (*Database, error) {
 }
 
 func (d *Database) GetAddressBalance(address *wallet.Addr) (int64, error) {
-	//query := "" +
-	//	"SELECT " +
-	//	"   outputs.address, " +
-	//	"   IFNULL(SUM(CASE WHEN inputs.hash IS NULL THEN outputs.value ELSE 0 END), 0) AS balance " +
-	//	"FROM outputs " +
-	//	"LEFT JOIN inputs ON (inputs.prev_hash = outputs.hash AND inputs.prev_index = outputs.`index`) " +
-	//	"WHERE outputs.address = ? " +
-	//	"GROUP BY outputs.address "
-	//var result struct {
-	//	Address string
-	//	Balance int64
-	//}
-	//if err := d.Db.QueryRow(query, address.String()).Scan(&result.Address, &result.Balance); err != nil {
-	//	return 0, jerr.Get("error getting address balance exec query", err)
-	//}
-	return 0, nil
+	utxos, err := d.GetUtxos(address)
+	if err != nil {
+		return 0, jerr.Get("error getting address balance", err)
+	}
+	var balance int64 = 0
+	for _, utxo := range utxos {
+		balance += utxo.Amount
+	}
+	return balance, nil
 }
 
 func (d *Database) GetAddressHeight(address *wallet.Addr) (int64, error) {
