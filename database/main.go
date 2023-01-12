@@ -58,6 +58,8 @@ type InputGetter struct {
 	UTXOs   []memo.UTXO
 }
 
+
+
 func (g *InputGetter) SetPkHashesToUse([][]byte) {
 }
 
