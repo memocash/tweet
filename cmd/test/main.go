@@ -21,12 +21,10 @@ var testCmd = &cobra.Command{
 		if err != nil {
 			jerr.Get("error getting address", err).Fatal()
 		}
-		balance, err := client.Database.GetAddressBalance(address)
+		_,err = client.GetUtxos(address)
 		if err != nil {
 			jerr.Get("error getting address balance", err).Fatal()
 		}
-		println(balance)
-
 	},
 }
 func GetCommand() *cobra.Command {

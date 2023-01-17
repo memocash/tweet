@@ -118,7 +118,6 @@ func (d *Database) SaveTxs(txs []graph.Tx) error {
 		for _, output := range tx.Outputs {
 			//output-address-txhash-index
 			key := []byte(fmt.Sprintf("output-%s-%s-%d", output.Lock.Address, tx.Hash, output.Index))
-			println(string(key))
 			output.Tx.Hash = tx.Hash
 			value, err := json.MarshalIndent(output, "", "  ")
 			if err != nil {

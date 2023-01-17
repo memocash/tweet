@@ -90,7 +90,7 @@ func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
 				PkScript:     pkScript,
 				PkHash:       pkHash,
 				Value:        output.Amount,
-				PrevOutHash:  hs.GetTxHash(output.Hash),
+				PrevOutHash:  hs.GetTxHash(output.Tx.Hash),
 				PrevOutIndex: uint32(output.Index),
 			},
 		})
