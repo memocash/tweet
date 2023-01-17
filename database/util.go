@@ -14,6 +14,11 @@ import (
 type Database struct {
 	Db *leveldb.DB
 }
+type Profile struct {
+	Name string
+	Description string
+	ProfilePic string
+}
 
 func GetClient() (*lib.Client, error) {
 	database, err := NewDatabase()

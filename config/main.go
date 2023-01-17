@@ -10,6 +10,7 @@ type Config struct {
 	BotCrypt   string     `mapstructure:"BOT_CRYPT"`
 	Streams    []Stream   `mapstructure:"STREAMS"`
 	TwitterAPI TwitterAPI `mapstructure:"TWITTER_API"`
+	UpdateInterval int        `mapstructure:"UPDATE_INTERVAL"`
 }
 
 type TwitterAPI struct {
