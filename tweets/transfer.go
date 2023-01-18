@@ -49,6 +49,7 @@ func Transfer(accountKey obj.AccountKey, db *leveldb.DB, appendLink bool, append
 	}
 	iter.Release()
 	numTransferred := 0
+	wlt := database.NewWallet(accountKey.Address, accountKey.Key, db)
 	for _, tweet := range tweetList {
 		match, _ := regexp.MatchString("https://t.co/[a-zA-Z0-9]*$", tweet.Tweet.Text)
 		if match {
@@ -63,7 +64,7 @@ func Transfer(accountKey obj.AccountKey, db *leveldb.DB, appendLink bool, append
 			}
 		}
 		println("saving tweet")
-		if err := database.SaveTweet(accountKey, tweet, db, appendLink, appendDate); err != nil {
+		if err := database.SaveTweet(wlt, accountKey, tweet, db, appendLink, appendDate); err != nil {
 			return numTransferred, jerr.Get("error streaming tweets for transfer", err)
 		}
 		numTransferred++
