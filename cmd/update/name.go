@@ -18,7 +18,7 @@ var nameCmd = &cobra.Command{
 		if err != nil {
 			jerr.Get("fatal error getting profile", err).Fatal()
 		}
-		err = database.UpdateName(database.NewWallet(accountKey.Address, accountKey.Key), profile.Name)
+		err = database.UpdateName(database.NewWallet(accountKey.Address, accountKey.Key, nil), profile.Name)
 		if err != nil {
 			jerr.Get("error", err).Fatal()
 		}

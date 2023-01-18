@@ -49,7 +49,7 @@ func Transfer(accountKey obj.AccountKey, db *leveldb.DB, appendLink bool, append
 	}
 	iter.Release()
 	numTransferred := 0
-	wlt := database.NewWallet(accountKey.Address, accountKey.Key)
+	wlt := database.NewWallet(accountKey.Address, accountKey.Key, db)
 	for _, tweet := range tweetList {
 		match, _ := regexp.MatchString("https://t.co/[a-zA-Z0-9]*$", tweet.Tweet.Text)
 		if match {
