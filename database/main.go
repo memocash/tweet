@@ -56,12 +56,17 @@ type Tx struct {
 type InputGetter struct {
 	Address wallet.Address
 	UTXOs   []memo.UTXO
+	reset   bool
 }
 
 func (g *InputGetter) SetPkHashesToUse([][]byte) {
 }
 
 func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
+	if g.reset && len(g.UTXOs) > 0 {
+		g.reset = false
+		return g.UTXOs, nil
+	}
 	database, err := db.NewDatabase()
 	if err != nil {
 		return nil, jerr.Get("error getting database", err)
@@ -113,6 +118,7 @@ func (g *InputGetter) AddChangeUTXO(new memo.UTXO) {
 }
 
 func (g *InputGetter) NewTx() {
+	g.reset = true
 }
 
 type Wallet struct {
@@ -291,7 +297,6 @@ func completeTransaction(memoTx *memo.Tx, err error) {
 	}
 }
 
-
 var salt = []byte{0xfe, 0xa9, 0xe9, 0x4c, 0xd9, 0x84, 0x50, 0x3d}
 
 func SetSalt(newSalt []byte) {
@@ -324,7 +329,7 @@ func Decrypt(value []byte, key []byte) ([]byte, error) {
 		return []byte{}, jerr.New("ciphertext too short")
 	}
 	iv := value[:aes.BlockSize]
-	decryptedValue := make([]byte, len(value) - aes.BlockSize)
+	decryptedValue := make([]byte, len(value)-aes.BlockSize)
 	copy(decryptedValue, value[aes.BlockSize:])
 	stream := cipher.NewCFBDecrypter(block, iv)
 	stream.XORKeyStream(decryptedValue, decryptedValue)
