@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/dghubble/go-twitter/twitter"
@@ -320,6 +321,7 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 					PrevOutHash:  output.Input.PrevOutHash,
 					PrevOutIndex: output.Input.PrevOutIndex,
 					PkHash:       output.Input.PkHash,
+					PkScript:     output.Input.PkScript,
 				}}, key, wallet.GetAddressFromString(senderAddress), value); err != nil {
 					return jerr.Get("error sending funds back", err)
 				}
@@ -362,11 +364,16 @@ func refund(data Subscription, b *Bot, coinIndex uint32, senderAddress string, e
 		return nil
 	}
 	//create a transaction with the sender address and the amount of the transaction
+	pkScript, err := hex.DecodeString(data.Addresses.Outputs[coinIndex].Script)
+	if err != nil {
+		return jerr.Get("error decoding script pk script for create bot", err)
+	}
 	if err := database.SendToTwitterAddress(memo.UTXO{Input: memo.TxInput{
 		Value:        data.Addresses.Outputs[coinIndex].Amount,
 		PrevOutHash:  hs.GetTxHash(data.Addresses.Hash),
 		PrevOutIndex: coinIndex,
 		PkHash:       wallet.GetAddressFromString(b.Addresses[0]).GetPkHash(),
+		PkScript:     pkScript,
 	}}, b.Key, wallet.GetAddressFromString(senderAddress), errMsg); err != nil {
 		return jerr.Get("error sending money back", err)
 	}
@@ -410,6 +417,9 @@ func (b *Bot) UpdateStream() error {
 		return jerr.Get("error updating running count", err)
 	}
 	go func() {
+		if len(streamArray) == 0 {
+			return
+		}
 		if err := b.Stream.InitiateStream(streamArray); err != nil {
 			b.ErrorChan <- jerr.Get("error twitter initiate stream in update", err)
 		}
@@ -442,11 +452,16 @@ func createBot(b *Bot, twitterName string, senderAddress string, data Subscripti
 			errMsg = fmt.Sprintf("You need to send at least 5,000 satoshis to create a bot for the account @%s", twitterName)
 		}
 		print("\n\n\nSending error message: " + errMsg + "\n\n\n")
+		pkScript, err := hex.DecodeString(data.Addresses.Outputs[coinIndex].Script)
+		if err != nil {
+			return nil, jerr.Get("error decoding script pk script for create bot", err)
+		}
 		if err := database.SendToTwitterAddress(memo.UTXO{Input: memo.TxInput{
 			Value:        data.Addresses.Outputs[coinIndex].Amount,
 			PrevOutHash:  hs.GetTxHash(data.Addresses.Hash),
 			PrevOutIndex: coinIndex,
 			PkHash:       wallet.GetAddressFromString(b.Addresses[0]).GetPkHash(),
+			PkScript:     pkScript,
 		}}, b.Key, wallet.GetAddressFromString(senderAddress), errMsg); err != nil {
 			return nil, jerr.Get("error sending money back", err)
 		}
@@ -490,11 +505,16 @@ func createBot(b *Bot, twitterName string, senderAddress string, data Subscripti
 		}
 		newAddr = newKey.GetAddress()
 	}
+	pkScript, err := hex.DecodeString(data.Addresses.Outputs[coinIndex].Script)
+	if err != nil {
+		return nil, jerr.Get("error decoding script pk script for create bot", err)
+	}
 	if err := database.FundTwitterAddress(memo.UTXO{Input: memo.TxInput{
 		Value:        data.Addresses.Outputs[coinIndex].Amount,
 		PrevOutHash:  hs.GetTxHash(data.Addresses.Hash),
 		PrevOutIndex: coinIndex,
-		PkHash:       wallet.GetAddressFromString(b.Addresses[0]).GetPkHash(),
+		PkHash:       b.Key.GetAddress().GetPkHash(),
+		PkScript:     pkScript,
 	}}, b.Key, newAddr); err != nil {
 		return nil, jerr.Get("error funding twitter address", err)
 	}
@@ -577,12 +597,15 @@ func updateProfile(b *Bot, newWallet database.Wallet, twitterName string, sender
 			return jerr.Get("error marshalling profile", err)
 		}
 		err = b.Db.Put([]byte("profile-"+senderAddress+"-"+twitterName), profileBytes, nil)
-	}
-	if err == nil {
-		//unmarshal it
+		if err != nil {
+			return jerr.Get("error putting profile in database", err)
+		}
+	}else if err == nil {
+		//make the profileExists into a string and print it
 		var dbProfile database.Profile
 		err = json.Unmarshal(profileExists, &dbProfile)
 		if err != nil {
+			println("Profile name: " + dbProfile.Name)
 			return jerr.Get("error unmarshalling profile", err)
 		}
 		if dbProfile.Name != profile.Name {
