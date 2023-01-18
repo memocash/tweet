@@ -181,14 +181,14 @@ func (s *Stream) InitiateStream(streamConfigs []config.Stream) error {
 				twitterAccountWallet := obj.GetAccountKeyFromArgs([]string{conf.Key, conf.Name})
 				var link = true
 				var date = false
-				flags,err := s.Db.Get([]byte("flags-" + conf.Sender +"-"+conf.Name),nil)
+				flags, err := s.Db.Get([]byte("flags-"+conf.Sender+"-"+conf.Name), nil)
 				if err != nil {
 					if err == leveldb.ErrNotFound {
 						continue
 					} else {
 						return jerr.Get("error getting flags from db", err)
 					}
-				} else{
+				} else {
 					type Flags struct {
 						Link bool `json:"link"`
 						Date bool `json:"date"`
@@ -200,7 +200,8 @@ func (s *Stream) InitiateStream(streamConfigs []config.Stream) error {
 					link = flagsStruct.Link
 					date = flagsStruct.Date
 				}
-				if err := database.SaveTweet(twitterAccountWallet, tweetTx, s.Db, link, date); err != nil {
+				wlt := database.NewWallet(twitterAccountWallet.Address, twitterAccountWallet.Key)
+				if err := database.SaveTweet(wlt, twitterAccountWallet, tweetTx, s.Db, link, date); err != nil {
 					return jerr.Get("error streaming tweet in stream", err)
 				}
 			}
