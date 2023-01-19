@@ -6,6 +6,7 @@ import (
 	"github.com/dghubble/go-twitter/twitter"
 	"github.com/jchavannes/jgo/jerr"
 	config2 "github.com/memocash/tweet/config"
+	"github.com/memocash/tweet/database"
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/syndtr/goleveldb/leveldb"
 	util2 "github.com/syndtr/goleveldb/leveldb/util"
@@ -159,7 +160,8 @@ func GetSkippedTweets(accountKey obj.AccountKey, client *twitter.Client, db *lev
 		if err != leveldb.ErrNotFound {
 			return jerr.Get("error getting tweet from database", err)
 		}
-		numSaved, err := Transfer(accountKey, db, link, date)
+		wlt := database.NewWallet(accountKey.Address, accountKey.Key, db)
+		numSaved, err := Transfer(accountKey, db, link, date, wlt)
 		if err != nil {
 			return jerr.Get("fatal error transferring tweets", err)
 		}

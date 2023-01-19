@@ -556,6 +556,7 @@ func updateProfiles(streamAray []config.Stream, b *Bot) error {
 		newWallet := database.NewWallet(streamAddress, streamKey, b.Db)
 		err = updateProfile(b, newWallet, stream.Name, stream.Sender)
 	}
+	time.Sleep(2 * time.Second)
 	return nil
 }
 func updateProfile(b *Bot, newWallet database.Wallet, twitterName string, senderAddress string) error {

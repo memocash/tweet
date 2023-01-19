@@ -12,7 +12,7 @@ import (
 	"strconv"
 )
 
-func Transfer(accountKey obj.AccountKey, db *leveldb.DB, appendLink bool, appendDate bool) (int, error) {
+func Transfer(accountKey obj.AccountKey, db *leveldb.DB, appendLink bool, appendDate bool, wlt database.Wallet) (int, error) {
 	var tweetList []obj.TweetTx
 	//find the greatest ID of all the already saved tweets
 	prefix := fmt.Sprintf("saved-%s-%s", accountKey.Address, accountKey.Account)
@@ -49,7 +49,6 @@ func Transfer(accountKey obj.AccountKey, db *leveldb.DB, appendLink bool, append
 	}
 	iter.Release()
 	numTransferred := 0
-	wlt := database.NewWallet(accountKey.Address, accountKey.Key, db)
 	for _, tweet := range tweetList {
 		match, _ := regexp.MatchString("https://t.co/[a-zA-Z0-9]*$", tweet.Tweet.Text)
 		if match {

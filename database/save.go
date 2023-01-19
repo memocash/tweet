@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/jchavannes/jgo/jerr"
+	"github.com/memocash/index/ref/bitcoin/memo"
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -18,18 +19,14 @@ func SaveTweet(wlt Wallet, accountKey obj.AccountKey, tweet obj.TweetTx, db *lev
 	tweetLink := fmt.Sprintf("\nhttps://twitter.com/twitter/status/%d\n", tweet.Tweet.ID)
 	tweetDate := fmt.Sprintf("\n%s\n", tweet.Tweet.CreatedAt)
 	tweetText := tweet.Tweet.Text
-	if appendLink {
-		tweetText += tweetLink
-	}
-	if appendDate {
-		tweetText += tweetDate
-	}
+	//get the length of tweetText in bytes
 	//add the tweet to the twitter-twittername-tweetID prefix
 	prefix := fmt.Sprintf("tweets-%s-%019d", tweet.Tweet.User.ScreenName, tweet.Tweet.ID)
 	tweetTx, _ := json.Marshal(tweet)
 	db.Put([]byte(prefix), tweetTx, nil)
 	//if the tweet was a regular post, post it normally
 	if tweet.Tweet.InReplyToStatusID == 0 {
+		tweetText = trimTweet(tweetText, tweetLink, tweetDate, appendLink, appendDate, memo.OldMaxPostSize)
 		parentHash, err := MakePost(wlt, html.UnescapeString(tweetText))
 		//find this tweet in archive and set its hash to the hash of the post that was just made
 		tweet.TxHash = parentHash
@@ -51,6 +48,7 @@ func SaveTweet(wlt Wallet, accountKey obj.AccountKey, tweet obj.TweetTx, db *lev
 		}
 		//if it turns out this tweet was actually a reply to another person's tweet, post it as a regular post
 		if parentHash == nil {
+			tweetText = trimTweet(tweetText, tweetLink, tweetDate, appendLink, appendDate, memo.OldMaxPostSize)
 			parentHash, err := MakePost(wlt, html.UnescapeString(tweetText))
 			//find this tweet in archive and set its hash to the hash of the post that was just made
 			tweet.TxHash = parentHash
@@ -59,6 +57,7 @@ func SaveTweet(wlt Wallet, accountKey obj.AccountKey, tweet obj.TweetTx, db *lev
 			}
 			//otherwise, it's part of a thread, so post it as a reply to the parent tweet
 		} else {
+			tweetText = trimTweet(tweetText, tweetLink, tweetDate, appendLink, appendDate, memo.OldMaxReplySize)
 			replyHash, err := MakeReply(wlt, parentHash, html.UnescapeString(tweetText))
 			//find this tweet in archive and set its hash to the hash of the post that was just made
 			tweet.TxHash = replyHash
@@ -75,4 +74,22 @@ func SaveTweet(wlt Wallet, accountKey obj.AccountKey, tweet obj.TweetTx, db *lev
 		return jerr.Get("error saving tweetTx", err)
 	}
 	return nil
+}
+
+func trimTweet(tweetText string, tweetLink string, tweetDate string, appendLink bool, appendDate bool, size int) string {
+	if appendLink {
+		if len([]byte(tweetText))+len([]byte(tweetLink)) > size {
+			//if the tweet is too long, trim it
+			tweetText = string([]byte(tweetText)[:size-len([]byte(tweetLink))])
+		}
+		tweetText += tweetLink
+	}
+	if appendDate {
+		if len([]byte(tweetText))+len([]byte(tweetDate)) > size {
+			//if the tweet is too long, trim it
+			tweetText = string([]byte(tweetText)[:size-len([]byte(tweetDate))])
+		}
+		tweetText += tweetDate
+	}
+	return tweetText
 }

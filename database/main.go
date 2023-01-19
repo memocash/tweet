@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/jchavannes/jgo/jerr"
+	"github.com/jchavannes/jgo/jlog"
 	"github.com/memocash/index/client/lib"
 	"github.com/memocash/index/ref/bitcoin/memo"
 	"github.com/memocash/index/ref/bitcoin/tx/gen"
@@ -64,9 +65,11 @@ func (g *InputGetter) SetPkHashesToUse([][]byte) {
 
 func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
 	if g.reset && len(g.UTXOs) > 0 {
+		jlog.Logf("Using existing UTXOS: %d\n", len(g.UTXOs))
 		g.reset = false
 		return g.UTXOs, nil
 	}
+	jlog.Logf("Getting new UTXOs from database\n")
 	database := Database{Db: g.Db}
 	//if err != nil {
 	//	return nil, jerr.Get("error getting database", err)
@@ -178,6 +181,7 @@ func FundTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Ad
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
 	completeTransaction(memoTx, err)
+	time.Sleep(2 * time.Second)
 	return nil
 }
 func PartialFund(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Address, amount int64) error {
@@ -200,6 +204,7 @@ func PartialFund(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Address, 
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
 	completeTransaction(memoTx, err)
+	time.Sleep(1 * time.Second)
 	return nil
 }
 func SendToTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Address, errorMsg string) error {
@@ -221,6 +226,7 @@ func SendToTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
 	completeTransaction(memoTx, err)
+	time.Sleep(1 * time.Second)
 	return nil
 }
 func UpdateName(wlt Wallet, name string) error {
