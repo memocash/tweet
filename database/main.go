@@ -7,7 +7,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jlog"
 	"github.com/memocash/index/client/lib"
@@ -64,22 +63,26 @@ func (g *InputGetter) SetPkHashesToUse([][]byte) {
 }
 
 func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
+	println("getting utxos")
 	if g.reset && len(g.UTXOs) > 0 {
 		jlog.Logf("Using existing UTXOS: %d\n", len(g.UTXOs))
+		for i := 0; i < len(g.UTXOs); i++ {
+			jlog.Logf("UTXO %d value: %d\n", i, g.UTXOs[i].Input.Value)
+		}
 		g.reset = false
 		return g.UTXOs, nil
 	}
-	jlog.Logf("Getting new UTXOs from database\n")
+	jlog.Logf("Getting UTXOs from the database\n")
+	for i := 0; i < len(g.UTXOs); i++ {
+		jlog.Logf("UTXO %d value: %d\n", i, g.UTXOs[i].Input.Value)
+	}
 	database := Database{Db: g.Db}
-	//if err != nil {
-	//	return nil, jerr.Get("error getting database", err)
-	//}
-	//print the contents of g.Db
 	client := lib.NewClient("http://localhost:26770/graphql", &database)
 	address := g.Address.GetAddr()
 	outputs, err := client.GetUtxos(&address)
 	balance, err := client.GetBalance(&address)
 	println("balance: ", balance)
+	println()
 	if err != nil {
 		return nil, jerr.Get("error getting utxos", err)
 	}
@@ -142,11 +145,12 @@ func NewWallet(address wallet.Address, key wallet.PrivateKey, db *leveldb.DB) Wa
 
 func MakePost(wlt Wallet, message string) ([]byte, error) {
 	memoTx, err := buildTx(wlt, script.Post{Message: message})
+	//check if the prefix already exists in the database
 	if err != nil {
 		return nil, jerr.Get("error generating memo tx", err)
 	}
-	txInfo := parse.GetTxInfo(memoTx)
-	txInfo.Print()
+	//txInfo := parse.GetTxInfo(memoTx)
+	//txInfo.Print()
 	completeTransaction(memoTx, err)
 	return memoTx.GetHash(), nil
 }
@@ -155,8 +159,8 @@ func MakeReply(wallet Wallet, parentHash []byte, message string) ([]byte, error)
 	if err != nil {
 		return nil, jerr.Get("error generating memo tx", err)
 	}
-	txInfo := parse.GetTxInfo(memoTx)
-	txInfo.Print()
+	//txInfo := parse.GetTxInfo(memoTx)
+	//txInfo.Print()
 	completeTransaction(memoTx, err)
 	return memoTx.GetHash(), nil
 }
@@ -277,6 +281,7 @@ func buildTx(wlt Wallet, outputScript memo.Script) (*memo.Tx, error) {
 			Keys: []wallet.PrivateKey{wlt.Key},
 		},
 	})
+
 	return memoTx, err
 }
 func completeTransaction(memoTx *memo.Tx, err error) {
@@ -298,8 +303,8 @@ func completeTransaction(memoTx *memo.Tx, err error) {
 	}
 	request.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: time.Second * 10}
-	response, err := client.Do(request)
-	fmt.Printf("%#v\n", response)
+	_, err = client.Do(request)
+	//fmt.Printf("%#v\n", response)
 	if err != nil {
 		jerr.Get("The HTTP request failed with error %s\n", err).Fatal()
 	}

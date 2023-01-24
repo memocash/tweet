@@ -35,7 +35,6 @@ type Bot struct {
 	Mutex       sync.Mutex
 	Crypt       string
 	Timer       *time.Timer
-	DoUpdate    chan struct{}
 }
 
 func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey, tweetClient *twitter.Client, db *leveldb.DB) *Bot {
@@ -46,7 +45,6 @@ func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey
 		TweetClient: tweetClient,
 		Db:          db,
 		ErrorChan:   make(chan error),
-		DoUpdate:    make(chan struct{}),
 	}
 }
 
@@ -78,7 +76,6 @@ func (b *Bot) Listen() error {
 		for {
 			t := time.NewTimer(time.Duration(updateInterval) * time.Minute)
 			select {
-			case <-b.DoUpdate:
 			case <-t.C:
 			}
 			streamArray, err := makeStreamArray(b)
@@ -402,8 +399,6 @@ func (b *Bot) UpdateStream() error {
 	if err != nil {
 		return jerr.Get("error making stream array", err)
 	}
-	//create a goroutine that calls updateProfiles every 5 minutes
-	b.DoUpdate <- struct{}{}
 	for _, stream := range streamArray {
 		streamKey, err := wallet.ImportPrivateKey(stream.Key)
 		if err != nil {
@@ -671,6 +666,7 @@ func makeStreamArray(b *Bot) ([]config.Stream, error) {
 			UTXOs:   nil,
 			Db:      b.Db,
 		}
+		println("Checking Balance for stream array")
 		outputs, err := inputGetter.GetUTXOs(nil)
 		if err != nil {
 			return nil, jerr.Get("error getting utxos", err)
@@ -681,7 +677,8 @@ func makeStreamArray(b *Bot) ([]config.Stream, error) {
 			balance += output.Input.Value
 		}
 		if balance > 800 {
-			streamArray = append(streamArray, config.Stream{Key: decryptedKey, Name: twitterName, Sender: senderAddress})
+			wlt := database.NewWallet(walletKey.GetAddress(), walletKey, b.Db)
+			streamArray = append(streamArray, config.Stream{Key: decryptedKey, Name: twitterName, Sender: senderAddress, Wallet: wlt})
 		}
 	}
 	iter.Release()

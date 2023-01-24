@@ -2,6 +2,7 @@ package config
 
 import (
 	"github.com/jchavannes/jgo/jerr"
+	"github.com/memocash/tweet/database"
 	"github.com/spf13/viper"
 )
 
@@ -26,6 +27,7 @@ type Stream struct {
 	Key  string `mapstructure:"KEY"`
 	Name string `mapstructure:"NAME"`
 	Sender string `mapstructure:"SENDER"`
+	Wallet database.Wallet `mapstructure:"WALLET"`
 }
 
 var _config Config

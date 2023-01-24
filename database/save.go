@@ -24,9 +24,20 @@ func SaveTweet(wlt Wallet, accountKey obj.AccountKey, tweet obj.TweetTx, db *lev
 	prefix := fmt.Sprintf("tweets-%s-%019d", tweet.Tweet.User.ScreenName, tweet.Tweet.ID)
 	tweetTx, _ := json.Marshal(tweet)
 	db.Put([]byte(prefix), tweetTx, nil)
+	prefix = fmt.Sprintf("saved-%s-%s", accountKey.Address, tweet.Tweet.User.ScreenName)
+	dbKey := fmt.Sprintf("%s-%019d", prefix, tweet.Tweet.ID)
+	found, err := db.Has([]byte(dbKey), nil)
+	if err != nil{
+		return jerr.Get("error checking if tweet is already saved", err)
+	}
+	if found {
+		//database has already saved this tweet
+		return nil
+	}
 	//if the tweet was a regular post, post it normally
 	if tweet.Tweet.InReplyToStatusID == 0 {
 		tweetText = trimTweet(tweetText, tweetLink, tweetDate, appendLink, appendDate, memo.OldMaxPostSize)
+		println("making post (twitter post was not a reply)")
 		parentHash, err := MakePost(wlt, html.UnescapeString(tweetText))
 		//find this tweet in archive and set its hash to the hash of the post that was just made
 		tweet.TxHash = parentHash
@@ -49,6 +60,7 @@ func SaveTweet(wlt Wallet, accountKey obj.AccountKey, tweet obj.TweetTx, db *lev
 		//if it turns out this tweet was actually a reply to another person's tweet, post it as a regular post
 		if parentHash == nil {
 			tweetText = trimTweet(tweetText, tweetLink, tweetDate, appendLink, appendDate, memo.OldMaxPostSize)
+			println("making post (reply parent not found)")
 			parentHash, err := MakePost(wlt, html.UnescapeString(tweetText))
 			//find this tweet in archive and set its hash to the hash of the post that was just made
 			tweet.TxHash = parentHash
@@ -58,6 +70,7 @@ func SaveTweet(wlt Wallet, accountKey obj.AccountKey, tweet obj.TweetTx, db *lev
 			//otherwise, it's part of a thread, so post it as a reply to the parent tweet
 		} else {
 			tweetText = trimTweet(tweetText, tweetLink, tweetDate, appendLink, appendDate, memo.OldMaxReplySize)
+			println("making reply")
 			replyHash, err := MakeReply(wlt, parentHash, html.UnescapeString(tweetText))
 			//find this tweet in archive and set its hash to the hash of the post that was just made
 			tweet.TxHash = replyHash
@@ -67,9 +80,7 @@ func SaveTweet(wlt Wallet, accountKey obj.AccountKey, tweet obj.TweetTx, db *lev
 		}
 	}
 	//save the txHash to the saved-address-twittername-tweetID prefix
-	prefix = fmt.Sprintf("saved-%s-%s", accountKey.Address, tweet.Tweet.User.ScreenName)
-	dbKey := fmt.Sprintf("%s-%019d", prefix, tweet.Tweet.ID)
-	err := db.Put([]byte(dbKey), tweet.TxHash, nil)
+	err = db.Put([]byte(dbKey), tweet.TxHash, nil)
 	if err != nil {
 		return jerr.Get("error saving tweetTx", err)
 	}
