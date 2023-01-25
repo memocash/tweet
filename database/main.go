@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jlog"
 	"github.com/memocash/index/client/lib"
@@ -63,19 +64,12 @@ func (g *InputGetter) SetPkHashesToUse([][]byte) {
 }
 
 func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
-	println("getting utxos")
 	if g.reset && len(g.UTXOs) > 0 {
 		jlog.Logf("Using existing UTXOS: %d\n", len(g.UTXOs))
-		for i := 0; i < len(g.UTXOs); i++ {
-			jlog.Logf("UTXO %d value: %d\n", i, g.UTXOs[i].Input.Value)
-		}
 		g.reset = false
 		return g.UTXOs, nil
 	}
 	jlog.Logf("Getting UTXOs from the database\n")
-	for i := 0; i < len(g.UTXOs); i++ {
-		jlog.Logf("UTXO %d value: %d\n", i, g.UTXOs[i].Input.Value)
-	}
 	database := Database{Db: g.Db}
 	client := lib.NewClient("http://localhost:26770/graphql", &database)
 	address := g.Address.GetAddr()
@@ -149,8 +143,8 @@ func MakePost(wlt Wallet, message string) ([]byte, error) {
 	if err != nil {
 		return nil, jerr.Get("error generating memo tx", err)
 	}
-	//txInfo := parse.GetTxInfo(memoTx)
-	//txInfo.Print()
+	txInfo := parse.GetTxInfo(memoTx)
+	txInfo.Print()
 	completeTransaction(memoTx, err)
 	return memoTx.GetHash(), nil
 }
@@ -159,8 +153,8 @@ func MakeReply(wallet Wallet, parentHash []byte, message string) ([]byte, error)
 	if err != nil {
 		return nil, jerr.Get("error generating memo tx", err)
 	}
-	//txInfo := parse.GetTxInfo(memoTx)
-	//txInfo.Print()
+	txInfo := parse.GetTxInfo(memoTx)
+	txInfo.Print()
 	completeTransaction(memoTx, err)
 	return memoTx.GetHash(), nil
 }
@@ -303,11 +297,11 @@ func completeTransaction(memoTx *memo.Tx, err error) {
 	}
 	request.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: time.Second * 10}
-	_, err = client.Do(request)
-	//fmt.Printf("%#v\n", response)
+	response, err := client.Do(request)
 	if err != nil {
 		jerr.Get("The HTTP request failed with error %s\n", err).Fatal()
 	}
+	fmt.Printf("%#v\n", response)
 }
 
 var salt = []byte{0xfe, 0xa9, 0xe9, 0x4c, 0xd9, 0x84, 0x50, 0x3d}

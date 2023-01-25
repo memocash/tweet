@@ -666,7 +666,6 @@ func makeStreamArray(b *Bot) ([]config.Stream, error) {
 			UTXOs:   nil,
 			Db:      b.Db,
 		}
-		println("Checking Balance for stream array")
 		outputs, err := inputGetter.GetUTXOs(nil)
 		if err != nil {
 			return nil, jerr.Get("error getting utxos", err)

@@ -28,12 +28,10 @@ func Transfer(accountKey obj.AccountKey, db *leveldb.DB, appendLink bool, append
 	iter.Release()
 	//get up to 20 tweets from the tweets-twittername-tweetID prefix with the smallest IDs greater than the startID
 	prefix = fmt.Sprintf("tweets-%s", accountKey.Account)
-	//println(prefix)
 	iter = db.NewIterator(util.BytesPrefix([]byte(prefix)), nil)
 	for iter.Next() {
 		key := iter.Key()
 		tweetID, _ := strconv.ParseInt(string(key[len(prefix)+1:]), 10, 64)
-		//println("%d", tweetID)
 		if tweetID > startID {
 			var tweetTx obj.TweetTx
 			err := json.Unmarshal(iter.Value(), &tweetTx)
@@ -41,7 +39,6 @@ func Transfer(accountKey obj.AccountKey, db *leveldb.DB, appendLink bool, append
 				return 0, jerr.Get("error unmarshaling tweetTx", err)
 			}
 			tweetList = append(tweetList, tweetTx)
-			//println(tweetTx.Tweet.Text)
 			if len(tweetList) == 20 {
 				break
 			}
@@ -49,8 +46,6 @@ func Transfer(accountKey obj.AccountKey, db *leveldb.DB, appendLink bool, append
 	}
 	iter.Release()
 	numTransferred := 0
-	println("transferring tweets")
-	println(len(tweetList))
 	for _, tweet := range tweetList {
 		match, _ := regexp.MatchString("https://t.co/[a-zA-Z0-9]*$", tweet.Tweet.Text)
 		if match {

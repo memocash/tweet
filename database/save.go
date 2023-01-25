@@ -24,16 +24,6 @@ func SaveTweet(wlt Wallet, accountKey obj.AccountKey, tweet obj.TweetTx, db *lev
 	prefix := fmt.Sprintf("tweets-%s-%019d", tweet.Tweet.User.ScreenName, tweet.Tweet.ID)
 	tweetTx, _ := json.Marshal(tweet)
 	db.Put([]byte(prefix), tweetTx, nil)
-	prefix = fmt.Sprintf("saved-%s-%s", accountKey.Address, tweet.Tweet.User.ScreenName)
-	dbKey := fmt.Sprintf("%s-%019d", prefix, tweet.Tweet.ID)
-	found, err := db.Has([]byte(dbKey), nil)
-	if err != nil{
-		return jerr.Get("error checking if tweet is already saved", err)
-	}
-	if found {
-		//database has already saved this tweet
-		return nil
-	}
 	//if the tweet was a regular post, post it normally
 	if tweet.Tweet.InReplyToStatusID == 0 {
 		tweetText = trimTweet(tweetText, tweetLink, tweetDate, appendLink, appendDate, memo.OldMaxPostSize)
@@ -79,8 +69,10 @@ func SaveTweet(wlt Wallet, accountKey obj.AccountKey, tweet obj.TweetTx, db *lev
 			}
 		}
 	}
+	prefix = fmt.Sprintf("saved-%s-%s", accountKey.Address, tweet.Tweet.User.ScreenName)
+	dbKey := fmt.Sprintf("%s-%019d", prefix, tweet.Tweet.ID)
 	//save the txHash to the saved-address-twittername-tweetID prefix
-	err = db.Put([]byte(dbKey), tweet.TxHash, nil)
+	err := db.Put([]byte(dbKey), tweet.TxHash, nil)
 	if err != nil {
 		return jerr.Get("error saving tweetTx", err)
 	}

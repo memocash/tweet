@@ -167,9 +167,8 @@ func getNumSavedTweets(accountKey obj.AccountKey, db *leveldb.DB) int {
 }
 func GetSkippedTweets(accountKey obj.AccountKey, client *twitter.Client, db *leveldb.DB, link bool, date bool, numTweets int) error {
 	println("getting skipped tweets")
-	//txList, err := getNewTweets(accountKey, client, db, numTweets)
-	txList, err := getNewTweetsLocal(accountKey, db, numTweets)
-	//open the file containing the tweets
+	txList, err := getNewTweets(accountKey, client, db, numTweets)
+	//txList, err := getNewTweetsLocal(accountKey, db, numTweets)
 	if err != nil {
 		return jerr.Get("error getting tweets since the bot was last run", err)
 	}

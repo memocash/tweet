@@ -6,3 +6,4 @@
 config.yaml
 example.db
 sendToServer.sh
+tweets-*.json
