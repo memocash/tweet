@@ -28,12 +28,10 @@ func Transfer(accountKey obj.AccountKey, db *leveldb.DB, appendLink bool, append
 	iter.Release()
 	//get up to 20 tweets from the tweets-twittername-tweetID prefix with the smallest IDs greater than the startID
 	prefix = fmt.Sprintf("tweets-%s", accountKey.Account)
-	println(prefix)
 	iter = db.NewIterator(util.BytesPrefix([]byte(prefix)), nil)
 	for iter.Next() {
 		key := iter.Key()
 		tweetID, _ := strconv.ParseInt(string(key[len(prefix)+1:]), 10, 64)
-		println("%d", tweetID)
 		if tweetID > startID {
 			var tweetTx obj.TweetTx
 			err := json.Unmarshal(iter.Value(), &tweetTx)
@@ -41,7 +39,6 @@ func Transfer(accountKey obj.AccountKey, db *leveldb.DB, appendLink bool, append
 				return 0, jerr.Get("error unmarshaling tweetTx", err)
 			}
 			tweetList = append(tweetList, tweetTx)
-			println(tweetTx.Tweet.Text)
 			if len(tweetList) == 20 {
 				break
 			}
@@ -55,14 +52,12 @@ func Transfer(accountKey obj.AccountKey, db *leveldb.DB, appendLink bool, append
 			//remove the https://t.co from the tweet text
 			tweet.Tweet.Text = regexp.MustCompile("https://t.co/[a-zA-Z0-9]*$").ReplaceAllString(tweet.Tweet.Text, "")
 		}
-		//marshal the tweet.Tweet object into a json and print it
-		if len(tweet.Tweet.Entities.Media) > 0 {
+		if tweet.Tweet.Entities.Media != nil && len(tweet.Tweet.Entities.Media) > 0 {
 			//append the url to the tweet text on a new line
 			for _, media := range tweet.Tweet.ExtendedEntities.Media {
 				tweet.Tweet.Text += fmt.Sprintf("\n%s", media.MediaURL)
 			}
 		}
-		println("saving tweet")
 		if err := database.SaveTweet(wlt, accountKey, tweet, db, appendLink, appendDate); err != nil {
 			return numTransferred, jerr.Get("error streaming tweets for transfer", err)
 		}

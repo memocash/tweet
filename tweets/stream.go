@@ -200,8 +200,8 @@ func (s *Stream) InitiateStream(streamConfigs []config.Stream) error {
 					link = flagsStruct.Link
 					date = flagsStruct.Date
 				}
-				wlt := database.NewWallet(twitterAccountWallet.Address, twitterAccountWallet.Key, s.Db)
-				if err := database.SaveTweet(wlt, twitterAccountWallet, tweetTx, s.Db, link, date); err != nil {
+				//may or may not break getnewtweets
+				if err := database.SaveTweet(conf.Wallet, twitterAccountWallet, tweetTx, s.Db, link, date); err != nil {
 					return jerr.Get("error streaming tweet in stream", err)
 				}
 			}

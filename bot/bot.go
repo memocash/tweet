@@ -35,7 +35,6 @@ type Bot struct {
 	Mutex       sync.Mutex
 	Crypt       string
 	Timer       *time.Timer
-	DoUpdate    chan struct{}
 }
 
 func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey, tweetClient *twitter.Client, db *leveldb.DB) *Bot {
@@ -46,7 +45,6 @@ func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey
 		TweetClient: tweetClient,
 		Db:          db,
 		ErrorChan:   make(chan error),
-		DoUpdate:    make(chan struct{}),
 	}
 }
 
@@ -78,7 +76,6 @@ func (b *Bot) Listen() error {
 		for {
 			t := time.NewTimer(time.Duration(updateInterval) * time.Minute)
 			select {
-			case <-b.DoUpdate:
 			case <-t.C:
 			}
 			streamArray, err := makeStreamArray(b)
@@ -282,50 +279,41 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 			}
 			//check if the message contains a number
 			var amount int64
-			var totalBalance int64 = 0
-			for _, output := range outputs {
-				if output.Input.Value < 546 {
-					continue
-				}
-				totalBalance += output.Input.Value
-			}
+			var maxSend = memo.GetMaxSendForUTXOs(outputs)
 			if regexp.MustCompile("^WITHDRAW TWITTER ([a-zA-Z0-9_]{1,15}) [0-9]+$").MatchString(message) {
 				amount, _ = strconv.ParseInt(regexp.MustCompile("^WITHDRAW TWITTER ([a-zA-Z0-9_]{1,15}) ([0-9]+)$").FindStringSubmatch(message)[2], 10, 64)
-				if amount > totalBalance {
-					err = refund(data, b, coinIndex, senderAddress, "Cannot withdraw more than the total balance")
+				if amount > maxSend{
+					err = refund(data, b, coinIndex, senderAddress, "Cannot withdraw more than the total balance is capable of sending")
+					if err != nil {
+						return jerr.Get("error refunding", err)
+					}
+					return nil
+				} else if amount+memo.DustMinimumOutput+memo.OutputFeeP2PKH > maxSend {
+					errmsg := fmt.Sprintf("Not enough funds will be left over to send change to bot account, please withdraw less than %d", maxSend+1-memo.DustMinimumOutput-memo.OutputFeeP2PKH)
+					err = refund(data, b, coinIndex, senderAddress,errmsg)
+					if err != nil {
+						return jerr.Get("error refunding", err)
+					}
+					return nil
+				} else {
+					err := database.WithdrawAmount(outputs, key, wallet.GetAddressFromString(senderAddress), amount)
+					if err != nil {
+						return jerr.Get("error withdrawing amount", err)
+					}
+				}
+			} else {
+				if maxSend > 0 {
+					err := database.WithdrawAll(outputs, key, wallet.GetAddressFromString(senderAddress))
+					if err != nil {
+						return jerr.Get("error withdrawing all", err)
+					}
+				} else {
+					err = refund(data, b, coinIndex, senderAddress, "Not enough balance to withdraw anything")
 					if err != nil {
 						return jerr.Get("error refunding", err)
 					}
 					return nil
 				}
-			} else {
-				amount = totalBalance
-			}
-			for _, output := range outputs {
-				if output.Input.Value < 546 {
-					continue
-				}
-				if amount <= 0 {
-					break
-				}
-				var value int64
-				if output.Input.Value >= amount {
-					value = amount
-				}
-				if output.Input.Value < amount {
-					value = output.Input.Value
-				}
-				println("\n\n\nValue: " + strconv.FormatInt(value, 10))
-				if err := database.PartialFund(memo.UTXO{Input: memo.TxInput{
-					Value:        output.Input.Value,
-					PrevOutHash:  output.Input.PrevOutHash,
-					PrevOutIndex: output.Input.PrevOutIndex,
-					PkHash:       output.Input.PkHash,
-					PkScript:     output.Input.PkScript,
-				}}, key, wallet.GetAddressFromString(senderAddress), value); err != nil {
-					return jerr.Get("error sending funds back", err)
-				}
-				amount -= value
 			}
 		}
 		err = b.SafeUpdate()
@@ -360,7 +348,8 @@ func refund(data Subscription, b *Bot, coinIndex uint32, senderAddress string, e
 	}
 	//handle sending back money
 	//not enough to send back
-	if data.Addresses.Outputs[coinIndex].Amount < 546 {
+	if memo.GetMaxSendFromCount(data.Addresses.Outputs[coinIndex].Amount, 1) <= 0 {
+		println("Not enough funds to refund")
 		return nil
 	}
 	//create a transaction with the sender address and the amount of the transaction
@@ -402,8 +391,6 @@ func (b *Bot) UpdateStream() error {
 	if err != nil {
 		return jerr.Get("error making stream array", err)
 	}
-	//create a goroutine that calls updateProfiles every 5 minutes
-	b.DoUpdate <- struct{}{}
 	for _, stream := range streamArray {
 		streamKey, err := wallet.ImportPrivateKey(stream.Key)
 		if err != nil {
@@ -452,18 +439,12 @@ func createBot(b *Bot, twitterName string, senderAddress string, data Subscripti
 			errMsg = fmt.Sprintf("You need to send at least 5,000 satoshis to create a bot for the account @%s", twitterName)
 		}
 		print("\n\n\nSending error message: " + errMsg + "\n\n\n")
-		pkScript, err := hex.DecodeString(data.Addresses.Outputs[coinIndex].Script)
 		if err != nil {
 			return nil, jerr.Get("error decoding script pk script for create bot", err)
 		}
-		if err := database.SendToTwitterAddress(memo.UTXO{Input: memo.TxInput{
-			Value:        data.Addresses.Outputs[coinIndex].Amount,
-			PrevOutHash:  hs.GetTxHash(data.Addresses.Hash),
-			PrevOutIndex: coinIndex,
-			PkHash:       wallet.GetAddressFromString(b.Addresses[0]).GetPkHash(),
-			PkScript:     pkScript,
-		}}, b.Key, wallet.GetAddressFromString(senderAddress), errMsg); err != nil {
-			return nil, jerr.Get("error sending money back", err)
+		err = refund(data, b, coinIndex, senderAddress, errMsg)
+		if err != nil {
+			return nil, jerr.Get("error refunding", err)
 		}
 		return nil, nil
 	}
@@ -681,7 +662,8 @@ func makeStreamArray(b *Bot) ([]config.Stream, error) {
 			balance += output.Input.Value
 		}
 		if balance > 800 {
-			streamArray = append(streamArray, config.Stream{Key: decryptedKey, Name: twitterName, Sender: senderAddress})
+			wlt := database.NewWallet(walletKey.GetAddress(), walletKey, b.Db)
+			streamArray = append(streamArray, config.Stream{Key: decryptedKey, Name: twitterName, Sender: senderAddress, Wallet: wlt})
 		}
 	}
 	iter.Release()

@@ -69,17 +69,14 @@ func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
 		g.reset = false
 		return g.UTXOs, nil
 	}
-	jlog.Logf("Getting new UTXOs from database\n")
+	jlog.Logf("Getting UTXOs from the database\n")
 	database := Database{Db: g.Db}
-	//if err != nil {
-	//	return nil, jerr.Get("error getting database", err)
-	//}
-	//print the contents of g.Db
 	client := lib.NewClient("http://localhost:26770/graphql", &database)
 	address := g.Address.GetAddr()
 	outputs, err := client.GetUtxos(&address)
 	balance, err := client.GetBalance(&address)
 	println("balance: ", balance)
+	println()
 	if err != nil {
 		return nil, jerr.Get("error getting utxos", err)
 	}
@@ -142,6 +139,7 @@ func NewWallet(address wallet.Address, key wallet.PrivateKey, db *leveldb.DB) Wa
 
 func MakePost(wlt Wallet, message string) ([]byte, error) {
 	memoTx, err := buildTx(wlt, script.Post{Message: message})
+	//check if the prefix already exists in the database
 	if err != nil {
 		return nil, jerr.Get("error generating memo tx", err)
 	}
@@ -181,17 +179,16 @@ func FundTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Ad
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
 	completeTransaction(memoTx, err)
-	time.Sleep(2 * time.Second)
 	return nil
 }
-func PartialFund(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Address, amount int64) error {
+func WithdrawAmount(utxos []memo.UTXO, key wallet.PrivateKey, address wallet.Address, amount int64) error{
 	memoTx, err := gen.Tx(gen.TxRequest{
-		InputsToUse: []memo.UTXO{utxo},
+		InputsToUse: utxos,
 		Change: wallet.Change{
 			Main: key.GetAddress(),
 		},
 		Outputs: []*memo.Output{{
-			Amount: memo.GetMaxSendFromCount(amount, 1),
+			Amount: amount,
 			Script: script.P2pkh{PkHash: address.GetPkHash()},
 		}},
 		KeyRing: wallet.KeyRing{
@@ -204,7 +201,28 @@ func PartialFund(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Address, 
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
 	completeTransaction(memoTx, err)
-	time.Sleep(1 * time.Second)
+	return nil
+}
+func WithdrawAll(utxos []memo.UTXO, key wallet.PrivateKey, address wallet.Address) error {
+	memoTx, err := gen.Tx(gen.TxRequest{
+		InputsToUse: utxos,
+		Change: wallet.Change{
+			Main: key.GetAddress(),
+		},
+		Outputs: []*memo.Output{{
+			Amount: memo.GetMaxSendForUTXOs(utxos),
+			Script: script.P2pkh{PkHash: address.GetPkHash()},
+		}},
+		KeyRing: wallet.KeyRing{
+			Keys: []wallet.PrivateKey{key},
+		},
+	})
+	if err != nil {
+		return jerr.Get("error generating memo tx", err)
+	}
+	txInfo := parse.GetTxInfo(memoTx)
+	txInfo.Print()
+	completeTransaction(memoTx, err)
 	return nil
 }
 func SendToTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Address, errorMsg string) error {
@@ -226,7 +244,6 @@ func SendToTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
 	completeTransaction(memoTx, err)
-	time.Sleep(1 * time.Second)
 	return nil
 }
 func UpdateName(wlt Wallet, name string) error {
@@ -277,6 +294,7 @@ func buildTx(wlt Wallet, outputScript memo.Script) (*memo.Tx, error) {
 			Keys: []wallet.PrivateKey{wlt.Key},
 		},
 	})
+
 	return memoTx, err
 }
 func completeTransaction(memoTx *memo.Tx, err error) {
@@ -299,10 +317,10 @@ func completeTransaction(memoTx *memo.Tx, err error) {
 	request.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: time.Second * 10}
 	response, err := client.Do(request)
-	fmt.Printf("%#v\n", response)
 	if err != nil {
 		jerr.Get("The HTTP request failed with error %s\n", err).Fatal()
 	}
+	fmt.Printf("%#v\n", response)
 }
 
 var salt = []byte{0xfe, 0xa9, 0xe9, 0x4c, 0xd9, 0x84, 0x50, 0x3d}

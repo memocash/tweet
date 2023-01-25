@@ -13,6 +13,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 	"log"
+	"os"
 	"strconv"
 )
 
@@ -107,6 +108,43 @@ func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, db *leveldb
 		}
 		tweetTxs = append(tweetTxs, obj.TweetTx{Tweet: &tweets[i], TxHash: nil})
 	}
+
+	//write the tweetTxs into a file for local storage
+	file := fmt.Sprintf("tweets-%s.json", accountKey.Account)
+	f, err := os.Create(file)
+	if err != nil {
+		return nil, jerr.Get("error creating file for local storage of tweets", err)
+	}
+	defer f.Close()
+	enc := json.NewEncoder(f)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(tweetTxs); err != nil {
+		return nil, jerr.Get("error encoding tweets for local storage", err)
+	}
+	return tweetTxs, nil
+}
+func getNewTweetsLocal(accountKey obj.AccountKey, db *leveldb.DB, numTweets int) ([]obj.TweetTx, error) {
+	file := fmt.Sprintf("tweets-%s.json", accountKey.Account)
+	f, err := os.Open(file)
+	if err != nil {
+		return nil, jerr.Get("error opening file for local storage of tweets", err)
+	}
+	defer f.Close()
+	var tweetTxs []obj.TweetTx
+	dec := json.NewDecoder(f)
+	if err := dec.Decode(&tweetTxs); err != nil {
+		return nil, jerr.Get("error decoding tweets for local storage", err)
+	}
+	for i, tweetTx := range tweetTxs {
+		if i >= numTweets {
+			break
+		}
+		prefix := fmt.Sprintf("tweets-%s-%019d", accountKey.Account, tweetTx.Tweet.ID)
+		tweetTx, _ := json.Marshal(tweetTx)
+		if err := db.Put([]byte(prefix), tweetTx, nil); err != nil {
+			return nil, jerr.Get("error saving tweet posted since last time the stream was opened", err)
+		}
+	}
 	return tweetTxs, nil
 }
 func getNumTweets(screenName string, db *leveldb.DB) int {
@@ -130,6 +168,7 @@ func getNumSavedTweets(accountKey obj.AccountKey, db *leveldb.DB) int {
 func GetSkippedTweets(accountKey obj.AccountKey, client *twitter.Client, db *leveldb.DB, link bool, date bool, numTweets int) error {
 	println("getting skipped tweets")
 	txList, err := getNewTweets(accountKey, client, db, numTweets)
+	//txList, err := getNewTweetsLocal(accountKey, db, numTweets)
 	if err != nil {
 		return jerr.Get("error getting tweets since the bot was last run", err)
 	}
@@ -141,12 +180,8 @@ func GetSkippedTweets(accountKey obj.AccountKey, client *twitter.Client, db *lev
 		}
 	}
 	println("saving skipped tweets")
-	//_, err = Transfer(accountKey, db, link, date)
-	//if err != nil {
-	//	return jerr.Get("fatal error transferring tweets", err)
-	//}
-	////call transfer until the tweet with the ID of the newest tweet in txList is found, or when we've saved 100 tweets
 	totalSaved := 0
+	wlt := database.NewWallet(accountKey.Address, accountKey.Key, db)
 	for {
 		if totalSaved >= numTweets {
 			break
@@ -160,7 +195,6 @@ func GetSkippedTweets(accountKey obj.AccountKey, client *twitter.Client, db *lev
 		if err != leveldb.ErrNotFound {
 			return jerr.Get("error getting tweet from database", err)
 		}
-		wlt := database.NewWallet(accountKey.Address, accountKey.Key, db)
 		numSaved, err := Transfer(accountKey, db, link, date, wlt)
 		if err != nil {
 			return jerr.Get("fatal error transferring tweets", err)
