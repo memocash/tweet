@@ -182,14 +182,37 @@ func FundTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Ad
 	time.Sleep(2 * time.Second)
 	return nil
 }
-func PartialFund(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Address, amount int64) error {
+func WithdrawAmount(utxos []memo.UTXO, key wallet.PrivateKey, address wallet.Address, amount int64) error{
 	memoTx, err := gen.Tx(gen.TxRequest{
-		InputsToUse: []memo.UTXO{utxo},
+		InputsToUse: utxos,
 		Change: wallet.Change{
 			Main: key.GetAddress(),
 		},
 		Outputs: []*memo.Output{{
-			Amount: memo.GetMaxSendFromCount(amount, 1),
+			Amount: amount,
+			Script: script.P2pkh{PkHash: address.GetPkHash()},
+		}},
+		KeyRing: wallet.KeyRing{
+			Keys: []wallet.PrivateKey{key},
+		},
+	})
+	if err != nil {
+		return jerr.Get("error generating memo tx", err)
+	}
+	txInfo := parse.GetTxInfo(memoTx)
+	txInfo.Print()
+	completeTransaction(memoTx, err)
+	time.Sleep(1 * time.Second)
+	return nil
+}
+func WithdrawAll(utxos []memo.UTXO, key wallet.PrivateKey, address wallet.Address) error {
+	memoTx, err := gen.Tx(gen.TxRequest{
+		InputsToUse: utxos,
+		Change: wallet.Change{
+			Main: key.GetAddress(),
+		},
+		Outputs: []*memo.Output{{
+			Amount: memo.GetMaxSendForUTXOs(utxos),
 			Script: script.P2pkh{PkHash: address.GetPkHash()},
 		}},
 		KeyRing: wallet.KeyRing{
