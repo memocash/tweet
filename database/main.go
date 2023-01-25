@@ -179,7 +179,6 @@ func FundTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Ad
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
 	completeTransaction(memoTx, err)
-	time.Sleep(2 * time.Second)
 	return nil
 }
 func WithdrawAmount(utxos []memo.UTXO, key wallet.PrivateKey, address wallet.Address, amount int64) error{
@@ -202,7 +201,6 @@ func WithdrawAmount(utxos []memo.UTXO, key wallet.PrivateKey, address wallet.Add
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
 	completeTransaction(memoTx, err)
-	time.Sleep(1 * time.Second)
 	return nil
 }
 func WithdrawAll(utxos []memo.UTXO, key wallet.PrivateKey, address wallet.Address) error {
@@ -225,7 +223,6 @@ func WithdrawAll(utxos []memo.UTXO, key wallet.PrivateKey, address wallet.Addres
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
 	completeTransaction(memoTx, err)
-	time.Sleep(1 * time.Second)
 	return nil
 }
 func SendToTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Address, errorMsg string) error {
@@ -247,7 +244,6 @@ func SendToTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
 	completeTransaction(memoTx, err)
-	time.Sleep(1 * time.Second)
 	return nil
 }
 func UpdateName(wlt Wallet, name string) error {
