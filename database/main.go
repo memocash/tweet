@@ -321,6 +321,7 @@ func completeTransaction(memoTx *memo.Tx, err error) {
 		jerr.Get("The HTTP request failed with error %s\n", err).Fatal()
 	}
 	fmt.Printf("%#v\n", response)
+	time.Sleep(time.Second * 1)
 }
 
 var salt = []byte{0xfe, 0xa9, 0xe9, 0x4c, 0xd9, 0x84, 0x50, 0x3d}
