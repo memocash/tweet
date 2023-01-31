@@ -165,7 +165,7 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 		//split the message into an array of strings
 		splitMessage := strings.Split(message, " ")
 		//get the twitter name from the message
-		twitterName := splitMessage[2]
+		twitterName := splitMessage[1]
 		//check if --history is in the message
 		history := false
 		link := true
