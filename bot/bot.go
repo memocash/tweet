@@ -145,7 +145,7 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 		return nil
 	}
 
-	match, _ := regexp.MatchString("^CREATE TWITTER ([a-zA-Z0-9_]{1,15})(( --history( [0-9]+)?)?( --nolink)?( --date)?)*$", message)
+	match, _ := regexp.MatchString("^CREATE ([a-zA-Z0-9_]{1,15})(( --history( [0-9]+)?)?( --nolink)?( --date)?)*$", message)
 	if match {
 		//check how many streams are running
 		streams, err := b.Db.Get([]byte("memobot-running-count"), nil)
@@ -231,11 +231,11 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 			println("account key pointer is nil, not transferring tweets")
 			return nil
 		}
-	} else if regexp.MustCompile("^WITHDRAW TWITTER ([a-zA-Z0-9_]{1,15})( [0-9]+)?$").MatchString(message) {
+	} else if regexp.MustCompile("^WITHDRAW ([a-zA-Z0-9_]{1,15})( [0-9]+)?$").MatchString(message) {
 		//check the database for each field that matches linked-<senderAddress>-<twitterName>
 		//if there is a match, print out the address and key
 		//if there is no match, print out an error message
-		twitterName := regexp.MustCompile("^WITHDRAW TWITTER ([a-zA-Z0-9_]{1,15})( [0-9]+)?$").FindStringSubmatch(message)[1]
+		twitterName := regexp.MustCompile("^WITHDRAW ([a-zA-Z0-9_]{1,15})( [0-9]+)?$").FindStringSubmatch(message)[1]
 		searchString := "linked-" + senderAddress + "-" + twitterName
 		//refund if this field doesn't exist
 		searchValue, err := b.Db.Get([]byte(searchString), nil)
@@ -280,8 +280,8 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 			//check if the message contains a number
 			var amount int64
 			var maxSend = memo.GetMaxSendForUTXOs(outputs)
-			if regexp.MustCompile("^WITHDRAW TWITTER ([a-zA-Z0-9_]{1,15}) [0-9]+$").MatchString(message) {
-				amount, _ = strconv.ParseInt(regexp.MustCompile("^WITHDRAW TWITTER ([a-zA-Z0-9_]{1,15}) ([0-9]+)$").FindStringSubmatch(message)[2], 10, 64)
+			if regexp.MustCompile("^WITHDRAW ([a-zA-Z0-9_]{1,15}) [0-9]+$").MatchString(message) {
+				amount, _ = strconv.ParseInt(regexp.MustCompile("^WITHDRAW ([a-zA-Z0-9_]{1,15}) ([0-9]+)$").FindStringSubmatch(message)[2], 10, 64)
 				if amount > maxSend{
 					err = refund(data, b, coinIndex, senderAddress, "Cannot withdraw more than the total balance is capable of sending")
 					if err != nil {
@@ -321,7 +321,7 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 			return jerr.Get("error updating stream", err)
 		}
 	} else {
-		errMsg := "Invalid command. Please use the following format: CREATE TWITTER <twitterName> --history <numTweets> or WITHDRAW TWITTER <twitterName>"
+		errMsg := "Invalid command. Please use the following format: CREATE <twitterName> or WITHDRAW <twitterName>"
 		err = refund(data, b, coinIndex, senderAddress, errMsg)
 		if err != nil {
 			return jerr.Get("error refunding", err)
