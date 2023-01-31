@@ -73,8 +73,8 @@ func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
 	database := Database{Db: g.Db}
 	client := lib.NewClient("http://localhost:26770/graphql", &database)
 	address := g.Address.GetAddr()
-	outputs, err := client.GetUtxos(&address)
-	balance, err := client.GetBalance(&address)
+	outputs, err := client.GetUtxos(address)
+	balance, err := client.GetBalance(address)
 	println("balance: ", balance)
 	println()
 	if err != nil {
@@ -181,7 +181,7 @@ func FundTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Ad
 	completeTransaction(memoTx, err)
 	return nil
 }
-func WithdrawAmount(utxos []memo.UTXO, key wallet.PrivateKey, address wallet.Address, amount int64) error{
+func WithdrawAmount(utxos []memo.UTXO, key wallet.PrivateKey, address wallet.Address, amount int64) error {
 	memoTx, err := gen.Tx(gen.TxRequest{
 		InputsToUse: utxos,
 		Change: wallet.Change{

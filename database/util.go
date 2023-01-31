@@ -4,20 +4,23 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/jchavannes/jgo/jerr"
+	"github.com/jchavannes/jgo/jutil"
 	"github.com/memocash/index/client/lib"
 	"github.com/memocash/index/client/lib/graph"
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"strings"
+	"time"
 )
+
 type Database struct {
 	Db *leveldb.DB
 }
 type Profile struct {
-	Name string
+	Name        string
 	Description string
-	ProfilePic string
+	ProfilePic  string
 }
 
 func GetClient() (*lib.Client, error) {
@@ -38,7 +41,7 @@ func NewDatabase() (*Database, error) {
 	}, nil
 }
 
-func (d *Database) GetAddressBalance(address *wallet.Addr) (int64, error) {
+func (d *Database) GetAddressBalance(address wallet.Addr) (int64, error) {
 	utxos, err := d.GetUtxos(address)
 	if err != nil {
 		return 0, jerr.Get("error getting address balance", err)
@@ -50,36 +53,30 @@ func (d *Database) GetAddressBalance(address *wallet.Addr) (int64, error) {
 	return balance, nil
 }
 
-func (d *Database) SetAddressHeight(address *wallet.Addr, height int64) error {
-	err := d.Db.Put([]byte("addressheight-"+ address.String()), []byte(fmt.Sprintf("%d", height)), nil)
+func (d *Database) SetAddressLastUpdate(address wallet.Addr, updateTime time.Time) error {
+	err := d.Db.Put([]byte("addresstime-"+address.String()), jutil.GetTimeByte(updateTime), nil)
 	if err != nil {
-		return jerr.Get("error setting address height", err)
+		return jerr.Get("error setting address last update", err)
 	}
 	return nil
 }
 
-func (d *Database) GetAddressHeight(address *wallet.Addr) (int64, error) {
-	height, err := d.Db.Get([]byte("addressheight-"+ address.String()), nil)
+func (d *Database) GetAddressLastUpdate(address wallet.Addr) (time.Time, error) {
+	timeByte, err := d.Db.Get([]byte("addresstime-"+address.String()), nil)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
-			return 0, nil
+			return time.Time{}, nil
 		}
-		return 0, jerr.Get("error getting address height", err)
+		return time.Time{}, jerr.Get("error getting address last update", err)
 	}
-	//convert byte array to int64
-	var heightInt int64
-	_, err = fmt.Sscanf(string(height), "%d", &heightInt)
-	if err != nil {
-		return 0, jerr.Get("error getting address height", err)
-	}
-	return heightInt, nil
+	return jutil.GetByteTime(timeByte), nil
 }
 
-func (d *Database) GetUtxos(address *wallet.Addr) ([]graph.Output, error) {
+func (d *Database) GetUtxos(address wallet.Addr) ([]graph.Output, error) {
 	//iterate over all outputs, and search if an input field key exists that matches "input-hash-index"
 	var utxos []graph.Output
 	//create an iterator for the prefix "output-address"
-	iter := d.Db.NewIterator(util.BytesPrefix([]byte("output-"+ address.String())), nil)
+	iter := d.Db.NewIterator(util.BytesPrefix([]byte("output-"+address.String())), nil)
 	for iter.Next() {
 		//check if the input exists
 		var output graph.Output
