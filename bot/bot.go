@@ -208,7 +208,7 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 		if err := b.Db.Put([]byte("flags-"+senderAddress+"-"+twitterName), flagsBytes, nil); err != nil {
 			return jerr.Get("error putting flags into database", err)
 		}
-		accountKeyPointer, err := createBot(b, twitterName, senderAddress, data, coinIndex)
+		accountKeyPointer, wlt,  err := createBot(b, twitterName, senderAddress, data, coinIndex)
 		if err != nil {
 			return jerr.Get("error creating bot", err)
 		}
@@ -217,7 +217,7 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 			accountKey := *accountKeyPointer
 			if history {
 				client := tweets.Connect()
-				err = tweets.GetSkippedTweets(accountKey, client, b.Db, link, date, historyNum)
+				err = tweets.GetSkippedTweets(accountKey, wlt, client, b.Db, link, date, historyNum)
 				if err != nil {
 					return jerr.Get("error getting skipped tweets", err)
 				}
@@ -414,12 +414,12 @@ func (b *Bot) UpdateStream() error {
 	return nil
 }
 
-func createBot(b *Bot, twitterName string, senderAddress string, data Subscription, coinIndex uint32) (*obj.AccountKey, error) {
+func createBot(b *Bot, twitterName string, senderAddress string, data Subscription, coinIndex uint32) (*obj.AccountKey, *database.Wallet, error) {
 	//check if the value of the transaction is less than 5,000 or this address already has a bot for this account in the database
 	botExists := false
 	_, err := b.Db.Get([]byte("linked-"+senderAddress+"-"+twitterName), nil)
 	if err != nil && err != leveldb.ErrNotFound {
-		return nil, jerr.Get("error getting bot from database", err)
+		return nil, nil, jerr.Get("error getting bot from database", err)
 	} else if err != leveldb.ErrNotFound {
 		botExists = true
 	}
@@ -430,7 +430,7 @@ func createBot(b *Bot, twitterName string, senderAddress string, data Subscripti
 	}
 	if !twitterExists || data.Addresses.Outputs[coinIndex].Amount < 5000 {
 		if data.Addresses.Outputs[coinIndex].Amount < 546 {
-			return nil, nil
+			return nil, nil, nil
 		}
 		errMsg := ""
 		if !twitterExists {
@@ -440,24 +440,24 @@ func createBot(b *Bot, twitterName string, senderAddress string, data Subscripti
 		}
 		print("\n\n\nSending error message: " + errMsg + "\n\n\n")
 		if err != nil {
-			return nil, jerr.Get("error decoding script pk script for create bot", err)
+			return nil, nil, jerr.Get("error decoding script pk script for create bot", err)
 		}
 		err = refund(data, b, coinIndex, senderAddress, errMsg)
 		if err != nil {
-			return nil, jerr.Get("error refunding", err)
+			return nil, nil, jerr.Get("error refunding", err)
 		}
-		return nil, nil
+		return nil, nil, nil
 	}
 	println(b.Addresses[0])
 	var newKey wallet.PrivateKey
 	var newAddr wallet.Address
 	numStreamBytes, err := b.Db.Get([]byte("memobot-num-streams"), nil)
 	if err != nil {
-		return nil, jerr.Get("error getting num-streams", err)
+		return nil, nil, jerr.Get("error getting num-streams", err)
 	}
 	numStream, err := strconv.ParseUint(string(numStreamBytes), 10, 64)
 	if err != nil {
-		return nil, jerr.Get("error parsing num-streams", err)
+		return nil,nil, jerr.Get("error parsing num-streams", err)
 	}
 	//convert numStream to a uint
 	numStreamUint := uint(numStream)
@@ -466,15 +466,15 @@ func createBot(b *Bot, twitterName string, senderAddress string, data Subscripti
 		//decrypt
 		rawKey, err := b.Db.Get([]byte("linked-"+senderAddress+"-"+twitterName), nil)
 		if err != nil {
-			return nil, jerr.Get("error getting key from database", err)
+			return nil, nil, jerr.Get("error getting key from database", err)
 		}
 		decryptedKey, err := database.Decrypt(rawKey, []byte(b.Crypt))
 		if err != nil {
-			return nil, jerr.Get("error decrypting key", err)
+			return nil,nil, jerr.Get("error decrypting key", err)
 		}
 		newKey, err = wallet.ImportPrivateKey(string(decryptedKey))
 		if err != nil {
-			return nil, jerr.Get("error importing private key", err)
+			return nil, nil, jerr.Get("error importing private key", err)
 		}
 		newAddr = newKey.GetAddress()
 	} else {
@@ -482,13 +482,13 @@ func createBot(b *Bot, twitterName string, senderAddress string, data Subscripti
 		keyPointer, err := b.Mnemonic.GetPath(path)
 		newKey = *keyPointer
 		if err != nil {
-			return nil, jerr.Get("error getting path", err)
+			return nil, nil, jerr.Get("error getting path", err)
 		}
 		newAddr = newKey.GetAddress()
 	}
 	pkScript, err := hex.DecodeString(data.Addresses.Outputs[coinIndex].Script)
 	if err != nil {
-		return nil, jerr.Get("error decoding script pk script for create bot", err)
+		return nil, nil, jerr.Get("error decoding script pk script for create bot", err)
 	}
 	if err := database.FundTwitterAddress(memo.UTXO{Input: memo.TxInput{
 		Value:        data.Addresses.Outputs[coinIndex].Amount,
@@ -497,35 +497,35 @@ func createBot(b *Bot, twitterName string, senderAddress string, data Subscripti
 		PkHash:       b.Key.GetAddress().GetPkHash(),
 		PkScript:     pkScript,
 	}}, b.Key, newAddr); err != nil {
-		return nil, jerr.Get("error funding twitter address", err)
+		return nil, nil, jerr.Get("error funding twitter address", err)
 	}
+	newWallet := database.NewWallet(newAddr, newKey, b.Db)
 	if !botExists {
-		newWallet := database.NewWallet(newAddr, newKey, b.Db)
 		err = updateProfile(b, newWallet, twitterName, senderAddress)
 		if err != nil {
-			return nil, jerr.Get("error updating profile", err)
+			return nil, nil, jerr.Get("error updating profile", err)
 		}
 	}
 	println("Stream Address: " + newAddr.GetEncoded())
 	if !botExists {
 		err = b.Db.Put([]byte("memobot-num-streams"), []byte(strconv.FormatUint(uint64(numStreamUint+1), 10)), nil)
 		if err != nil {
-			return nil, jerr.Get("error putting num-streams", err)
+			return nil, nil, jerr.Get("error putting num-streams", err)
 		}
 		//add a field to the database that links the sending address and twitter name to the new key
 		//encrypt
 		encryptedKey, err := database.Encrypt([]byte(newKey.GetBase58Compressed()), []byte(b.Crypt))
 		if err != nil {
-			return nil, jerr.Get("error encrypting key", err)
+			return nil, nil, jerr.Get("error encrypting key", err)
 		}
 		err = b.Db.Put([]byte("linked-"+senderAddress+"-"+twitterName), encryptedKey, nil)
 		if err != nil {
-			return nil, jerr.Get("error updating linked-"+senderAddress+"-"+twitterName, err)
+			return nil, nil, jerr.Get("error updating linked-"+senderAddress+"-"+twitterName, err)
 		}
 	}
 	println("done")
 	accountKey := obj.GetAccountKeyFromArgs([]string{newKey.GetBase58Compressed(), twitterName})
-	return &accountKey, nil
+	return &accountKey, &newWallet, nil
 }
 func updateProfiles(streamAray []config.Stream, b *Bot) error {
 	for _, stream := range streamAray {
@@ -536,8 +536,8 @@ func updateProfiles(streamAray []config.Stream, b *Bot) error {
 		streamAddress := streamKey.GetAddress()
 		newWallet := database.NewWallet(streamAddress, streamKey, b.Db)
 		err = updateProfile(b, newWallet, stream.Name, stream.Sender)
+		time.Sleep(1 * time.Second)
 	}
-	time.Sleep(2 * time.Second)
 	return nil
 }
 func updateProfile(b *Bot, newWallet database.Wallet, twitterName string, senderAddress string) error {

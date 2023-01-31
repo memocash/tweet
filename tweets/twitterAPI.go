@@ -165,7 +165,7 @@ func getNumSavedTweets(accountKey obj.AccountKey, db *leveldb.DB) int {
 	iter.Release()
 	return numTweets
 }
-func GetSkippedTweets(accountKey obj.AccountKey, client *twitter.Client, db *leveldb.DB, link bool, date bool, numTweets int) error {
+func GetSkippedTweets(accountKey obj.AccountKey, wlt *database.Wallet, client *twitter.Client, db *leveldb.DB, link bool, date bool, numTweets int) error {
 	println("getting skipped tweets")
 	txList, err := getNewTweets(accountKey, client, db, numTweets)
 	//txList, err := getNewTweetsLocal(accountKey, db, numTweets)
@@ -181,7 +181,6 @@ func GetSkippedTweets(accountKey obj.AccountKey, client *twitter.Client, db *lev
 	}
 	println("saving skipped tweets")
 	totalSaved := 0
-	wlt := database.NewWallet(accountKey.Address, accountKey.Key, db)
 	for {
 		if totalSaved >= numTweets {
 			break
@@ -195,7 +194,7 @@ func GetSkippedTweets(accountKey obj.AccountKey, client *twitter.Client, db *lev
 		if err != leveldb.ErrNotFound {
 			return jerr.Get("error getting tweet from database", err)
 		}
-		numSaved, err := Transfer(accountKey, db, link, date, wlt)
+		numSaved, err := Transfer(accountKey, db, link, date, *wlt)
 		if err != nil {
 			return jerr.Get("fatal error transferring tweets", err)
 		}
