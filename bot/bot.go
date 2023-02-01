@@ -66,7 +66,7 @@ func (b *Bot) Listen() error {
 	updateInterval := config.GetConfig().UpdateInterval
 	if updateInterval == 0 {
 		updateInterval = 180
-		}
+	}
 	go func() {
 		if err = client.Run(); err != nil {
 			b.ErrorChan <- jerr.Get("error running graphql client", err)
@@ -119,6 +119,10 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 		scriptArray = append(scriptArray, output.Script)
 	}
 	message := grabMessage(scriptArray)
+	if message == "" {
+		println("No message found, skipping")
+		return nil
+	}
 	senderAddress := ""
 	for _, input := range data.Addresses.Inputs {
 		if input.Output.Lock.Address != b.Addresses[0] {
@@ -145,7 +149,7 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 		return nil
 	}
 
-	match, _ := regexp.MatchString("^CREATE TWITTER ([a-zA-Z0-9_]{1,15})(( --history( [0-9]+)?)?( --nolink)?( --date)?)*$", message)
+	match, _ := regexp.MatchString("^CREATE ([a-zA-Z0-9_]{1,15})(( --history( [0-9]+)?)?( --nolink)?( --date)?)*$", message)
 	if match {
 		//check how many streams are running
 		streams, err := b.Db.Get([]byte("memobot-running-count"), nil)
@@ -165,7 +169,7 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 		//split the message into an array of strings
 		splitMessage := strings.Split(message, " ")
 		//get the twitter name from the message
-		twitterName := splitMessage[2]
+		twitterName := splitMessage[1]
 		//check if --history is in the message
 		history := false
 		link := true
@@ -208,7 +212,7 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 		if err := b.Db.Put([]byte("flags-"+senderAddress+"-"+twitterName), flagsBytes, nil); err != nil {
 			return jerr.Get("error putting flags into database", err)
 		}
-		accountKeyPointer, wlt,  err := createBot(b, twitterName, senderAddress, data, coinIndex)
+		accountKeyPointer, wlt, err := createBot(b, twitterName, senderAddress, data, coinIndex)
 		if err != nil {
 			return jerr.Get("error creating bot", err)
 		}
@@ -231,11 +235,11 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 			println("account key pointer is nil, not transferring tweets")
 			return nil
 		}
-	} else if regexp.MustCompile("^WITHDRAW TWITTER ([a-zA-Z0-9_]{1,15})( [0-9]+)?$").MatchString(message) {
+	} else if regexp.MustCompile("^WITHDRAW ([a-zA-Z0-9_]{1,15})( [0-9]+)?$").MatchString(message) {
 		//check the database for each field that matches linked-<senderAddress>-<twitterName>
 		//if there is a match, print out the address and key
 		//if there is no match, print out an error message
-		twitterName := regexp.MustCompile("^WITHDRAW TWITTER ([a-zA-Z0-9_]{1,15})( [0-9]+)?$").FindStringSubmatch(message)[1]
+		twitterName := regexp.MustCompile("^WITHDRAW ([a-zA-Z0-9_]{1,15})( [0-9]+)?$").FindStringSubmatch(message)[1]
 		searchString := "linked-" + senderAddress + "-" + twitterName
 		//refund if this field doesn't exist
 		searchValue, err := b.Db.Get([]byte(searchString), nil)
@@ -280,9 +284,9 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 			//check if the message contains a number
 			var amount int64
 			var maxSend = memo.GetMaxSendForUTXOs(outputs)
-			if regexp.MustCompile("^WITHDRAW TWITTER ([a-zA-Z0-9_]{1,15}) [0-9]+$").MatchString(message) {
-				amount, _ = strconv.ParseInt(regexp.MustCompile("^WITHDRAW TWITTER ([a-zA-Z0-9_]{1,15}) ([0-9]+)$").FindStringSubmatch(message)[2], 10, 64)
-				if amount > maxSend{
+			if regexp.MustCompile("^WITHDRAW ([a-zA-Z0-9_]{1,15}) [0-9]+$").MatchString(message) {
+				amount, _ = strconv.ParseInt(regexp.MustCompile("^WITHDRAW ([a-zA-Z0-9_]{1,15}) ([0-9]+)$").FindStringSubmatch(message)[2], 10, 64)
+				if amount > maxSend {
 					err = refund(data, b, coinIndex, senderAddress, "Cannot withdraw more than the total balance is capable of sending")
 					if err != nil {
 						return jerr.Get("error refunding", err)
@@ -290,7 +294,7 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 					return nil
 				} else if amount+memo.DustMinimumOutput+memo.OutputFeeP2PKH > maxSend {
 					errmsg := fmt.Sprintf("Not enough funds will be left over to send change to bot account, please withdraw less than %d", maxSend+1-memo.DustMinimumOutput-memo.OutputFeeP2PKH)
-					err = refund(data, b, coinIndex, senderAddress,errmsg)
+					err = refund(data, b, coinIndex, senderAddress, errmsg)
 					if err != nil {
 						return jerr.Get("error refunding", err)
 					}
@@ -321,7 +325,7 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 			return jerr.Get("error updating stream", err)
 		}
 	} else {
-		errMsg := "Invalid command. Please use the following format: CREATE TWITTER <twitterName> --history <numTweets> or WITHDRAW TWITTER <twitterName>"
+		errMsg := "Invalid command. Please use the following format: CREATE <twitterName> or WITHDRAW <twitterName>"
 		err = refund(data, b, coinIndex, senderAddress, errMsg)
 		if err != nil {
 			return jerr.Get("error refunding", err)
@@ -457,7 +461,7 @@ func createBot(b *Bot, twitterName string, senderAddress string, data Subscripti
 	}
 	numStream, err := strconv.ParseUint(string(numStreamBytes), 10, 64)
 	if err != nil {
-		return nil,nil, jerr.Get("error parsing num-streams", err)
+		return nil, nil, jerr.Get("error parsing num-streams", err)
 	}
 	//convert numStream to a uint
 	numStreamUint := uint(numStream)
@@ -470,7 +474,7 @@ func createBot(b *Bot, twitterName string, senderAddress string, data Subscripti
 		}
 		decryptedKey, err := database.Decrypt(rawKey, []byte(b.Crypt))
 		if err != nil {
-			return nil,nil, jerr.Get("error decrypting key", err)
+			return nil, nil, jerr.Get("error decrypting key", err)
 		}
 		newKey, err = wallet.ImportPrivateKey(string(decryptedKey))
 		if err != nil {
@@ -582,7 +586,7 @@ func updateProfile(b *Bot, newWallet database.Wallet, twitterName string, sender
 		if err != nil {
 			return jerr.Get("error putting profile in database", err)
 		}
-	}else if err == nil {
+	} else if err == nil {
 		//make the profileExists into a string and print it
 		var dbProfile database.Profile
 		err = json.Unmarshal(profileExists, &dbProfile)
