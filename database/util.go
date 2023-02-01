@@ -62,14 +62,15 @@ func (d *Database) SetAddressLastUpdate(address wallet.Addr, updateTime time.Tim
 }
 
 func (d *Database) GetAddressLastUpdate(address wallet.Addr) (time.Time, error) {
-	timeByte, err := d.Db.Get([]byte("addresstime-"+address.String()), nil)
-	if err != nil {
-		if err == leveldb.ErrNotFound {
-			return time.Time{}, nil
-		}
-		return time.Time{}, jerr.Get("error getting address last update", err)
-	}
-	return jutil.GetByteTime(timeByte), nil
+	//timeByte, err := d.Db.Get([]byte("addresstime-"+address.String()), nil)
+	//if err != nil {
+	//	if err == leveldb.ErrNotFound {
+	//		return time.Time{}, nil
+	//	}
+	//	return time.Time{}, jerr.Get("error getting address last update", err)
+	//}
+	//return jutil.GetByteTime(timeByte), nil
+	return time.Time{}, nil
 }
 
 func (d *Database) GetUtxos(address wallet.Addr) ([]graph.Output, error) {
