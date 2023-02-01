@@ -3,6 +3,7 @@ package cmd
 import (
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/tweet/cmd/getnewtweets"
+	"github.com/memocash/tweet/cmd/maint"
 	"github.com/memocash/tweet/cmd/memobot"
 	"github.com/memocash/tweet/cmd/test"
 	"github.com/memocash/tweet/cmd/transfertweets"
@@ -31,6 +32,7 @@ func Execute() error {
 		getnewtweets.GetCommand(),
 		memobot.GetCommand(),
 		test.GetCommand(),
+		maint.GetCommand(),
 	)
 	if err := indexCmd.Execute(); err != nil {
 		return jerr.Get("error executing server command", err)
