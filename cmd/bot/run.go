@@ -1,4 +1,4 @@
-package memobot
+package bot
 
 import (
 	"github.com/jchavannes/jgo/jerr"
@@ -10,10 +10,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var memobotCmd = &cobra.Command{
-	Use:   "memobot",
-	Short: "Listens for new transactions on a memo account",
-	Long:  "Prints out each new transaction as it comes in. ",
+var runCmd = &cobra.Command{
+	Use:   "run",
+	Short: "run",
+	Long:  "Listens for new transactions on a memo account. Prints out each new transaction as it comes in. ",
 	RunE: func(c *cobra.Command, args []string) error {
 		botSeed := config.GetConfig().BotSeed
 		//get base key and address from seed
@@ -55,18 +55,21 @@ var memobotCmd = &cobra.Command{
 		}
 		botAddress := botKey.GetPublicKey().GetAddress().GetEncoded()
 		memoBot := bot.NewBot(mnemonic, []string{botAddress}, *botKey, tweets.Connect(), db)
-		cryptBytes,err  := database.GenerateEncryptionKeyFromPassword(config.GetConfig().BotCrypt)
+		cryptBytes, err := database.GenerateEncryptionKeyFromPassword(config.GetConfig().BotCrypt)
 		if err != nil {
 			return jerr.Get("error generating encryption key", err)
 		}
 		memoBot.Crypt = string(cryptBytes)
-		if err = memoBot.Listen(); err != nil {
-			return jerr.Get("error listening for transactions", err)
-		}
-		return nil
+		var errorChan = make(chan error)
+		go func() {
+			err = memoBot.Listen()
+			errorChan <- jerr.Get("error listening for transactions", err)
+		}()
+		go func() {
+			infoServer := bot.NewInfoServer(db)
+			err = infoServer.Listen()
+			errorChan <- jerr.Get("error info server listener", err)
+		}()
+		return <-errorChan
 	},
-}
-
-func GetCommand() *cobra.Command {
-	return memobotCmd
 }

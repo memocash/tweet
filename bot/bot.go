@@ -80,7 +80,7 @@ func (b *Bot) Listen() error {
 			}
 			streamArray, err := makeStreamArray(b)
 			if err != nil {
-				b.ErrorChan <- jerr.Get("error making stream array", err)
+				b.ErrorChan <- jerr.Get("error making stream array bot listen", err)
 			}
 			err = updateProfiles(streamArray, b)
 			if err != nil {
@@ -393,7 +393,7 @@ func (b *Bot) UpdateStream() error {
 	//create an array of {twitterName, newKey} objects by searching through the linked-<senderAddress>-<twitterName> fields
 	streamArray, err := makeStreamArray(b)
 	if err != nil {
-		return jerr.Get("error making stream array", err)
+		return jerr.Get("error making stream array update", err)
 	}
 	for _, stream := range streamArray {
 		streamKey, err := wallet.ImportPrivateKey(stream.Key)

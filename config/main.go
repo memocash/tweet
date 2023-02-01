@@ -7,11 +7,12 @@ import (
 )
 
 type Config struct {
-	BotSeed    string     `mapstructure:"BOT_SEED"`
-	BotCrypt   string     `mapstructure:"BOT_CRYPT"`
-	Streams    []Stream   `mapstructure:"STREAMS"`
-	TwitterAPI TwitterAPI `mapstructure:"TWITTER_API"`
+	BotSeed        string     `mapstructure:"BOT_SEED"`
+	BotCrypt       string     `mapstructure:"BOT_CRYPT"`
+	Streams        []Stream   `mapstructure:"STREAMS"`
+	TwitterAPI     TwitterAPI `mapstructure:"TWITTER_API"`
 	UpdateInterval int        `mapstructure:"UPDATE_INTERVAL"`
+	InfoServerPort int        `mapstructure:"INFO_SERVER_PORT"`
 }
 
 type TwitterAPI struct {
@@ -24,9 +25,9 @@ func (t TwitterAPI) IsSet() bool {
 }
 
 type Stream struct {
-	Key  string `mapstructure:"KEY"`
-	Name string `mapstructure:"NAME"`
-	Sender string `mapstructure:"SENDER"`
+	Key    string          `mapstructure:"KEY"`
+	Name   string          `mapstructure:"NAME"`
+	Sender string          `mapstructure:"SENDER"`
 	Wallet database.Wallet `mapstructure:"WALLET"`
 }
 
