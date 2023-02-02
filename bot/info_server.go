@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/config"
@@ -45,6 +46,24 @@ func (l *InfoServer) Listen() error {
 		}
 		writer.Write([]byte(fmt.Sprintf("balance: %d", total)))
 	})
+	mux.HandleFunc("/profile", func(writer http.ResponseWriter, request *http.Request) {
+		if err := request.ParseForm(); err != nil {
+			writer.Write([]byte(fmt.Sprintf("error parsing form: %v", err)))
+			return
+		}
+		sender := request.FormValue("sender")
+		twittername := request.FormValue("twittername")
+		profileBytes, err := db.Db.Get([]byte(fmt.Sprintf("profile-%s-%s", sender, twittername)), nil)
+		writer.Write([]byte(fmt.Sprintf("Searching for profile-%s-%s\n", sender, twittername)))
+		if err != nil {
+			writer.Write([]byte(fmt.Sprintf("error getting profile; %v", err)))
+			return
+		}
+		var profile database.Profile
+		json.Unmarshal(profileBytes, &profile)
+		writer.Write([]byte(fmt.Sprintf("name: %v\ndesc: %v\npicUrl: %v\n", profile.Name, profile.Description, profile.ProfilePic)))
+	})
+
 	err := http.ListenAndServe(fmt.Sprintf(":%d", cfg.InfoServerPort), mux)
 	return fmt.Errorf("error listening for info api: %w", err)
 }

@@ -26,6 +26,18 @@ var infoCmd = &cobra.Command{
 			if err := bot.InfoBalance(*addr); err != nil {
 				log.Fatalf("error info balance; %v", err)
 			}
+		case "profile":
+			if len(args) < 3 {
+				log.Fatalf("must specify the sender address and twittername")
+			}
+			senderAdder, err := wallet.GetAddrFromString(args[1])
+			if err != nil {
+				log.Fatalf("error getting address; %v", err)
+			}
+			twittername := args[2]
+			if err := bot.InfoProfile(*senderAdder, twittername); err != nil {
+				log.Fatalf("error info profile; %v", err)
+			}
 		default:
 			log.Fatalf("unknown info command: %s", args[0])
 		}
