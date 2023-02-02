@@ -9,6 +9,7 @@ var maintCmd = &cobra.Command{
 func GetCommand() *cobra.Command {
 	maintCmd.AddCommand(
 		removeCompletedCmd,
+		resetProfileCmd,
 	)
 	return maintCmd
 }
