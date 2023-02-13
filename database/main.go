@@ -69,17 +69,18 @@ func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
 		g.reset = false
 		return g.UTXOs, nil
 	}
-	jlog.Logf("Getting UTXOs from the database\n")
 	database := Database{Db: g.Db}
 	client := lib.NewClient("http://localhost:26770/graphql", &database)
 	address := g.Address.GetAddr()
 	outputs, err := client.GetUtxos(address)
-	balance, err := client.GetBalance(address)
-	println("balance: ", balance)
-	println()
 	if err != nil {
-		return nil, jerr.Get("error getting utxos", err)
+		return nil, jerr.Get("error getting utxos from database for input getter", err)
 	}
+	balance, err := client.GetBalance(address)
+	if err != nil {
+		return nil, jerr.Get("error getting balance from database for input getter", err)
+	}
+	jlog.Logf("address balance (input getter): %s %d (outs: %d)\n", address, balance, len(outputs))
 	var utxos []memo.UTXO
 	pkHash := g.Address.GetPkHash()
 	pkScript, err := script.P2pkh{PkHash: pkHash}.Get()
@@ -87,12 +88,19 @@ func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
 		return nil, jerr.Get("error getting pk script", err)
 	}
 	for _, output := range outputs {
+		txHash := hs.GetTxHash(output.Tx.Hash)
+		for _, utxo := range g.UTXOs {
+			if bytes.Equal(utxo.Input.PrevOutHash, txHash) &&
+				utxo.Input.PrevOutIndex == uint32(output.Index) {
+				continue
+			}
+		}
 		utxos = append(utxos, memo.UTXO{
 			Input: memo.TxInput{
 				PkScript:     pkScript,
 				PkHash:       pkHash,
 				Value:        output.Amount,
-				PrevOutHash:  hs.GetTxHash(output.Tx.Hash),
+				PrevOutHash:  txHash,
 				PrevOutIndex: uint32(output.Index),
 			},
 		})

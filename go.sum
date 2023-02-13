@@ -495,8 +495,8 @@ github.com/jchavannes/btcutil v1.1.4/go.mod h1:wUTq4tEX5b0GF7ognnQZaVVx/JbNeguRj
 github.com/jchavannes/go-mnemonic v0.0.0-20191017214729-76f026914b65 h1:DdWODy0K8bxz4XtYRVdqBbM+34SNdsBMd8345YU5lxA=
 github.com/jchavannes/go-mnemonic v0.0.0-20191017214729-76f026914b65/go.mod h1:0wKxri3IqwwE2j63qzxS5lXbI2cTEbKj95DQ7nmlRI4=
 github.com/jchavannes/gorm v0.0.0-20190714222221-6e209826f9bd/go.mod h1:utXzNh8giZEFprSHsuauEeZXuH6BVCbzuo0uKS+c37s=
-github.com/jchavannes/jgo v0.0.0-20230124190857-0be599aa3e55 h1:GADguvPSDXyJE20cPS5RoyZy+06OcZC7BRU2o3XwH10=
-github.com/jchavannes/jgo v0.0.0-20230124190857-0be599aa3e55/go.mod h1:J1NTAoh6LjpbL9q1kGE5MnOcDqgk4MAsZxONoQzY+2k=
+github.com/jchavannes/jgo v0.0.0-20230207194100-08de035df971 h1:xSeuqpiCbsfYB9Uu5wsmN5N84FIcwTu90pB4xu/32Sw=
+github.com/jchavannes/jgo v0.0.0-20230207194100-08de035df971/go.mod h1:J1NTAoh6LjpbL9q1kGE5MnOcDqgk4MAsZxONoQzY+2k=
 github.com/jchavannes/twitter-stream v0.0.0-20221222182917-b6a2ddd2363d h1:Nc1kiExjcYMxtkKRlGkoxLhAfxQ7sYmwxURXK5TZMTA=
 github.com/jchavannes/twitter-stream v0.0.0-20221222182917-b6a2ddd2363d/go.mod h1:rI9+ApaAA61jczjpin3vlREA9ONK4P4H4GVUNEXyoq0=
 github.com/jessevdk/go-flags v1.4.0 h1:4IU2WS7AumrZ/40jfhf4QVDMsQwqA7VEHozFRrGARJA=
@@ -562,8 +562,8 @@ github.com/mattn/go-isatty v0.0.16/go.mod h1:kYGgaQfpe5nmfYZH+SKPsOc2e4SrIfOl2e/
 github.com/mattn/go-sqlite3 v1.14.0/go.mod h1:JIl7NbARA7phWnGvh0LKTyg7S9BA+6gx71ShQilpsus=
 github.com/mattn/go-sqlite3 v1.14.16/go.mod h1:2eHXhiwb8IkHr+BDWZGa96P6+rkvnG63S2DGjv9HUNg=
 github.com/matttproud/golang_protobuf_extensions v1.0.1/go.mod h1:D8He9yQNgCq6Z5Ld7szi9bcBfOoFv/3dc6xSMkL2PC0=
-github.com/memocash/index v0.1.1-0.20230131171049-b84f362d7013 h1:HOYtUu/qYa5km2WujokD7YS9JT6NqlIGZ1VhrIk2+JE=
-github.com/memocash/index v0.1.1-0.20230131171049-b84f362d7013/go.mod h1:OZP3HC+VdLXj1CJ28KazxY3C+AH6/x4iRLURVxQJTBg=
+github.com/memocash/index v0.1.1-0.20230213204657-118e8583b03e h1:wBeG1wB7oehWWsT5tniD77FvktdqgENA2rDZQKAiouY=
+github.com/memocash/index v0.1.1-0.20230213204657-118e8583b03e/go.mod h1:fiBRJDbYt6/UcxH4EtA5r9Ag3T024m6Fxoto+AknV0k=
 github.com/miekg/dns v1.0.14/go.mod h1:W1PPwlIAgtquWBMBEV9nkV9Cazfe8ScdGz/Lj7v3Nrg=
 github.com/miekg/dns v1.1.26/go.mod h1:bPDLeHnStXmXAq1m/Ch/hvfNHr14JKNPMBo3VZKjuso=
 github.com/miekg/dns v1.1.41/go.mod h1:p6aan82bvRIyn+zDIv9xYNUpwa73JcSh9BKwknJysuI=
