@@ -30,6 +30,7 @@ import (
 	"time"
 )
 
+
 type Bot struct {
 	Mnemonic    *wallet.Mnemonic
 	Addresses   []string
@@ -144,7 +145,20 @@ func (b *Bot) Listen() error {
 	if b.Stream, err = tweets.NewStream(b.Db); err != nil {
 		return jerr.Get("error getting new tweet stream", err)
 	}
-	err = b.SafeUpdate()
+	streamArray, err := b.SafeUpdate()
+	//for each stream, call GetSkippedTweets
+	for _, stream := range streamArray {
+		accountKey := obj.AccountKey{
+			Account: stream.Name,
+			Key: stream.Wallet.Key,
+			Address: stream.Wallet.Address,
+		}
+		err = tweets.GetSkippedTweets(accountKey, &stream.Wallet, b.TweetClient, b.Db, true, false, 100)
+		if err != nil {
+			fmt.Printf("\n\nError getting skipped tweets: %s\n\n", err.Error())
+		}
+	}
+
 	if err != nil {
 		return jerr.Get("error updating stream", err)
 	}
@@ -294,7 +308,7 @@ func (b *Bot) SaveTx(tx Tx) error {
 				}
 
 			}
-			err = b.SafeUpdate()
+			_,err = b.SafeUpdate()
 			if err != nil {
 				return jerr.Get("error updating stream", err)
 			}
@@ -387,7 +401,7 @@ func (b *Bot) SaveTx(tx Tx) error {
 				}
 			}
 		}
-		err = b.SafeUpdate()
+		_, err = b.SafeUpdate()
 		if err != nil {
 			return jerr.Get("error updating stream", err)
 		}
@@ -401,7 +415,7 @@ func (b *Bot) SaveTx(tx Tx) error {
 	return nil
 }
 func refund(tx Tx, b *Bot, coinIndex uint32, senderAddress string, errMsg string) error {
-	err := b.SafeUpdate()
+	_,err := b.SafeUpdate()
 	if err != nil {
 		return jerr.Get("error updating stream", err)
 	}
@@ -439,40 +453,40 @@ func refund(tx Tx, b *Bot, coinIndex uint32, senderAddress string, errMsg string
 	}
 	return nil
 }
-func (b *Bot) SafeUpdate() error {
-	err := b.UpdateStream()
+func (b *Bot) SafeUpdate() ([]config.Stream, error) {
+	streamArray, err := b.UpdateStream()
 	var waitCount = 1
 	for err != nil && waitCount < 30 {
 		if !jerr.HasErrorPart(err, "DuplicateRule") {
-			return jerr.Get("error updating stream", err)
+			return nil, jerr.Get("error updating stream", err)
 		}
 		fmt.Printf("\n\n\nError updating stream: %s\n\n\n", err.Error())
-		err = b.UpdateStream()
+		streamArray, err = b.UpdateStream()
 		time.Sleep(time.Duration(waitCount) * time.Second)
 		waitCount *= 2
 	}
 	if err != nil {
-		return jerr.Get("error updating stream", err)
+		return nil, jerr.Get("error updating stream", err)
 	}
-	return nil
+	return streamArray, nil
 }
-func (b *Bot) UpdateStream() error {
+func (b *Bot) UpdateStream() ([]config.Stream, error) {
 	//create an array of {twitterName, newKey} objects by searching through the linked-<senderAddress>-<twitterName> fields
 	streamArray, err := makeStreamArray(b)
 	if err != nil {
-		return jerr.Get("error making stream array update", err)
+		return nil, jerr.Get("error making stream array update", err)
 	}
 	for _, stream := range streamArray {
 		streamKey, err := wallet.ImportPrivateKey(stream.Key)
 		if err != nil {
-			return jerr.Get("error importing private key", err)
+			return nil, jerr.Get("error importing private key", err)
 		}
 		streamAddress := streamKey.GetAddress()
 		println("streaming " + stream.Name + " to address " + streamAddress.GetEncoded())
 	}
 	err = b.Db.Put([]byte("memobot-running-count"), []byte(strconv.FormatUint(uint64(len(streamArray)), 10)), nil)
 	if err != nil {
-		return jerr.Get("error updating running count", err)
+		return nil, jerr.Get("error updating running count", err)
 	}
 	go func() {
 		if len(streamArray) == 0 {
@@ -482,7 +496,7 @@ func (b *Bot) UpdateStream() error {
 			b.ErrorChan <- jerr.Get("error twitter initiate stream in update", err)
 		}
 	}()
-	return nil
+	return streamArray, nil
 }
 
 func createBot(b *Bot, twitterName string, senderAddress string, tx Tx, coinIndex uint32) (*obj.AccountKey, *database.Wallet, error) {
