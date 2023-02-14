@@ -2,7 +2,6 @@ package db
 
 import (
 	"fmt"
-	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jutil"
 	"github.com/memocash/tweet/database"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -31,14 +30,14 @@ func GetObjectCombinedUid(o ObjectI) []byte {
 func Save(objects []ObjectI) error {
 	db, err := database.GetDb()
 	if err != nil {
-		return jerr.Get("error getting database handler for save", err)
+		return fmt.Errorf("%w; error getting database handler for save", err)
 	}
 	batch := new(leveldb.Batch)
 	for _, object := range objects {
 		batch.Put(GetObjectCombinedUid(object), object.Serialize())
 	}
 	if err := db.Write(batch, nil); err != nil {
-		return jerr.Get("error saving leveldb objects", err)
+		return fmt.Errorf("%w; error saving leveldb objects", err)
 	}
 	return nil
 }
@@ -46,14 +45,14 @@ func Save(objects []ObjectI) error {
 func Delete(objects []ObjectI) error {
 	db, err := database.GetDb()
 	if err != nil {
-		return jerr.Get("error getting database handler for delete", err)
+		return fmt.Errorf("%w; error getting database handler for delete", err)
 	}
 	batch := new(leveldb.Batch)
 	for _, object := range objects {
 		batch.Delete(GetObjectCombinedUid(object))
 	}
 	if err := db.Write(batch, nil); err != nil {
-		return jerr.Get("error deleting leveldb objects", err)
+		return fmt.Errorf("%w; error deleting leveldb objects", err)
 	}
 	return nil
 }
@@ -61,11 +60,11 @@ func Delete(objects []ObjectI) error {
 func GetItem(obj ObjectI) error {
 	db, err := database.GetDb()
 	if err != nil {
-		return jerr.Get("error getting database handler for save", err)
+		return fmt.Errorf("%w; error getting database handler for save", err)
 	}
 	val, err := db.Get(GetObjectCombinedUid(obj), nil)
 	if err != nil {
-		return jerr.Get("error getting db item single", err)
+		return fmt.Errorf("%w; error getting db item single", err)
 	}
 	obj.Deserialize(val)
 	return nil
