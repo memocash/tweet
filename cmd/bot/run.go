@@ -54,7 +54,10 @@ var runCmd = &cobra.Command{
 			}
 		}
 		botAddress := botKey.GetPublicKey().GetAddress().GetEncoded()
-		memoBot := bot.NewBot(mnemonic, []string{botAddress}, *botKey, tweets.Connect(), db)
+		memoBot, err := bot.NewBot(mnemonic, []string{botAddress}, *botKey, tweets.Connect(), db)
+		if err != nil {
+			return jerr.Get("error creating new bot", err)
+		}
 		cryptBytes, err := database.GenerateEncryptionKeyFromPassword(config.GetConfig().BotCrypt)
 		if err != nil {
 			return jerr.Get("error generating encryption key", err)

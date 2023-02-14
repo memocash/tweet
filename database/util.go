@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jutil"
-	"github.com/memocash/index/client/lib"
 	"github.com/memocash/index/client/lib/graph"
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -17,28 +16,11 @@ import (
 type Database struct {
 	Db *leveldb.DB
 }
+
 type Profile struct {
 	Name        string
 	Description string
 	ProfilePic  string
-}
-
-func GetClient() (*lib.Client, error) {
-	database, err := NewDatabase()
-	if err != nil {
-		return nil, jerr.Get("error getting database", err)
-	}
-	return lib.NewClient("http://localhost:26770/graphql", database), nil
-}
-
-func NewDatabase() (*Database, error) {
-	db, err := leveldb.OpenFile("tweets.db", nil)
-	if err != nil {
-		return nil, jerr.Get("error opening database", err)
-	}
-	return &Database{
-		Db: db,
-	}, nil
 }
 
 func (d *Database) GetAddressBalance(address wallet.Addr) (int64, error) {

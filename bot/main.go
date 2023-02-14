@@ -11,7 +11,8 @@ import (
 type UpdateQuery struct {
 	Address struct {
 		Txs []struct {
-			Hash string `graphql:"hash"`
+			Hash string      `graphql:"hash"`
+			Seen GraphQlDate `graphql:"seen"`
 		} `graphql:"txs(start: $start)"`
 	} `graphql:"address(address: $address)"`
 }

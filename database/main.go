@@ -24,11 +24,17 @@ import (
 	"time"
 )
 
+var _db *leveldb.DB
+
 func GetDb() (*leveldb.DB, error) {
+	if _db != nil {
+		return _db, nil
+	}
 	db, err := leveldb.OpenFile("tweets.db", nil)
 	if err != nil {
-		return nil, jerr.Get("error opening db", err)
+		return nil, fmt.Errorf("%w; error opening db", err)
 	}
+	_db = db
 	return db, nil
 }
 

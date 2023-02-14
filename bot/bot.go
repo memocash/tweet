@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/dghubble/go-twitter/twitter"
 	"github.com/hasura/go-graphql-client"
 	"github.com/hasura/go-graphql-client/pkg/jsonutil"
+	"github.com/jchavannes/btcd/chaincfg/chainhash"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jlog"
 	"github.com/memocash/index/ref/bitcoin/memo"
@@ -15,6 +17,7 @@ import (
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/database"
+	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets"
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -29,6 +32,7 @@ import (
 type Bot struct {
 	Mnemonic    *wallet.Mnemonic
 	Addresses   []string
+	Addr        wallet.Addr
 	Key         wallet.PrivateKey
 	TweetClient *twitter.Client
 	Db          *leveldb.DB
@@ -39,37 +43,54 @@ type Bot struct {
 	Timer       *time.Timer
 }
 
-func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey, tweetClient *twitter.Client, db *leveldb.DB) *Bot {
+func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey, tweetClient *twitter.Client, db *leveldb.DB) (*Bot, error) {
+	if len(addresses) == 0 {
+		return nil, jerr.New("error new bot, no addresses")
+	}
+	addr, err := wallet.GetAddrFromString(addresses[0])
+	if err != nil {
+		return nil, jerr.Get("error getting address from string for new bot", err)
+	}
 	return &Bot{
 		Mnemonic:    mnemonic,
 		Addresses:   addresses,
+		Addr:        *addr,
 		Key:         key,
 		TweetClient: tweetClient,
 		Db:          db,
 		ErrorChan:   make(chan error),
-	}
+	}, nil
 }
 
-type Date string
+type GraphQlDate string
 
-func (d Date) GetGraphQLType() string {
+func (d GraphQlDate) GetGraphQLType() string {
 	return "Date"
 }
 
 func (b *Bot) ProcessMissedTxs() error {
 	client := graphql.NewClient("http://127.0.0.1:26770/graphql", nil)
 	var updateQuery = new(UpdateQuery)
-	// TODO: Save last update (every time a TX is received) and use that as the start time
-	// TODO: Process these txs
+	recentAddressSeenTx, err := db.GetRecentAddressSeenTx(b.Addr)
+	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
+		return jerr.Get("error getting recent address seen tx for addr", err)
+	}
+	var start time.Time
+	if recentAddressSeenTx != nil {
+		start = recentAddressSeenTx.Seen
+	} else {
+		start = time.Date(2023, 02, 5, 0, 0, 0, 0, time.Local)
+	}
 	if err := client.Query(context.Background(), updateQuery, map[string]interface{}{
 		"address": b.Addresses[0],
-		"start":   Date(time.Date(2023, 02, 5, 0, 0, 0, 0, time.Local).Format(time.RFC3339)),
+		"start":   GraphQlDate(start.Format(time.RFC3339)),
 	}); err != nil {
 		return jerr.Get("error querying graphql process missed txs", err)
 	}
-	jlog.Logf("Found %d missed txs\n", len(updateQuery.Address.Txs))
+	jlog.Logf("Found %d missed txs (start: %s)\n", len(updateQuery.Address.Txs), start.Format(time.RFC3339))
+	// TODO: Process these txs
 	for _, tx := range updateQuery.Address.Txs {
-		jlog.Logf("Found tx: %s\n", tx.Hash)
+		jlog.Logf("Found tx: %s - %s\n", tx.Hash, tx.Seen)
 	}
 	return nil
 }
@@ -87,8 +108,6 @@ func (b *Bot) Listen() error {
 	if err != nil {
 		return jerr.Get("error subscribing to graphql", err)
 	}
-	fmt.Println("Listening for memos...")
-	//client.WithLog(log.Println)
 	updateInterval := config.GetConfig().UpdateInterval
 	if updateInterval == 0 {
 		updateInterval = 180
@@ -163,18 +182,25 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 			break
 		}
 	}
+	txHash, err := chainhash.NewHashFromStr(data.Addresses.Hash)
+	if err != nil {
+		return jerr.Get("error parsing address receive tx hash", err)
+	}
 	defer func() {
-		//add the transaction hash to the database
-		if err := b.Db.Put([]byte("completed-"+data.Addresses.Hash), []byte{}, nil); err != nil {
+		var addressSeenTx = &db.AddressSeenTx{Address: b.Addr, Seen: data.Addresses.Seen, TxHash: *txHash}
+		var completed = &db.CompletedTx{TxHash: *txHash}
+		if err := db.Save([]db.ObjectI{addressSeenTx, completed}); err != nil {
 			b.ErrorChan <- jerr.Get("error adding tx hash to database", err)
 		}
 	}()
-	//check if the transaction is already in the database
-	if _, err := b.Db.Get([]byte("completed-"+data.Addresses.Hash), nil); err == nil {
-		println("Already completed tx: " + data.Addresses.Hash)
+	hasCompletedTx, err := db.HasCompletedTx(*txHash)
+	if err != nil {
+		return jerr.Get("error getting completed tx", err)
+	}
+	if hasCompletedTx {
+		jlog.Logf("Already completed tx: %s\n", data.Addresses.Hash)
 		return nil
 	}
-
 	match, _ := regexp.MatchString("^CREATE ([a-zA-Z0-9_]{1,15})(( --history( [0-9]+)?)?( --nolink)?( --date)?)*$", message)
 	if match {
 		//check how many streams are running
