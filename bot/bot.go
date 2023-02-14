@@ -146,6 +146,9 @@ func (b *Bot) Listen() error {
 		return jerr.Get("error getting new tweet stream", err)
 	}
 	streamArray, err := b.SafeUpdate()
+	if err != nil {
+		return jerr.Get("error updating stream", err)
+	}
 	//for each stream, call GetSkippedTweets
 	for _, stream := range streamArray {
 		accountKey := obj.AccountKey{
@@ -158,6 +161,7 @@ func (b *Bot) Listen() error {
 			fmt.Printf("\n\nError getting skipped tweets: %s\n\n", err.Error())
 		}
 	}
+	_, err = b.SafeUpdate()
 
 	if err != nil {
 		return jerr.Get("error updating stream", err)

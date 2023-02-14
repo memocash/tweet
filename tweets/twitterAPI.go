@@ -109,18 +109,18 @@ func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, db *leveldb
 		tweetTxs = append(tweetTxs, obj.TweetTx{Tweet: &tweets[i], TxHash: nil})
 	}
 
-	//write the tweetTxs into a file for local storage
-	file := fmt.Sprintf("tweets-%s.json", accountKey.Account)
-	f, err := os.Create(file)
-	if err != nil {
-		return nil, jerr.Get("error creating file for local storage of tweets", err)
-	}
-	defer f.Close()
-	enc := json.NewEncoder(f)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(tweetTxs); err != nil {
-		return nil, jerr.Get("error encoding tweets for local storage", err)
-	}
+	////write the tweetTxs into a file for local storage
+	//file := fmt.Sprintf("tweets-%s.json", accountKey.Account)
+	//f, err := os.Create(file)
+	//if err != nil {
+	//	return nil, jerr.Get("error creating file for local storage of tweets", err)
+	//}
+	//defer f.Close()
+	//enc := json.NewEncoder(f)
+	//enc.SetIndent("", "  ")
+	//if err := enc.Encode(tweetTxs); err != nil {
+	//	return nil, jerr.Get("error encoding tweets for local storage", err)
+	//}
 	return tweetTxs, nil
 }
 func getNewTweetsLocal(accountKey obj.AccountKey, db *leveldb.DB, numTweets int) ([]obj.TweetTx, error) {
