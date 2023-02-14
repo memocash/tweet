@@ -81,11 +81,12 @@ func (b *Bot) ProcessMissedTxs() error {
 	}
 	if recentAddressSeenTx != nil && !jutil.IsTimeZero(recentAddressSeenTx.Seen) {
 		vars["start"] = GraphQlDate(recentAddressSeenTx.Seen.Format(time.RFC3339))
+		jlog.Logf("Processing missed txs using start: %s\n", recentAddressSeenTx.Seen.Format(time.RFC3339))
 	}
 	if err := client.Query(context.Background(), updateQuery, vars); err != nil {
 		return jerr.Get("error querying graphql process missed txs", err)
 	}
-	jlog.Logf("Found %d missed txs (start: %s)\n", len(updateQuery.Address.Txs), start.Format(time.RFC3339))
+	jlog.Logf("Found %d missed txs\n", len(updateQuery.Address.Txs))
 	for _, tx := range updateQuery.Address.Txs {
 		if err := b.SaveTx(tx); err != nil {
 			return jerr.Get("error saving missed process tx", err)
