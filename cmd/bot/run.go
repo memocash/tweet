@@ -60,6 +60,9 @@ var runCmd = &cobra.Command{
 			return jerr.Get("error generating encryption key", err)
 		}
 		memoBot.Crypt = string(cryptBytes)
+		if err := memoBot.ProcessMissedTxs(); err != nil {
+			return jerr.Get("error updating bot", err)
+		}
 		var errorChan = make(chan error)
 		go func() {
 			err = memoBot.Listen()

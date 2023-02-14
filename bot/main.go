@@ -8,6 +8,14 @@ import (
 	"time"
 )
 
+type UpdateQuery struct {
+	Address struct {
+		Txs []struct {
+			Hash string `graphql:"hash"`
+		} `graphql:"txs(start: $start)"`
+	} `graphql:"address(address: $address)"`
+}
+
 type Subscription struct {
 	Addresses struct {
 		Hash   string

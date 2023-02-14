@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"github.com/hasura/go-graphql-client"
 	"github.com/hasura/go-graphql-client/pkg/jsonutil"
 	"github.com/jchavannes/jgo/jerr"
+	"github.com/jchavannes/jgo/jlog"
 	"github.com/memocash/index/ref/bitcoin/memo"
 	"github.com/memocash/index/ref/bitcoin/tx/hs"
 	"github.com/memocash/index/ref/bitcoin/wallet"
@@ -48,8 +50,32 @@ func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey
 	}
 }
 
+type Date string
+
+func (d Date) GetGraphQLType() string {
+	return "Date"
+}
+
+func (b *Bot) ProcessMissedTxs() error {
+	client := graphql.NewClient("http://127.0.0.1:26770/graphql", nil)
+	var updateQuery = new(UpdateQuery)
+	// TODO: Save last update (every time a TX is received) and use that as the start time
+	// TODO: Process these txs
+	if err := client.Query(context.Background(), updateQuery, map[string]interface{}{
+		"address": b.Addresses[0],
+		"start":   Date(time.Date(2023, 02, 5, 0, 0, 0, 0, time.Local).Format(time.RFC3339)),
+	}); err != nil {
+		return jerr.Get("error querying graphql process missed txs", err)
+	}
+	jlog.Logf("Found %d missed txs\n", len(updateQuery.Address.Txs))
+	for _, tx := range updateQuery.Address.Txs {
+		jlog.Logf("Found tx: %s\n", tx.Hash)
+	}
+	return nil
+}
+
 func (b *Bot) Listen() error {
-	println("Listening to address: " + b.Addresses[0])
+	jlog.Logf("Bot listening to address: %s\n", b.Addresses[0])
 	client := graphql.NewSubscriptionClient("ws://127.0.0.1:26770/graphql")
 	defer client.Close()
 	var subscription = new(Subscription)
