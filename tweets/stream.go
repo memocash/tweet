@@ -96,6 +96,9 @@ func (s *Stream) ResetRules() error {
 }
 
 func (s *Stream) InitiateStream(streamConfigs []config.Stream) error {
+	if s == nil {
+		return jerr.New("error stream is nil for initiate stream")
+	}
 	s.SetFreshApi()
 	if err := s.ResetRules(); err != nil {
 		return jerr.Get("error twitter stream reset rules", err)

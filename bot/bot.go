@@ -30,7 +30,6 @@ import (
 	"time"
 )
 
-
 type Bot struct {
 	Mnemonic    *wallet.Mnemonic
 	Addresses   []string
@@ -149,11 +148,10 @@ func (b *Bot) Listen() error {
 	if err != nil {
 		return jerr.Get("error updating stream", err)
 	}
-	//for each stream, call GetSkippedTweets
 	for _, stream := range streamArray {
 		accountKey := obj.AccountKey{
 			Account: stream.Name,
-			Key: stream.Wallet.Key,
+			Key:     stream.Wallet.Key,
 			Address: stream.Wallet.Address,
 		}
 		err = tweets.GetSkippedTweets(accountKey, &stream.Wallet, b.TweetClient, b.Db, true, false, 100)
@@ -161,10 +159,8 @@ func (b *Bot) Listen() error {
 			fmt.Printf("\n\nError getting skipped tweets: %s\n\n", err.Error())
 		}
 	}
-	_, err = b.SafeUpdate()
-
-	if err != nil {
-		return jerr.Get("error updating stream", err)
+	if _, err = b.SafeUpdate(); err != nil {
+		return jerr.Get("error updating stream 2nd time", err)
 	}
 	return jerr.Get("error in listen", <-b.ErrorChan)
 }
@@ -315,7 +311,7 @@ func (b *Bot) SaveTx(tx Tx) error {
 				}
 
 			}
-			_,err = b.SafeUpdate()
+			_, err = b.SafeUpdate()
 			if err != nil {
 				return jerr.Get("error updating stream", err)
 			}
@@ -425,11 +421,11 @@ func (b *Bot) SaveTx(tx Tx) error {
 	return nil
 }
 func refund(tx Tx, b *Bot, coinIndex uint32, senderAddress string, errMsg string) error {
-	_,err := b.SafeUpdate()
+	_, err := b.SafeUpdate()
 	if err != nil {
 		return jerr.Get("error updating stream", err)
 	}
-	fmt.Printf("\n\nSending error message: %s\n\n", errMsg)
+	jlog.Logf("Sending error message: %s\n", errMsg)
 	sentToMainBot := false
 	//check all the outputs to see if any of them match the bot's address, if not, return nil, if so, continue with the function
 	for _, output := range tx.Outputs {

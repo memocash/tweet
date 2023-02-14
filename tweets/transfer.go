@@ -52,7 +52,7 @@ func Transfer(accountKey obj.AccountKey, db *leveldb.DB, appendLink bool, append
 			//remove the https://t.co from the tweet text
 			tweet.Tweet.Text = regexp.MustCompile("https://t.co/[a-zA-Z0-9]*$").ReplaceAllString(tweet.Tweet.Text, "")
 		}
-		if tweet.Tweet.Entities.Media != nil && len(tweet.Tweet.Entities.Media) > 0 {
+		if tweet.Tweet.Entities != nil && tweet.Tweet.Entities.Media != nil && len(tweet.Tweet.Entities.Media) > 0 {
 			//append the url to the tweet text on a new line
 			for _, media := range tweet.Tweet.ExtendedEntities.Media {
 				tweet.Tweet.Text += fmt.Sprintf("\n%s", media.MediaURL)
