@@ -76,12 +76,13 @@ func GetLastItem(obj ObjectI, prefix []byte) error {
 	if err != nil {
 		return fmt.Errorf("%w; error getting database handler for save", err)
 	}
-	rng := util.BytesPrefix(jutil.CombineBytes([]byte(obj.GetPrefix()), []byte{Spacer}, prefix))
+	topicPrefix := jutil.CombineBytes([]byte(obj.GetPrefix()), []byte{Spacer})
+	rng := util.BytesPrefix(jutil.CombineBytes(topicPrefix, prefix))
 	iter := db.NewIterator(rng, nil)
 	if !iter.Last() {
 		return leveldb.ErrNotFound
 	}
-	obj.SetUid(iter.Key())
+	obj.SetUid(iter.Key()[len(topicPrefix):])
 	obj.Deserialize(iter.Value())
 	return nil
 }

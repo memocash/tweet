@@ -69,6 +69,11 @@ func (d GraphQlDate) GetGraphQLType() string {
 	return "Date"
 }
 
+func (d GraphQlDate) GetTime() time.Time {
+	t, _ := time.Parse(time.RFC3339, string(d))
+	return t
+}
+
 func (b *Bot) ProcessMissedTxs() error {
 	client := graphql.NewClient("http://127.0.0.1:26770/graphql", nil)
 	var updateQuery = new(UpdateQuery)
@@ -82,6 +87,8 @@ func (b *Bot) ProcessMissedTxs() error {
 	if recentAddressSeenTx != nil && !jutil.IsTimeZero(recentAddressSeenTx.Seen) {
 		vars["start"] = GraphQlDate(recentAddressSeenTx.Seen.Format(time.RFC3339))
 		jlog.Logf("Processing missed txs using start: %s\n", recentAddressSeenTx.Seen.Format(time.RFC3339))
+	} else {
+		vars["start"] = GraphQlDate(time.Date(2009, 1, 1, 0, 0, 0, 0, time.Local).Format(time.RFC3339))
 	}
 	if err := client.Query(context.Background(), updateQuery, vars); err != nil {
 		return jerr.Get("error querying graphql process missed txs", err)
@@ -91,7 +98,7 @@ func (b *Bot) ProcessMissedTxs() error {
 		if err := b.SaveTx(tx); err != nil {
 			return jerr.Get("error saving missed process tx", err)
 		}
-		jlog.Logf("Found missed process tx: %s - %s\n", tx.Hash, tx.Seen)
+		jlog.Logf("Found missed process tx: %s - %s\n", tx.Hash, tx.Seen.GetTime().Format(time.RFC3339))
 	}
 	return nil
 }
@@ -195,7 +202,7 @@ func (b *Bot) SaveTx(tx Tx) error {
 		return jerr.Get("error parsing address receive tx hash", err)
 	}
 	defer func() {
-		var addressSeenTx = &db.AddressSeenTx{Address: b.Addr, Seen: tx.Seen, TxHash: *txHash}
+		var addressSeenTx = &db.AddressSeenTx{Address: b.Addr, Seen: tx.Seen.GetTime(), TxHash: *txHash}
 		var completed = &db.CompletedTx{TxHash: *txHash}
 		if err := db.Save([]db.ObjectI{addressSeenTx, completed}); err != nil {
 			b.ErrorChan <- jerr.Get("error adding tx hash to database", err)

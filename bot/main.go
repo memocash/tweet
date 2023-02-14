@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"github.com/jchavannes/btcd/txscript"
 	"github.com/memocash/index/ref/bitcoin/memo"
-	"time"
 )
 
 type UpdateQuery struct {
@@ -20,7 +19,7 @@ type Subscription struct {
 
 type Tx struct {
 	Hash   string
-	Seen   time.Time
+	Seen   GraphQlDate
 	Raw    string
 	Inputs []struct {
 		Index     uint32
@@ -41,7 +40,7 @@ type Tx struct {
 	}
 	Blocks []struct {
 		Hash      string
-		Timestamp time.Time
+		Timestamp GraphQlDate
 		Height    int
 	}
 }

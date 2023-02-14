@@ -19,7 +19,7 @@ var convertCompletedCmd = &cobra.Command{
 		if err != nil {
 			log.Fatalf("error opening db; %v", err)
 		}
-		iter := levelDb.NewIterator(util.BytesPrefix([]byte("completed-")), nil)
+		iter := levelDb.NewIterator(util.BytesPrefix([]byte(db.PrefixCompletedTx+"-")), nil)
 		var cnt int
 		for iter.Next() {
 			key := iter.Key()
