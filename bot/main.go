@@ -10,41 +10,40 @@ import (
 
 type UpdateQuery struct {
 	Address struct {
-		Txs []struct {
-			Hash string      `graphql:"hash"`
-			Seen GraphQlDate `graphql:"seen"`
-		} `graphql:"txs(start: $start)"`
+		Txs []Tx `graphql:"txs(start: $start)"`
 	} `graphql:"address(address: $address)"`
 }
 
 type Subscription struct {
-	Addresses struct {
-		Hash   string
-		Seen   time.Time
-		Raw    string
-		Inputs []struct {
-			Index     uint32
-			PrevHash  string `graphql:"prev_hash"`
-			PrevIndex uint32 `graphql:"prev_index"`
-			Output    struct {
-				Lock struct {
-					Address string
-				}
-			}
-		}
-		Outputs []struct {
-			Script string
-			Amount int64
-			Lock   struct {
+	Addresses Tx `graphql:"addresses(addresses: $addresses)"`
+}
+
+type Tx struct {
+	Hash   string
+	Seen   time.Time
+	Raw    string
+	Inputs []struct {
+		Index     uint32
+		PrevHash  string `graphql:"prev_hash"`
+		PrevIndex uint32 `graphql:"prev_index"`
+		Output    struct {
+			Lock struct {
 				Address string
 			}
 		}
-		Blocks []struct {
-			Hash      string
-			Timestamp time.Time
-			Height    int
+	}
+	Outputs []struct {
+		Script string
+		Amount int64
+		Lock   struct {
+			Address string
 		}
-	} `graphql:"addresses(addresses: $addresses)"`
+	}
+	Blocks []struct {
+		Hash      string
+		Timestamp time.Time
+		Height    int
+	}
 }
 
 func grabMessage(outputScripts []string) string {

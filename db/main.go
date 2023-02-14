@@ -43,6 +43,21 @@ func Save(objects []ObjectI) error {
 	return nil
 }
 
+func Delete(objects []ObjectI) error {
+	db, err := database.GetDb()
+	if err != nil {
+		return jerr.Get("error getting database handler for delete", err)
+	}
+	batch := new(leveldb.Batch)
+	for _, object := range objects {
+		batch.Delete(GetObjectCombinedUid(object))
+	}
+	if err := db.Write(batch, nil); err != nil {
+		return jerr.Get("error deleting leveldb objects", err)
+	}
+	return nil
+}
+
 func GetItem(obj ObjectI) error {
 	db, err := database.GetDb()
 	if err != nil {

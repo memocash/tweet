@@ -12,6 +12,7 @@ import (
 	"github.com/jchavannes/btcd/chaincfg/chainhash"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jlog"
+	"github.com/jchavannes/jgo/jutil"
 	"github.com/memocash/index/ref/bitcoin/memo"
 	"github.com/memocash/index/ref/bitcoin/tx/hs"
 	"github.com/memocash/index/ref/bitcoin/wallet"
@@ -75,22 +76,21 @@ func (b *Bot) ProcessMissedTxs() error {
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		return jerr.Get("error getting recent address seen tx for addr", err)
 	}
-	var start time.Time
-	if recentAddressSeenTx != nil {
-		start = recentAddressSeenTx.Seen
-	} else {
-		start = time.Date(2023, 02, 5, 0, 0, 0, 0, time.Local)
-	}
-	if err := client.Query(context.Background(), updateQuery, map[string]interface{}{
+	var vars = map[string]interface{}{
 		"address": b.Addresses[0],
-		"start":   GraphQlDate(start.Format(time.RFC3339)),
-	}); err != nil {
+	}
+	if recentAddressSeenTx != nil && !jutil.IsTimeZero(recentAddressSeenTx.Seen) {
+		vars["start"] = GraphQlDate(recentAddressSeenTx.Seen.Format(time.RFC3339))
+	}
+	if err := client.Query(context.Background(), updateQuery, vars); err != nil {
 		return jerr.Get("error querying graphql process missed txs", err)
 	}
 	jlog.Logf("Found %d missed txs (start: %s)\n", len(updateQuery.Address.Txs), start.Format(time.RFC3339))
-	// TODO: Process these txs
 	for _, tx := range updateQuery.Address.Txs {
-		jlog.Logf("Found tx: %s - %s\n", tx.Hash, tx.Seen)
+		if err := b.SaveTx(tx); err != nil {
+			return jerr.Get("error saving missed process tx", err)
+		}
+		jlog.Logf("Found missed process tx: %s - %s\n", tx.Hash, tx.Seen)
 	}
 	return nil
 }
@@ -154,13 +154,20 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 	if err != nil {
 		return jerr.Get("error marshaling subscription", err)
 	}
-	for _, input := range data.Addresses.Inputs {
+	if err := b.SaveTx(data.Addresses); err != nil {
+		return jerr.Get("error saving new received tx", err)
+	}
+	return nil
+}
+
+func (b *Bot) SaveTx(tx Tx) error {
+	for _, input := range tx.Inputs {
 		if input.Output.Lock.Address == b.Addresses[0] {
 			return nil
 		}
 	}
 	var scriptArray []string
-	for _, output := range data.Addresses.Outputs {
+	for _, output := range tx.Outputs {
 		scriptArray = append(scriptArray, output.Script)
 	}
 	message := grabMessage(scriptArray)
@@ -169,25 +176,25 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 		return nil
 	}
 	senderAddress := ""
-	for _, input := range data.Addresses.Inputs {
+	for _, input := range tx.Inputs {
 		if input.Output.Lock.Address != b.Addresses[0] {
 			senderAddress = input.Output.Lock.Address
 			break
 		}
 	}
 	coinIndex := uint32(0)
-	for i, output := range data.Addresses.Outputs {
+	for i, output := range tx.Outputs {
 		if output.Lock.Address == b.Addresses[0] {
 			coinIndex = uint32(i)
 			break
 		}
 	}
-	txHash, err := chainhash.NewHashFromStr(data.Addresses.Hash)
+	txHash, err := chainhash.NewHashFromStr(tx.Hash)
 	if err != nil {
 		return jerr.Get("error parsing address receive tx hash", err)
 	}
 	defer func() {
-		var addressSeenTx = &db.AddressSeenTx{Address: b.Addr, Seen: data.Addresses.Seen, TxHash: *txHash}
+		var addressSeenTx = &db.AddressSeenTx{Address: b.Addr, Seen: tx.Seen, TxHash: *txHash}
 		var completed = &db.CompletedTx{TxHash: *txHash}
 		if err := db.Save([]db.ObjectI{addressSeenTx, completed}); err != nil {
 			b.ErrorChan <- jerr.Get("error adding tx hash to database", err)
@@ -198,7 +205,7 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 		return jerr.Get("error getting completed tx", err)
 	}
 	if hasCompletedTx {
-		jlog.Logf("Already completed tx: %s\n", data.Addresses.Hash)
+		jlog.Logf("Already completed tx: %s\n", tx.Hash)
 		return nil
 	}
 	match, _ := regexp.MatchString("^CREATE ([a-zA-Z0-9_]{1,15})(( --history( [0-9]+)?)?( --nolink)?( --date)?)*$", message)
@@ -212,7 +219,7 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 		numStreams, err := strconv.Atoi(string(streams))
 		//if there are more than 25 streams running, refund and return
 		if numStreams >= 25 {
-			err := refund(data, b, coinIndex, senderAddress, "There are too many streams running, please try again later")
+			err := refund(tx, b, coinIndex, senderAddress, "There are too many streams running, please try again later")
 			if err != nil {
 				return jerr.Get("error refunding", err)
 			}
@@ -245,7 +252,7 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 			}
 		}
 		if historyNum > 1000 {
-			err = refund(data, b, coinIndex, senderAddress, "Number of tweets must be less than 1000")
+			err = refund(tx, b, coinIndex, senderAddress, "Number of tweets must be less than 1000")
 			if err != nil {
 				return jerr.Get("error refunding", err)
 			}
@@ -264,7 +271,7 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 		if err := b.Db.Put([]byte("flags-"+senderAddress+"-"+twitterName), flagsBytes, nil); err != nil {
 			return jerr.Get("error putting flags into database", err)
 		}
-		accountKeyPointer, wlt, err := createBot(b, twitterName, senderAddress, data, coinIndex)
+		accountKeyPointer, wlt, err := createBot(b, twitterName, senderAddress, tx, coinIndex)
 		if err != nil {
 			return jerr.Get("error creating bot", err)
 		}
@@ -299,14 +306,14 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 			if err == leveldb.ErrNotFound {
 				//handle refund
 				errMsg := "No linked address found for " + senderAddress + "-" + twitterName
-				err = refund(data, b, coinIndex, senderAddress, errMsg)
+				err = refund(tx, b, coinIndex, senderAddress, errMsg)
 				if err != nil {
 					return jerr.Get("error refunding", err)
 				}
 				return nil
 			}
 			errMsg := "Error accessing database looking for existing linked address"
-			_ = refund(data, b, coinIndex, senderAddress, errMsg)
+			_ = refund(tx, b, coinIndex, senderAddress, errMsg)
 			return jerr.Get("error getting linked-"+senderAddress+"-"+twitterName, err)
 		} else {
 			fieldName := searchString
@@ -339,14 +346,14 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 			if regexp.MustCompile("^WITHDRAW ([a-zA-Z0-9_]{1,15}) [0-9]+$").MatchString(message) {
 				amount, _ = strconv.ParseInt(regexp.MustCompile("^WITHDRAW ([a-zA-Z0-9_]{1,15}) ([0-9]+)$").FindStringSubmatch(message)[2], 10, 64)
 				if amount > maxSend {
-					err = refund(data, b, coinIndex, senderAddress, "Cannot withdraw more than the total balance is capable of sending")
+					err = refund(tx, b, coinIndex, senderAddress, "Cannot withdraw more than the total balance is capable of sending")
 					if err != nil {
 						return jerr.Get("error refunding", err)
 					}
 					return nil
 				} else if amount+memo.DustMinimumOutput+memo.OutputFeeP2PKH > maxSend {
 					errmsg := fmt.Sprintf("Not enough funds will be left over to send change to bot account, please withdraw less than %d", maxSend+1-memo.DustMinimumOutput-memo.OutputFeeP2PKH)
-					err = refund(data, b, coinIndex, senderAddress, errmsg)
+					err = refund(tx, b, coinIndex, senderAddress, errmsg)
 					if err != nil {
 						return jerr.Get("error refunding", err)
 					}
@@ -364,7 +371,7 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 						return jerr.Get("error withdrawing all", err)
 					}
 				} else {
-					err = refund(data, b, coinIndex, senderAddress, "Not enough balance to withdraw anything")
+					err = refund(tx, b, coinIndex, senderAddress, "Not enough balance to withdraw anything")
 					if err != nil {
 						return jerr.Get("error refunding", err)
 					}
@@ -378,14 +385,14 @@ func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
 		}
 	} else {
 		errMsg := "Invalid command. Please use the following format: CREATE <twitterName> or WITHDRAW <twitterName>"
-		err = refund(data, b, coinIndex, senderAddress, errMsg)
+		err = refund(tx, b, coinIndex, senderAddress, errMsg)
 		if err != nil {
 			return jerr.Get("error refunding", err)
 		}
 	}
 	return nil
 }
-func refund(data Subscription, b *Bot, coinIndex uint32, senderAddress string, errMsg string) error {
+func refund(tx Tx, b *Bot, coinIndex uint32, senderAddress string, errMsg string) error {
 	err := b.SafeUpdate()
 	if err != nil {
 		return jerr.Get("error updating stream", err)
@@ -393,7 +400,7 @@ func refund(data Subscription, b *Bot, coinIndex uint32, senderAddress string, e
 	fmt.Printf("\n\nSending error message: %s\n\n", errMsg)
 	sentToMainBot := false
 	//check all the outputs to see if any of them match the bot's address, if not, return nil, if so, continue with the function
-	for _, output := range data.Addresses.Outputs {
+	for _, output := range tx.Outputs {
 		if output.Lock.Address == b.Addresses[0] {
 			sentToMainBot = true
 			break
@@ -404,18 +411,18 @@ func refund(data Subscription, b *Bot, coinIndex uint32, senderAddress string, e
 	}
 	//handle sending back money
 	//not enough to send back
-	if memo.GetMaxSendFromCount(data.Addresses.Outputs[coinIndex].Amount, 1) <= 0 {
+	if memo.GetMaxSendFromCount(tx.Outputs[coinIndex].Amount, 1) <= 0 {
 		println("Not enough funds to refund")
 		return nil
 	}
 	//create a transaction with the sender address and the amount of the transaction
-	pkScript, err := hex.DecodeString(data.Addresses.Outputs[coinIndex].Script)
+	pkScript, err := hex.DecodeString(tx.Outputs[coinIndex].Script)
 	if err != nil {
 		return jerr.Get("error decoding script pk script for create bot", err)
 	}
 	if err := database.SendToTwitterAddress(memo.UTXO{Input: memo.TxInput{
-		Value:        data.Addresses.Outputs[coinIndex].Amount,
-		PrevOutHash:  hs.GetTxHash(data.Addresses.Hash),
+		Value:        tx.Outputs[coinIndex].Amount,
+		PrevOutHash:  hs.GetTxHash(tx.Hash),
 		PrevOutIndex: coinIndex,
 		PkHash:       wallet.GetAddressFromString(b.Addresses[0]).GetPkHash(),
 		PkScript:     pkScript,
@@ -470,7 +477,7 @@ func (b *Bot) UpdateStream() error {
 	return nil
 }
 
-func createBot(b *Bot, twitterName string, senderAddress string, data Subscription, coinIndex uint32) (*obj.AccountKey, *database.Wallet, error) {
+func createBot(b *Bot, twitterName string, senderAddress string, tx Tx, coinIndex uint32) (*obj.AccountKey, *database.Wallet, error) {
 	//check if the value of the transaction is less than 5,000 or this address already has a bot for this account in the database
 	botExists := false
 	_, err := b.Db.Get([]byte("linked-"+senderAddress+"-"+twitterName), nil)
@@ -484,8 +491,8 @@ func createBot(b *Bot, twitterName string, senderAddress string, data Subscripti
 	if _, _, err := b.TweetClient.Users.Show(&twitter.UserShowParams{ScreenName: twitterName}); err == nil {
 		twitterExists = true
 	}
-	if !twitterExists || data.Addresses.Outputs[coinIndex].Amount < 5000 {
-		if data.Addresses.Outputs[coinIndex].Amount < 546 {
+	if !twitterExists || tx.Outputs[coinIndex].Amount < 5000 {
+		if tx.Outputs[coinIndex].Amount < 546 {
 			return nil, nil, nil
 		}
 		errMsg := ""
@@ -498,7 +505,7 @@ func createBot(b *Bot, twitterName string, senderAddress string, data Subscripti
 		if err != nil {
 			return nil, nil, jerr.Get("error decoding script pk script for create bot", err)
 		}
-		err = refund(data, b, coinIndex, senderAddress, errMsg)
+		err = refund(tx, b, coinIndex, senderAddress, errMsg)
 		if err != nil {
 			return nil, nil, jerr.Get("error refunding", err)
 		}
@@ -542,13 +549,13 @@ func createBot(b *Bot, twitterName string, senderAddress string, data Subscripti
 		}
 		newAddr = newKey.GetAddress()
 	}
-	pkScript, err := hex.DecodeString(data.Addresses.Outputs[coinIndex].Script)
+	pkScript, err := hex.DecodeString(tx.Outputs[coinIndex].Script)
 	if err != nil {
 		return nil, nil, jerr.Get("error decoding script pk script for create bot", err)
 	}
 	if err := database.FundTwitterAddress(memo.UTXO{Input: memo.TxInput{
-		Value:        data.Addresses.Outputs[coinIndex].Amount,
-		PrevOutHash:  hs.GetTxHash(data.Addresses.Hash),
+		Value:        tx.Outputs[coinIndex].Amount,
+		PrevOutHash:  hs.GetTxHash(tx.Hash),
 		PrevOutIndex: coinIndex,
 		PkHash:       b.Key.GetAddress().GetPkHash(),
 		PkScript:     pkScript,

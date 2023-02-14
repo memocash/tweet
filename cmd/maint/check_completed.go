@@ -2,7 +2,7 @@ package maint
 
 import (
 	"github.com/jchavannes/btcd/chaincfg/chainhash"
-	"github.com/memocash/tweet/database"
+	"github.com/memocash/tweet/db"
 	"github.com/spf13/cobra"
 	"log"
 )
@@ -18,14 +18,10 @@ var checkCompletedCmd = &cobra.Command{
 		if err != nil {
 			log.Fatalf("error bad tx hash; %v", err)
 		}
-		db, err := database.GetDb()
-		if err != nil {
-			log.Fatalf("error opening db; %v", err)
-		}
-		val, err := db.Get([]byte("completed-"+txHash.String()), nil)
+		hasCompleted, err := db.HasCompletedTx(*txHash)
 		if err != nil {
 			log.Fatalf("error getting completed tx item; %v", err)
 		}
-		log.Printf("checked completed tx: %s, %x\n", txHash.String(), val)
+		log.Printf("checked completed tx: %s, %t\n", txHash.String(), hasCompleted)
 	},
 }
