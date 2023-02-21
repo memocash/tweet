@@ -9,6 +9,7 @@ var maintCmd = &cobra.Command{
 func GetCommand() *cobra.Command {
 	maintCmd.AddCommand(
 		checkAddressSeenCmd,
+		removeInvalidAddressSeenCmd,
 		checkCompletedCmd,
 		convertCompletedCmd,
 		removeCompletedCmd,
