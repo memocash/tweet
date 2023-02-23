@@ -14,6 +14,7 @@ func GetCommand() *cobra.Command {
 		convertCompletedCmd,
 		removeCompletedCmd,
 		resetProfileCmd,
+		checkSavedTweetsCmd,
 	)
 	return maintCmd
 }
