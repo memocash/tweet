@@ -14,16 +14,15 @@ var checkSavedTweetsCmd = &cobra.Command{
 	Short: "check-saved-tweets",
 	Run: func(c *cobra.Command, args []string) {
 		if len(args) != 1 {
-			log.Fatalf("must specify the twitter name")
+			log.Fatalf("must specify the prefix")
 		}
-		twitterName := args[0]
+		prefix := args[0]
 		//open the database print out every row in the database that matches saved-address-twitterName
 		db, err := database.GetDb()
 		if err != nil {
 			panic(err)
 		}
 		defer db.Close()
-		prefix := "tweets-" + twitterName
 		iter := db.NewIterator(util.BytesPrefix([]byte(prefix)), nil)
 		for iter.Next() {
 			key := iter.Key()
