@@ -1,4 +1,4 @@
-package database
+package wallet
 
 import (
 	"encoding/json"
@@ -15,12 +15,6 @@ import (
 
 type Database struct {
 	Db *leveldb.DB
-}
-
-type Profile struct {
-	Name        string
-	Description string
-	ProfilePic  string
 }
 
 func (d *Database) GetAddressBalance(address wallet.Addr) (int64, error) {

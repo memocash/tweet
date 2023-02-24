@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/tweet/config"
-	"github.com/memocash/tweet/database"
+	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets"
 	"github.com/memocash/tweet/tweets/obj"
+	"github.com/memocash/tweet/wallet"
 	"github.com/spf13/cobra"
 	util2 "github.com/syndtr/goleveldb/leveldb/util"
 )
@@ -19,7 +20,7 @@ var transferCmd = &cobra.Command{
 	Short: "Listens for new tweets on an account",
 	Long:  "Prints out each new tweet as it comes in. ",
 	Run: func(c *cobra.Command, args []string) {
-		db, err := database.GetDb()
+		db, err := db.GetDb()
 		if err != nil {
 			jerr.Get("fatal error getting db", err).Fatal()
 		}
@@ -33,8 +34,8 @@ var transferCmd = &cobra.Command{
 			tweetsFound := iter.First()
 			iter.Release()
 			if tweetsFound {
-				wlt := database.NewWallet(accountKey.Address, accountKey.Key, db)
-				err := tweets.GetSkippedTweets(accountKey,&wlt, tweets.Connect(), db, link, date, 100)
+				wlt := wallet.NewWallet(accountKey.Address, accountKey.Key, db)
+				err := tweets.GetSkippedTweets(accountKey, &wlt, tweets.Connect(), db, link, date, 100)
 				if err != nil {
 					jerr.Get("error getting skipped tweets", err).Print()
 				}

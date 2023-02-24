@@ -3,7 +3,6 @@ package maint
 import (
 	"github.com/jchavannes/btcd/chaincfg/chainhash"
 	"github.com/jchavannes/jgo/jlog"
-	"github.com/memocash/tweet/database"
 	"github.com/memocash/tweet/db"
 	"github.com/spf13/cobra"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -15,7 +14,7 @@ var convertCompletedCmd = &cobra.Command{
 	Use:   "convert-completed",
 	Short: "convert-completed",
 	Run: func(c *cobra.Command, args []string) {
-		levelDb, err := database.GetDb()
+		levelDb, err := db.GetDb()
 		if err != nil {
 			log.Fatalf("error opening db; %v", err)
 		}

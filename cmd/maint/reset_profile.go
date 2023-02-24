@@ -1,7 +1,7 @@
 package maint
 
 import (
-	"github.com/memocash/tweet/database"
+	"github.com/memocash/tweet/db"
 	"github.com/spf13/cobra"
 	"log"
 )
@@ -15,7 +15,7 @@ var resetProfileCmd = &cobra.Command{
 		}
 		senderAddr := args[0]
 		twittername := args[1]
-		db, err := database.GetDb()
+		db, err := db.GetDb()
 		if err != nil {
 			log.Fatalf("error opening db; %v", err)
 		}

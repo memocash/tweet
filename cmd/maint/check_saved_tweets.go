@@ -2,7 +2,7 @@ package maint
 
 import (
 	"encoding/json"
-	"github.com/memocash/tweet/database"
+	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/spf13/cobra"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -18,7 +18,7 @@ var checkSavedTweetsCmd = &cobra.Command{
 		}
 		prefix := args[0]
 		//open the database print out every row in the database that matches saved-address-twitterName
-		db, err := database.GetDb()
+		db, err := db.GetDb()
 		if err != nil {
 			panic(err)
 		}

@@ -2,9 +2,9 @@ package update
 
 import (
 	"github.com/jchavannes/jgo/jerr"
-	"github.com/memocash/tweet/database"
 	"github.com/memocash/tweet/tweets"
 	"github.com/memocash/tweet/tweets/obj"
+	"github.com/memocash/tweet/wallet"
 	"github.com/spf13/cobra"
 )
 
@@ -18,7 +18,7 @@ var nameCmd = &cobra.Command{
 		if err != nil {
 			jerr.Get("fatal error getting profile", err).Fatal()
 		}
-		err = database.UpdateName(database.NewWallet(accountKey.Address, accountKey.Key, nil), profile.Name)
+		err = wallet.UpdateName(wallet.NewWallet(accountKey.Address, accountKey.Key, nil), profile.Name)
 		if err != nil {
 			jerr.Get("error", err).Fatal()
 		}

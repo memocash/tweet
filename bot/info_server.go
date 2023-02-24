@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/config"
-	"github.com/memocash/tweet/database"
+	tweetWallet "github.com/memocash/tweet/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
 	"net/http"
 )
@@ -26,7 +26,7 @@ func (l *InfoServer) Listen() error {
 		return fmt.Errorf("port is 0 for info server")
 	}
 	mux := http.NewServeMux()
-	db := database.Database{Db: l.Db}
+	db := tweetWallet.Database{Db: l.Db}
 	mux.HandleFunc("/balance", func(writer http.ResponseWriter, request *http.Request) {
 		if err := request.ParseForm(); err != nil {
 			writer.Write([]byte(fmt.Sprintf("error parsing form: %v", err)))
@@ -59,7 +59,7 @@ func (l *InfoServer) Listen() error {
 			writer.Write([]byte(fmt.Sprintf("error getting profile; %v", err)))
 			return
 		}
-		var profile database.Profile
+		var profile tweetWallet.Profile
 		json.Unmarshal(profileBytes, &profile)
 		writer.Write([]byte(fmt.Sprintf("name: %v\ndesc: %v\npicUrl: %v\n", profile.Name, profile.Description, profile.ProfilePic)))
 	})

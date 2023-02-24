@@ -17,10 +17,10 @@ import (
 	"github.com/memocash/index/ref/bitcoin/tx/hs"
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/config"
-	"github.com/memocash/tweet/database"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets"
 	"github.com/memocash/tweet/tweets/obj"
+	tweetWallet "github.com/memocash/tweet/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"regexp"
@@ -84,12 +84,14 @@ func (b *Bot) ProcessMissedTxs() error {
 	var vars = map[string]interface{}{
 		"address": b.Addresses[0],
 	}
+	var startDate string
 	if recentAddressSeenTx != nil && !jutil.IsTimeZero(recentAddressSeenTx.Seen) {
-		vars["start"] = GraphQlDate(recentAddressSeenTx.Seen.Format(time.RFC3339))
+		startDate = recentAddressSeenTx.Seen.Format(time.RFC3339)
 	} else {
-		vars["start"] = GraphQlDate(time.Date(2009, 1, 1, 0, 0, 0, 0, time.Local).Format(time.RFC3339))
+		startDate = time.Date(2009, 1, 1, 0, 0, 0, 0, time.Local).Format(time.RFC3339)
 	}
-	jlog.Logf("Processing missed txs using start: %s\n", recentAddressSeenTx.Seen.Format(time.RFC3339))
+	vars["start"] = GraphQlDate(startDate)
+	jlog.Logf("Processing missed txs using start: %s\n", startDate)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := client.Query(ctx, updateQuery, vars); err != nil {
@@ -350,7 +352,7 @@ func (b *Bot) SaveTx(tx Tx) error {
 			stringKey := searchValue
 			println("Field name: " + string(fieldName))
 			//get the address object from the private key
-			decryptedKey, err := database.Decrypt(stringKey, []byte(b.Crypt))
+			decryptedKey, err := tweetWallet.Decrypt(stringKey, []byte(b.Crypt))
 			if err != nil {
 				return jerr.Get("error decrypting key", err)
 			}
@@ -360,7 +362,7 @@ func (b *Bot) SaveTx(tx Tx) error {
 			}
 			address := key.GetAddress()
 			println("Address: " + address.GetEncoded())
-			inputGetter := database.InputGetter{
+			inputGetter := tweetWallet.InputGetter{
 				Address: address,
 				UTXOs:   nil,
 				Db:      b.Db,
@@ -389,14 +391,14 @@ func (b *Bot) SaveTx(tx Tx) error {
 					}
 					return nil
 				} else {
-					err := database.WithdrawAmount(outputs, key, wallet.GetAddressFromString(senderAddress), amount)
+					err := tweetWallet.WithdrawAmount(outputs, key, wallet.GetAddressFromString(senderAddress), amount)
 					if err != nil {
 						return jerr.Get("error withdrawing amount", err)
 					}
 				}
 			} else {
 				if maxSend > 0 {
-					err := database.WithdrawAll(outputs, key, wallet.GetAddressFromString(senderAddress))
+					err := tweetWallet.WithdrawAll(outputs, key, wallet.GetAddressFromString(senderAddress))
 					if err != nil {
 						return jerr.Get("error withdrawing all", err)
 					}
@@ -450,7 +452,7 @@ func refund(tx Tx, b *Bot, coinIndex uint32, senderAddress string, errMsg string
 	if err != nil {
 		return jerr.Get("error decoding script pk script for create bot", err)
 	}
-	if err := database.SendToTwitterAddress(memo.UTXO{Input: memo.TxInput{
+	if err := tweetWallet.SendToTwitterAddress(memo.UTXO{Input: memo.TxInput{
 		Value:        tx.Outputs[coinIndex].Amount,
 		PrevOutHash:  hs.GetTxHash(tx.Hash),
 		PrevOutIndex: coinIndex,
@@ -507,7 +509,7 @@ func (b *Bot) UpdateStream() ([]config.Stream, error) {
 	return streamArray, nil
 }
 
-func createBot(b *Bot, twitterName string, senderAddress string, tx Tx, coinIndex uint32) (*obj.AccountKey, *database.Wallet, error) {
+func createBot(b *Bot, twitterName string, senderAddress string, tx Tx, coinIndex uint32) (*obj.AccountKey, *tweetWallet.Wallet, error) {
 	//check if the value of the transaction is less than 5,000 or this address already has a bot for this account in the database
 	botExists := false
 	_, err := b.Db.Get([]byte("linked-"+senderAddress+"-"+twitterName), nil)
@@ -561,7 +563,7 @@ func createBot(b *Bot, twitterName string, senderAddress string, tx Tx, coinInde
 		if err != nil {
 			return nil, nil, jerr.Get("error getting key from database", err)
 		}
-		decryptedKey, err := database.Decrypt(rawKey, []byte(b.Crypt))
+		decryptedKey, err := tweetWallet.Decrypt(rawKey, []byte(b.Crypt))
 		if err != nil {
 			return nil, nil, jerr.Get("error decrypting key", err)
 		}
@@ -583,7 +585,7 @@ func createBot(b *Bot, twitterName string, senderAddress string, tx Tx, coinInde
 	if err != nil {
 		return nil, nil, jerr.Get("error decoding script pk script for create bot", err)
 	}
-	if err := database.FundTwitterAddress(memo.UTXO{Input: memo.TxInput{
+	if err := tweetWallet.FundTwitterAddress(memo.UTXO{Input: memo.TxInput{
 		Value:        tx.Outputs[coinIndex].Amount,
 		PrevOutHash:  hs.GetTxHash(tx.Hash),
 		PrevOutIndex: coinIndex,
@@ -592,7 +594,7 @@ func createBot(b *Bot, twitterName string, senderAddress string, tx Tx, coinInde
 	}}, b.Key, newAddr); err != nil {
 		return nil, nil, jerr.Get("error funding twitter address", err)
 	}
-	newWallet := database.NewWallet(newAddr, newKey, b.Db)
+	newWallet := tweetWallet.NewWallet(newAddr, newKey, b.Db)
 	if !botExists {
 		err = updateProfile(b, newWallet, twitterName, senderAddress)
 		if err != nil {
@@ -607,7 +609,7 @@ func createBot(b *Bot, twitterName string, senderAddress string, tx Tx, coinInde
 		}
 		//add a field to the database that links the sending address and twitter name to the new key
 		//encrypt
-		encryptedKey, err := database.Encrypt([]byte(newKey.GetBase58Compressed()), []byte(b.Crypt))
+		encryptedKey, err := tweetWallet.Encrypt([]byte(newKey.GetBase58Compressed()), []byte(b.Crypt))
 		if err != nil {
 			return nil, nil, jerr.Get("error encrypting key", err)
 		}
@@ -627,13 +629,13 @@ func updateProfiles(streamAray []config.Stream, b *Bot) error {
 			return jerr.Get("error importing private key", err)
 		}
 		streamAddress := streamKey.GetAddress()
-		newWallet := database.NewWallet(streamAddress, streamKey, b.Db)
+		newWallet := tweetWallet.NewWallet(streamAddress, streamKey, b.Db)
 		err = updateProfile(b, newWallet, stream.Name, stream.Sender)
 		time.Sleep(1 * time.Second)
 	}
 	return nil
 }
-func updateProfile(b *Bot, newWallet database.Wallet, twitterName string, senderAddress string) error {
+func updateProfile(b *Bot, newWallet tweetWallet.Wallet, twitterName string, senderAddress string) error {
 	profile, err := tweets.GetProfile(twitterName, b.TweetClient)
 	if err != nil {
 		return jerr.Get("fatal error getting profile", err)
@@ -644,25 +646,25 @@ func updateProfile(b *Bot, newWallet database.Wallet, twitterName string, sender
 		return jerr.Get("error getting profile from database", err)
 	}
 	if err == leveldb.ErrNotFound {
-		err = database.UpdateName(newWallet, profile.Name)
+		err = tweetWallet.UpdateName(newWallet, profile.Name)
 		if err != nil {
 			return jerr.Get("error updating name", err)
 		} else {
 			println("updated name for the first time")
 		}
-		err = database.UpdateProfileText(newWallet, profile.Description)
+		err = tweetWallet.UpdateProfileText(newWallet, profile.Description)
 		if err != nil {
 			return jerr.Get("error updating profile text", err)
 		} else {
 			println("updated profile text for the first time")
 		}
-		err = database.UpdateProfilePic(newWallet, profile.ProfilePic)
+		err = tweetWallet.UpdateProfilePic(newWallet, profile.ProfilePic)
 		if err != nil {
 			return jerr.Get("error updating profile pic", err)
 		} else {
 			println("updated profile pic for the first time")
 		}
-		newProfile := database.Profile{
+		newProfile := tweetWallet.Profile{
 			Name:        profile.Name,
 			Description: profile.Description,
 			ProfilePic:  profile.ProfilePic,
@@ -677,14 +679,14 @@ func updateProfile(b *Bot, newWallet database.Wallet, twitterName string, sender
 		}
 	} else if err == nil {
 		//make the profileExists into a string and print it
-		var dbProfile database.Profile
+		var dbProfile tweetWallet.Profile
 		err = json.Unmarshal(profileExists, &dbProfile)
 		if err != nil {
 			println("Profile name: " + dbProfile.Name)
 			return jerr.Get("error unmarshalling profile", err)
 		}
 		if dbProfile.Name != profile.Name {
-			err = database.UpdateName(newWallet, profile.Name)
+			err = tweetWallet.UpdateName(newWallet, profile.Name)
 			if err != nil {
 				return jerr.Get("error updating name", err)
 			} else {
@@ -693,7 +695,7 @@ func updateProfile(b *Bot, newWallet database.Wallet, twitterName string, sender
 			dbProfile.Name = profile.Name
 		}
 		if dbProfile.Description != profile.Description {
-			err = database.UpdateProfileText(newWallet, profile.Description)
+			err = tweetWallet.UpdateProfileText(newWallet, profile.Description)
 			if err != nil {
 				return jerr.Get("error updating profile text", err)
 			} else {
@@ -702,7 +704,7 @@ func updateProfile(b *Bot, newWallet database.Wallet, twitterName string, sender
 			dbProfile.Description = profile.Description
 		}
 		if dbProfile.ProfilePic != profile.ProfilePic {
-			err = database.UpdateProfilePic(newWallet, profile.ProfilePic)
+			err = tweetWallet.UpdateProfilePic(newWallet, profile.ProfilePic)
 			if err != nil {
 				return jerr.Get("error updating profile pic", err)
 			} else {
@@ -730,7 +732,7 @@ func makeStreamArray(b *Bot) ([]config.Stream, error) {
 		senderAddress := strings.Split(string(iter.Key()), "-")[1]
 		twitterName := strings.Split(string(iter.Key()), "-")[2]
 		//decrypt
-		decryptedKeyByte, err := database.Decrypt(iter.Value(), []byte(b.Crypt))
+		decryptedKeyByte, err := tweetWallet.Decrypt(iter.Value(), []byte(b.Crypt))
 		if err != nil {
 			return nil, jerr.Get("error decrypting", err)
 		}
@@ -740,7 +742,7 @@ func makeStreamArray(b *Bot) ([]config.Stream, error) {
 			return nil, jerr.Get("error importing private key", err)
 		}
 		//check the balance of the new key
-		inputGetter := database.InputGetter{
+		inputGetter := tweetWallet.InputGetter{
 			Address: walletKey.GetAddress(),
 			UTXOs:   nil,
 			Db:      b.Db,
@@ -755,7 +757,7 @@ func makeStreamArray(b *Bot) ([]config.Stream, error) {
 			balance += output.Input.Value
 		}
 		if balance > 800 {
-			wlt := database.NewWallet(walletKey.GetAddress(), walletKey, b.Db)
+			wlt := tweetWallet.NewWallet(walletKey.GetAddress(), walletKey, b.Db)
 			streamArray = append(streamArray, config.Stream{Key: decryptedKey, Name: twitterName, Sender: senderAddress, Wallet: wlt})
 		}
 	}

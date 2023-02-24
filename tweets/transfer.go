@@ -4,19 +4,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/jchavannes/jgo/jerr"
-	"github.com/memocash/tweet/database"
+	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets/obj"
+	"github.com/memocash/tweet/tweets/save"
+	"github.com/memocash/tweet/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"regexp"
 	"strconv"
 )
 
-func Transfer(accountKey obj.AccountKey, db *leveldb.DB, appendLink bool, appendDate bool, wlt database.Wallet) (int, error) {
+func Transfer(accountKey obj.AccountKey, levelDb *leveldb.DB, appendLink bool, appendDate bool, wlt wallet.Wallet) (int, error) {
 	var tweetList []obj.TweetTx
 	//find the greatest ID of all the already saved tweets
 	prefix := fmt.Sprintf("saved-%s-%s", accountKey.Address, accountKey.Account)
-	iter := db.NewIterator(util.BytesPrefix([]byte(prefix)), nil)
+	iter := levelDb.NewIterator(util.BytesPrefix([]byte(prefix)), nil)
 	var startID int64 = 0
 	for iter.Next() {
 		key := iter.Key()
@@ -27,24 +29,17 @@ func Transfer(accountKey obj.AccountKey, db *leveldb.DB, appendLink bool, append
 	}
 	iter.Release()
 	//get up to 20 tweets from the tweets-twittername-tweetID prefix with the smallest IDs greater than the startID
-	prefix = fmt.Sprintf("tweets-%s", accountKey.Account)
-	iter = db.NewIterator(util.BytesPrefix([]byte(prefix)), nil)
-	for iter.Next() {
-		key := iter.Key()
-		tweetID, _ := strconv.ParseInt(string(key[len(prefix)+1:]), 10, 64)
-		if tweetID > startID {
-			var tweetTx obj.TweetTx
-			err := json.Unmarshal(iter.Value(), &tweetTx)
-			if err != nil {
-				return 0, jerr.Get("error unmarshaling tweetTx", err)
-			}
-			tweetList = append(tweetList, tweetTx)
-			if len(tweetList) == 20 {
-				break
-			}
-		}
+	tweetTxs, err := db.GetTweetTxs(accountKey.Account, startID)
+	if err != nil {
+		return 0, jerr.Get("error getting tweet txs from db", err)
 	}
-	iter.Release()
+	for _, dbTweetTx := range tweetTxs {
+		var tweetTx obj.TweetTx
+		if err := json.Unmarshal(dbTweetTx.Tx, &tweetTx); err != nil {
+			return 0, jerr.Get("error unmarshalling tweetTx", err)
+		}
+		tweetList = append(tweetList, tweetTx)
+	}
 	numTransferred := 0
 	for _, tweet := range tweetList {
 		match, _ := regexp.MatchString("https://t.co/[a-zA-Z0-9]*$", tweet.Tweet.Text)
@@ -58,7 +53,7 @@ func Transfer(accountKey obj.AccountKey, db *leveldb.DB, appendLink bool, append
 				tweet.Tweet.Text += fmt.Sprintf("\n%s", media.MediaURL)
 			}
 		}
-		if err := database.SaveTweet(wlt, accountKey, tweet, db, appendLink, appendDate); err != nil {
+		if err := save.Tweet(wlt, accountKey, tweet, levelDb, appendLink, appendDate); err != nil {
 			return numTransferred, jerr.Get("error streaming tweets for transfer", err)
 		}
 		numTransferred++

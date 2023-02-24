@@ -3,15 +3,30 @@ package db
 import (
 	"fmt"
 	"github.com/jchavannes/jgo/jutil"
-	"github.com/memocash/tweet/database"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 const (
 	PrefixAddressSeenTx = "address-seen-tx"
 	PrefixCompletedTx   = "completed"
+	PrefixTweetTx       = "tweets"
 )
+
+var _db *leveldb.DB
+
+func GetDb() (*leveldb.DB, error) {
+	if _db != nil {
+		return _db, nil
+	}
+	db, err := leveldb.OpenFile("tweets.db", nil)
+	if err != nil {
+		return nil, fmt.Errorf("%w; error opening db", err)
+	}
+	_db = db
+	return db, nil
+}
 
 type ObjectI interface {
 	GetPrefix() string
@@ -28,7 +43,7 @@ func GetObjectCombinedUid(o ObjectI) []byte {
 }
 
 func Save(objects []ObjectI) error {
-	db, err := database.GetDb()
+	db, err := GetDb()
 	if err != nil {
 		return fmt.Errorf("%w; error getting database handler for save", err)
 	}
@@ -43,7 +58,7 @@ func Save(objects []ObjectI) error {
 }
 
 func Delete(objects []ObjectI) error {
-	db, err := database.GetDb()
+	db, err := GetDb()
 	if err != nil {
 		return fmt.Errorf("%w; error getting database handler for delete", err)
 	}
@@ -58,7 +73,7 @@ func Delete(objects []ObjectI) error {
 }
 
 func GetItem(obj ObjectI) error {
-	db, err := database.GetDb()
+	db, err := GetDb()
 	if err != nil {
 		return fmt.Errorf("%w; error getting database handler for save", err)
 	}
@@ -70,8 +85,23 @@ func GetItem(obj ObjectI) error {
 	return nil
 }
 
+func GetFirstItem(obj ObjectI, prefix []byte) error {
+	db, err := GetDb()
+	if err != nil {
+		return fmt.Errorf("%w; error getting database handler for save", err)
+	}
+	topicPrefix := jutil.CombineBytes([]byte(obj.GetPrefix()), []byte{Spacer})
+	rng := util.BytesPrefix(jutil.CombineBytes(topicPrefix, prefix))
+	iter := db.NewIterator(rng, nil)
+	if !iter.First() {
+		return leveldb.ErrNotFound
+	}
+	Set(obj, iter)
+	return nil
+}
+
 func GetLastItem(obj ObjectI, prefix []byte) error {
-	db, err := database.GetDb()
+	db, err := GetDb()
 	if err != nil {
 		return fmt.Errorf("%w; error getting database handler for save", err)
 	}
@@ -81,7 +111,25 @@ func GetLastItem(obj ObjectI, prefix []byte) error {
 	if !iter.Last() {
 		return leveldb.ErrNotFound
 	}
-	obj.SetUid(iter.Key()[len(topicPrefix):])
-	obj.Deserialize(iter.Value())
+	Set(obj, iter)
 	return nil
+}
+
+func GetNum(prefix []byte) (int, error) {
+	db, err := GetDb()
+	if err != nil {
+		return 0, fmt.Errorf("%w; error getting database handler for get num db objects", err)
+	}
+	iter := db.NewIterator(util.BytesPrefix(prefix), nil)
+	defer iter.Release()
+	var count int
+	for iter.Next() {
+		count++
+	}
+	return count, nil
+}
+
+func Set(obj ObjectI, iter iterator.Iterator) {
+	obj.SetUid(iter.Key()[len(obj.GetPrefix())+1:])
+	obj.Deserialize(iter.Value())
 }

@@ -2,9 +2,10 @@ package transfertweets
 
 import (
 	"github.com/jchavannes/jgo/jerr"
-	"github.com/memocash/tweet/database"
+	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets"
 	"github.com/memocash/tweet/tweets/obj"
+	"github.com/memocash/tweet/wallet"
 	"github.com/spf13/cobra"
 )
 
@@ -21,15 +22,15 @@ var transferCmd = &cobra.Command{
 	Run: func(c *cobra.Command, args []string) {
 		accountKey := obj.GetAccountKeyFromArgs(args)
 		client := tweets.Connect()
-		db, err := database.GetDb()
+		db, err := db.GetDb()
 		if err != nil {
 			jerr.Get("error opening db", err).Fatal()
 		}
 		defer db.Close()
-		if _,err := tweets.GetAllTweets(accountKey.Account, client, db); err != nil {
+		if _, err := tweets.GetAllTweets(accountKey.Account, client); err != nil {
 			jerr.Get("error getting all tweets", err).Fatal()
 		}
-		wlt := database.NewWallet(accountKey.Address, accountKey.Key, db)
+		wlt := wallet.NewWallet(accountKey.Address, accountKey.Key, db)
 		if _, err = tweets.Transfer(accountKey, db, link, date, wlt); err != nil {
 			jerr.Get("fatal error transferring tweets", err).Fatal()
 		}

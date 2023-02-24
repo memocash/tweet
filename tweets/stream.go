@@ -10,8 +10,8 @@ import (
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jlog"
 	"github.com/memocash/tweet/config"
-	"github.com/memocash/tweet/database"
 	"github.com/memocash/tweet/tweets/obj"
+	"github.com/memocash/tweet/tweets/save"
 	"github.com/syndtr/goleveldb/leveldb"
 	"regexp"
 	"strconv"
@@ -204,7 +204,7 @@ func (s *Stream) InitiateStream(streamConfigs []config.Stream) error {
 					date = flagsStruct.Date
 				}
 				//may or may not break getnewtweets
-				if err := database.SaveTweet(conf.Wallet, twitterAccountWallet, tweetTx, s.Db, link, date); err != nil {
+				if err := save.Tweet(conf.Wallet, twitterAccountWallet, tweetTx, s.Db, link, date); err != nil {
 					return jerr.Get("error streaming tweet in stream", err)
 				}
 			}

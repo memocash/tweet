@@ -5,7 +5,6 @@ import (
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jlog"
 	"github.com/memocash/index/ref/bitcoin/wallet"
-	"github.com/memocash/tweet/database"
 	"github.com/memocash/tweet/db"
 	"github.com/spf13/cobra"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -17,7 +16,7 @@ var checkAddressSeenCmd = &cobra.Command{
 	Use:   "check-address-seen",
 	Short: "check-address-seen",
 	Run: func(c *cobra.Command, args []string) {
-		levelDb, err := database.GetDb()
+		levelDb, err := db.GetDb()
 		if err != nil {
 			log.Fatalf("error opening db; %v", err)
 		}
@@ -41,7 +40,7 @@ var removeInvalidAddressSeenCmd = &cobra.Command{
 	Use:   "remove-invalid-address-seen",
 	Short: "remove-invalid-address-seen",
 	Run: func(c *cobra.Command, args []string) {
-		levelDb, err := database.GetDb()
+		levelDb, err := db.GetDb()
 		if err != nil {
 			log.Fatalf("error opening db; %v", err)
 		}
