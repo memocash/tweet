@@ -35,11 +35,6 @@ func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
 	if err != nil {
 		return nil, jerr.Get("error getting utxos from database for input getter", err)
 	}
-	balance, err := client.GetBalance(address)
-	if err != nil {
-		return nil, jerr.Get("error getting balance from database for input getter", err)
-	}
-	jlog.Logf("address balance (input getter): %s %d (outs: %d)\n", address, balance, len(outputs))
 	var utxos []memo.UTXO
 	pkHash := g.Address.GetPkHash()
 	pkScript, err := script.P2pkh{PkHash: pkHash}.Get()

@@ -605,7 +605,9 @@ func createBot(b *Bot, twitterName string, senderAddress string, tx Tx, coinInde
 			return nil, nil, jerr.Get("error updating profile", err)
 		}
 	}
-	println("Stream Address: " + newAddr.GetEncoded())
+	if b.Verbose {
+		jlog.Logf("Create bot stream Address: " + newAddr.GetEncoded())
+	}
 	if !botExists {
 		err = b.Db.Put([]byte("memobot-num-streams"), []byte(strconv.FormatUint(uint64(numStreamUint+1), 10)), nil)
 		if err != nil {
@@ -622,7 +624,6 @@ func createBot(b *Bot, twitterName string, senderAddress string, tx Tx, coinInde
 			return nil, nil, jerr.Get("error updating linked-"+senderAddress+"-"+twitterName, err)
 		}
 	}
-	println("done")
 	accountKey := obj.GetAccountKeyFromArgs([]string{newKey.GetBase58Compressed(), twitterName})
 	return &accountKey, &newWallet, nil
 }
@@ -680,34 +681,30 @@ func updateProfile(b *Bot, newWallet tweetWallet.Wallet, twitterName string, sen
 		var dbProfile tweetWallet.Profile
 		err = json.Unmarshal(profileExists, &dbProfile)
 		if err != nil {
-			println("Profile name: " + dbProfile.Name)
-			return jerr.Get("error unmarshalling profile", err)
+			return jerr.Getf(err, "error unmarshalling profile: %s", dbProfile.Name)
 		}
 		if dbProfile.Name != profile.Name {
 			err = tweetWallet.UpdateName(newWallet, profile.Name)
 			if err != nil {
 				return jerr.Get("error updating name", err)
-			} else {
-				println("updated name")
 			}
+			jlog.Logf("updated profile name for %s: %s to %s\n", profile.ID, dbProfile.Name, profile.Name)
 			dbProfile.Name = profile.Name
 		}
 		if dbProfile.Description != profile.Description {
 			err = tweetWallet.UpdateProfileText(newWallet, profile.Description)
 			if err != nil {
 				return jerr.Get("error updating profile text", err)
-			} else {
-				println("updated profile text")
 			}
+			jlog.Logf("updated profile text for %s: %s to %s\n", profile.ID, dbProfile.Description, profile.Description)
 			dbProfile.Description = profile.Description
 		}
 		if dbProfile.ProfilePic != profile.ProfilePic {
 			err = tweetWallet.UpdateProfilePic(newWallet, profile.ProfilePic)
 			if err != nil {
 				return jerr.Get("error updating profile pic", err)
-			} else {
-				println("updated profile pic")
 			}
+			jlog.Logf("updated profile pic for %s: %s to %s\n", profile.ID, dbProfile.ProfilePic, profile.ProfilePic)
 			dbProfile.ProfilePic = profile.ProfilePic
 		}
 		profileBytes, err := json.Marshal(profile)
@@ -719,7 +716,9 @@ func updateProfile(b *Bot, newWallet tweetWallet.Wallet, twitterName string, sen
 			return jerr.Get("error putting profile", err)
 		}
 	}
-	println("checked for updates")
+	if b.Verbose {
+		jlog.Logf("checked for profile updates: %s (%s)", twitterName, senderAddress)
+	}
 	return nil
 }
 func makeStreamArray(b *Bot) ([]config.Stream, error) {
