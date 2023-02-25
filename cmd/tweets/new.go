@@ -1,4 +1,4 @@
-package getnewtweets
+package tweets
 
 import (
 	"fmt"
@@ -12,14 +12,13 @@ import (
 	util2 "github.com/syndtr/goleveldb/leveldb/util"
 )
 
-var link bool = false
-var date bool = false
-
-var transferCmd = &cobra.Command{
-	Use:   "getnewtweets",
+var getNewCmd = &cobra.Command{
+	Use:   "get-new",
 	Short: "Listens for new tweets on an account",
 	Long:  "Prints out each new tweet as it comes in. ",
 	Run: func(c *cobra.Command, args []string) {
+		link, _ := c.Flags().GetBool(FlagLink)
+		date, _ := c.Flags().GetBool(FlagDate)
 		db, err := db.GetDb()
 		if err != nil {
 			jerr.Get("fatal error getting db", err).Fatal()
@@ -49,11 +48,4 @@ var transferCmd = &cobra.Command{
 			jerr.Get("error twitter initiate stream get new tweets", err).Fatal()
 		}
 	},
-}
-
-func GetCommand() *cobra.Command {
-	//if link and date are supplied, the tweet will be linked and the date will be added to the memo post
-	transferCmd.PersistentFlags().BoolVarP(&link, "link", "l", false, "link to tweet")
-	transferCmd.PersistentFlags().BoolVarP(&date, "date", "d", false, "add date to post")
-	return transferCmd
 }
