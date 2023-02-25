@@ -320,7 +320,7 @@ func (b *Bot) SaveTx(tx Tx) error {
 				return jerr.Get("error updating stream", err)
 			}
 		} else {
-			println("account key pointer is nil, not transferring tweets")
+			jlog.Log("account key pointer is nil, not transferring tweets, bot not created")
 			return nil
 		}
 	} else if regexp.MustCompile("^WITHDRAW @?([a-zA-Z0-9_]{1,15})( [0-9]+)?$").MatchString(message) {
@@ -429,7 +429,7 @@ func refund(tx Tx, b *Bot, coinIndex uint32, senderAddress string, errMsg string
 	if err != nil {
 		return jerr.Get("error updating stream", err)
 	}
-	jlog.Logf("Sending error message: %s\n", errMsg)
+	jlog.Logf("Sending refund error message: %s\n", errMsg)
 	sentToMainBot := false
 	//check all the outputs to see if any of them match the bot's address, if not, return nil, if so, continue with the function
 	for _, output := range tx.Outputs {
@@ -444,13 +444,13 @@ func refund(tx Tx, b *Bot, coinIndex uint32, senderAddress string, errMsg string
 	//handle sending back money
 	//not enough to send back
 	if memo.GetMaxSendFromCount(tx.Outputs[coinIndex].Amount, 1) <= 0 {
-		println("Not enough funds to refund")
+		jlog.Log("Not enough funds to refund")
 		return nil
 	}
 	//create a transaction with the sender address and the amount of the transaction
 	pkScript, err := hex.DecodeString(tx.Outputs[coinIndex].Script)
 	if err != nil {
-		return jerr.Get("error decoding script pk script for create bot", err)
+		return jerr.Get("error decoding script pk script for refund", err)
 	}
 	if err := tweetWallet.SendToTwitterAddress(memo.UTXO{Input: memo.TxInput{
 		Value:        tx.Outputs[coinIndex].Amount,
@@ -515,7 +515,7 @@ func createBot(b *Bot, twitterName string, senderAddress string, tx Tx, coinInde
 	_, err := b.Db.Get([]byte("linked-"+senderAddress+"-"+twitterName), nil)
 	if err != nil && err != leveldb.ErrNotFound {
 		return nil, nil, jerr.Get("error getting bot from database", err)
-	} else if err != leveldb.ErrNotFound {
+	} else if err == nil {
 		botExists = true
 	}
 	//check if this twitter account actually exists
@@ -533,10 +533,7 @@ func createBot(b *Bot, twitterName string, senderAddress string, tx Tx, coinInde
 		} else {
 			errMsg = fmt.Sprintf("You need to send at least 5,000 satoshis to create a bot for the account @%s", twitterName)
 		}
-		print("\n\n\nSending error message: " + errMsg + "\n\n\n")
-		if err != nil {
-			return nil, nil, jerr.Get("error decoding script pk script for create bot", err)
-		}
+		jlog.Logf("Sending create bot error message: %s\n", errMsg)
 		err = refund(tx, b, coinIndex, senderAddress, errMsg)
 		if err != nil {
 			return nil, nil, jerr.Get("error refunding", err)
