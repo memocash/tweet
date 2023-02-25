@@ -3,6 +3,7 @@ package db
 import (
 	"fmt"
 	"github.com/jchavannes/jgo/jutil"
+	"github.com/syndtr/goleveldb/leveldb/util"
 	"strings"
 )
 
@@ -27,8 +28,8 @@ func (t *SavedAddressTweet) SetUid(b []byte) {
 		return
 	}
 	t.Address = parts[0]
-	t.ScreenName = parts[0]
-	t.TweetId = jutil.GetInt64FromString(strings.TrimLeft("0", parts[2]))
+	t.ScreenName = parts[1]
+	t.TweetId = jutil.GetInt64FromString(strings.TrimLeft(parts[2], "0"))
 }
 
 func (t *SavedAddressTweet) Serialize() []byte {
@@ -65,4 +66,20 @@ func GetSavedAddressTweet(address, screenName string, tweetId int64) (*SavedAddr
 		return nil, fmt.Errorf("error getting saved address tweet; %w", err)
 	}
 	return savedAddressTweet, nil
+}
+
+func GetAllSavedAddressTweet() ([]*SavedAddressTweet, error) {
+	db, err := GetDb()
+	if err != nil {
+		return nil, fmt.Errorf("error getting database handler for get all saved address tweets; %w", err)
+	}
+	iter := db.NewIterator(util.BytesPrefix([]byte(fmt.Sprintf("%s-", PrefixSavedAddressTweet))), nil)
+	defer iter.Release()
+	var savedAddressTweets []*SavedAddressTweet
+	for iter.Next() {
+		var savedAddressTweet = new(SavedAddressTweet)
+		Set(savedAddressTweet, iter)
+		savedAddressTweets = append(savedAddressTweets, savedAddressTweet)
+	}
+	return savedAddressTweets, nil
 }

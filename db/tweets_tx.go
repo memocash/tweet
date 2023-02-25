@@ -27,7 +27,7 @@ func (t *TweetTx) SetUid(b []byte) {
 		return
 	}
 	t.ScreenName = parts[0]
-	t.TweetId = jutil.GetInt64FromString(strings.TrimLeft("0", parts[1]))
+	t.TweetId = jutil.GetInt64FromString(strings.TrimLeft(parts[1], "0"))
 }
 
 func (t *TweetTx) Serialize() []byte {
@@ -74,10 +74,18 @@ func GetOldestTweetTx(screenName string) (*TweetTx, error) {
 	return tweetTx, nil
 }
 
-func GetNumTweetTxs(screenName string) (int, error) {
-	count, err := GetNum([]byte(fmt.Sprintf("%s-%s-", PrefixTweetTx, screenName)))
+func GetAllTweetTx() ([]*TweetTx, error) {
+	db, err := GetDb()
 	if err != nil {
-		return 0, fmt.Errorf("error getting num tweets using get num; %w", err)
+		return nil, fmt.Errorf("error getting database handler for get all tweet txs; %w", err)
 	}
-	return count, nil
+	iter := db.NewIterator(util.BytesPrefix([]byte(fmt.Sprintf("%s-", PrefixTweetTx))), nil)
+	defer iter.Release()
+	var tweetTxs []*TweetTx
+	for iter.Next() {
+		var tweetTx = new(TweetTx)
+		Set(tweetTx, iter)
+		tweetTxs = append(tweetTxs, tweetTx)
+	}
+	return tweetTxs, nil
 }

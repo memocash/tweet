@@ -2,10 +2,10 @@ package maint
 
 import (
 	"encoding/json"
+	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/spf13/cobra"
-	"github.com/syndtr/goleveldb/leveldb/util"
 	"log"
 )
 
@@ -13,28 +13,32 @@ var checkSavedTweetsCmd = &cobra.Command{
 	Use:   "check-saved-tweets",
 	Short: "check-saved-tweets",
 	Run: func(c *cobra.Command, args []string) {
-		if len(args) != 1 {
-			log.Fatalf("must specify the prefix")
-		}
-		prefix := args[0]
-		//open the database print out every row in the database that matches saved-address-twitterName
-		db, err := db.GetDb()
+		verbose, _ := c.Flags().GetBool(FlagVerbose)
+		allTweetTxs, err := db.GetAllTweetTx()
 		if err != nil {
-			panic(err)
+			jerr.Get("fatal error getting all saved address tweets", err).Fatal()
 		}
-		defer db.Close()
-		iter := db.NewIterator(util.BytesPrefix([]byte(prefix)), nil)
-		for iter.Next() {
-			key := iter.Key()
-			value := iter.Value()
-			TweetTx := obj.TweetTx{}
-			//unmarshal the value into a TweetTx
-			err := json.Unmarshal(value, &TweetTx)
+		log.Printf("count all tweet txs: %d\n", len(allTweetTxs))
+		for _, dbTweetTx := range allTweetTxs {
+			tweetTx := obj.TweetTx{}
+			err := json.Unmarshal(dbTweetTx.Tx, &tweetTx)
 			if err != nil {
-				panic(err)
+				jerr.Get("fatal error unmarshalling tweet tx", err).Fatal()
 			}
-
-			log.Printf("%s: %s\n", key, TweetTx.Tweet.ID)
+			if verbose {
+				log.Printf("screen name: %s, tweetId: %d\n", dbTweetTx.ScreenName, tweetTx.Tweet.ID)
+			}
+		}
+		savedTweets, err := db.GetAllSavedAddressTweet()
+		if err != nil {
+			jerr.Get("fatal error getting all saved address tweets", err).Fatal()
+		}
+		log.Printf("count all saved address tweets: %d\n", len(savedTweets))
+		if verbose {
+			for _, savedTweet := range savedTweets {
+				log.Printf("address: %s, screen name: %s, tweetId: %d\n",
+					savedTweet.Address, savedTweet.ScreenName, savedTweet.TweetId)
+			}
 		}
 	},
 }
