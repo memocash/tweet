@@ -42,9 +42,10 @@ type Bot struct {
 	Mutex       sync.Mutex
 	Crypt       string
 	Timer       *time.Timer
+	Verbose     bool
 }
 
-func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey, tweetClient *twitter.Client, db *leveldb.DB) (*Bot, error) {
+func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey, tweetClient *twitter.Client, db *leveldb.DB, verbose bool) (*Bot, error) {
 	if len(addresses) == 0 {
 		return nil, jerr.New("error new bot, no addresses")
 	}
@@ -60,6 +61,7 @@ func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey
 		TweetClient: tweetClient,
 		Db:          db,
 		ErrorChan:   make(chan error),
+		Verbose:     verbose,
 	}, nil
 }
 
@@ -160,7 +162,7 @@ func (b *Bot) Listen() error {
 		}
 		err = tweets.GetSkippedTweets(accountKey, &stream.Wallet, b.TweetClient, b.Db, true, false, 100)
 		if err != nil {
-			fmt.Printf("\n\nError getting skipped tweets: %s\n\n", err.Error())
+			return jerr.Get("error getting skipped tweets on bot listen", err)
 		}
 	}
 	if _, err = b.SafeUpdate(); err != nil {
@@ -311,7 +313,7 @@ func (b *Bot) SaveTx(tx Tx) error {
 				client := tweets.Connect()
 				err = tweets.GetSkippedTweets(accountKey, wlt, client, b.Db, link, date, historyNum)
 				if err != nil {
-					return jerr.Get("error getting skipped tweets", err)
+					return jerr.Get("error getting skipped tweets on bot save tx", err)
 				}
 
 			}
@@ -320,7 +322,9 @@ func (b *Bot) SaveTx(tx Tx) error {
 				return jerr.Get("error updating stream", err)
 			}
 		} else {
-			jlog.Log("account key pointer is nil, not transferring tweets, bot not created")
+			if b.Verbose {
+				jlog.Log("account key pointer is nil, not transferring tweets, bot not created")
+			}
 			return nil
 		}
 	} else if regexp.MustCompile("^WITHDRAW @?([a-zA-Z0-9_]{1,15})( [0-9]+)?$").MatchString(message) {
@@ -429,7 +433,7 @@ func refund(tx Tx, b *Bot, coinIndex uint32, senderAddress string, errMsg string
 	if err != nil {
 		return jerr.Get("error updating stream", err)
 	}
-	jlog.Logf("Sending refund error message: %s\n", errMsg)
+	jlog.Logf("Sending refund error message to %s: %s\n", senderAddress, errMsg)
 	sentToMainBot := false
 	//check all the outputs to see if any of them match the bot's address, if not, return nil, if so, continue with the function
 	for _, output := range tx.Outputs {
@@ -444,7 +448,9 @@ func refund(tx Tx, b *Bot, coinIndex uint32, senderAddress string, errMsg string
 	//handle sending back money
 	//not enough to send back
 	if memo.GetMaxSendFromCount(tx.Outputs[coinIndex].Amount, 1) <= 0 {
-		jlog.Log("Not enough funds to refund")
+		if b.Verbose {
+			jlog.Log("Not enough funds to refund")
+		}
 		return nil
 	}
 	//create a transaction with the sender address and the amount of the transaction
@@ -492,7 +498,9 @@ func (b *Bot) UpdateStream() ([]config.Stream, error) {
 			return nil, jerr.Get("error importing private key", err)
 		}
 		streamAddress := streamKey.GetAddress()
-		println("streaming " + stream.Name + " to address " + streamAddress.GetEncoded())
+		if b.Verbose {
+			jlog.Logf("streaming %s to address %s\n", stream.Name, streamAddress.GetEncoded())
+		}
 	}
 	err = b.Db.Put([]byte("memobot-running-count"), []byte(strconv.FormatUint(uint64(len(streamArray)), 10)), nil)
 	if err != nil {
@@ -533,7 +541,6 @@ func createBot(b *Bot, twitterName string, senderAddress string, tx Tx, coinInde
 		} else {
 			errMsg = fmt.Sprintf("You need to send at least 5,000 satoshis to create a bot for the account @%s", twitterName)
 		}
-		jlog.Logf("Sending create bot error message: %s\n", errMsg)
 		err = refund(tx, b, coinIndex, senderAddress, errMsg)
 		if err != nil {
 			return nil, nil, jerr.Get("error refunding", err)
@@ -643,23 +650,17 @@ func updateProfile(b *Bot, newWallet tweetWallet.Wallet, twitterName string, sen
 		return jerr.Get("error getting profile from database", err)
 	}
 	if err == leveldb.ErrNotFound {
-		err = tweetWallet.UpdateName(newWallet, profile.Name)
-		if err != nil {
+		if err = tweetWallet.UpdateName(newWallet, profile.Name); err != nil {
 			return jerr.Get("error updating name", err)
-		} else {
-			println("updated name for the first time")
 		}
-		err = tweetWallet.UpdateProfileText(newWallet, profile.Description)
-		if err != nil {
+		if err = tweetWallet.UpdateProfileText(newWallet, profile.Description); err != nil {
 			return jerr.Get("error updating profile text", err)
-		} else {
-			println("updated profile text for the first time")
 		}
-		err = tweetWallet.UpdateProfilePic(newWallet, profile.ProfilePic)
-		if err != nil {
+		if err = tweetWallet.UpdateProfilePic(newWallet, profile.ProfilePic); err != nil {
 			return jerr.Get("error updating profile pic", err)
-		} else {
-			println("updated profile pic for the first time")
+		}
+		if b.Verbose {
+			jlog.Log("updated profile info for the first time")
 		}
 		newProfile := tweetWallet.Profile{
 			Name:        profile.Name,

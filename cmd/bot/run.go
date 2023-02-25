@@ -16,6 +16,7 @@ var runCmd = &cobra.Command{
 	Short: "run",
 	Long:  "Listens for new transactions on a memo account. Prints out each new transaction as it comes in. ",
 	Run: func(c *cobra.Command, args []string) {
+		verbose, _ := c.Flags().GetBool(FlagVerbose)
 		botSeed := config.GetConfig().BotSeed
 		//get base key and address from seed
 		mnemonic, err := wallet.GetMnemonicFromString(botSeed)
@@ -55,7 +56,7 @@ var runCmd = &cobra.Command{
 			}
 		}
 		botAddress := botKey.GetPublicKey().GetAddress().GetEncoded()
-		memoBot, err := bot.NewBot(mnemonic, []string{botAddress}, *botKey, tweets.Connect(), db)
+		memoBot, err := bot.NewBot(mnemonic, []string{botAddress}, *botKey, tweets.Connect(), db, verbose)
 		if err != nil {
 			jerr.Get("fatal error creating new bot", err).Fatal()
 		}

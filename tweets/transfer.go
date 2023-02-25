@@ -15,7 +15,6 @@ import (
 )
 
 func Transfer(accountKey obj.AccountKey, levelDb *leveldb.DB, appendLink bool, appendDate bool, wlt wallet.Wallet) (int, error) {
-	var tweetList []obj.TweetTx
 	//find the greatest ID of all the already saved tweets
 	prefix := fmt.Sprintf("saved-%s-%s", accountKey.Address, accountKey.Account)
 	iter := levelDb.NewIterator(util.BytesPrefix([]byte(prefix)), nil)
@@ -33,12 +32,11 @@ func Transfer(accountKey obj.AccountKey, levelDb *leveldb.DB, appendLink bool, a
 	if err != nil {
 		return 0, jerr.Get("error getting tweet txs from db", err)
 	}
-	for _, dbTweetTx := range tweetTxs {
-		var tweetTx obj.TweetTx
-		if err := json.Unmarshal(dbTweetTx.Tx, &tweetTx); err != nil {
-			return 0, jerr.Get("error unmarshalling tweetTx", err)
+	var tweetList = make([]obj.TweetTx, len(tweetTxs))
+	for i := range tweetTxs {
+		if err := json.Unmarshal(tweetTxs[i].Tx, &tweetList[i]); err != nil {
+			return 0, jerr.Get("error unmarshalling tweetTx for transfer", err)
 		}
-		tweetList = append(tweetList, tweetTx)
 	}
 	numTransferred := 0
 	for _, tweet := range tweetList {

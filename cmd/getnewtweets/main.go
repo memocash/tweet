@@ -37,7 +37,7 @@ var transferCmd = &cobra.Command{
 				wlt := wallet.NewWallet(accountKey.Address, accountKey.Key, db)
 				err := tweets.GetSkippedTweets(accountKey, &wlt, tweets.Connect(), db, link, date, 100)
 				if err != nil {
-					jerr.Get("error getting skipped tweets", err).Print()
+					jerr.Get("error getting skipped tweets for get new tweets", err).Fatal()
 				}
 			}
 		}

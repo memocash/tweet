@@ -145,7 +145,6 @@ func getNumSavedTweets(accountKey obj.AccountKey, db *leveldb.DB) int {
 }
 
 func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, client *twitter.Client, db *leveldb.DB, link bool, date bool, numTweets int) error {
-	println("getting skipped tweets")
 	txList, err := getNewTweets(accountKey, client, numTweets)
 	//txList, err := getNewTweetsLocal(accountKey, db, numTweets)
 	if err != nil {
@@ -158,7 +157,6 @@ func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, client *twi
 			tweetID = tweetTx.Tweet.ID
 		}
 	}
-	println("saving skipped tweets")
 	totalSaved := 0
 	for {
 		if totalSaved >= numTweets {

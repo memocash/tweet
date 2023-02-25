@@ -130,6 +130,15 @@ func GetNum(prefix []byte) (int, error) {
 }
 
 func Set(obj ObjectI, iter iterator.Iterator) {
-	obj.SetUid(iter.Key()[len(obj.GetPrefix())+1:])
-	obj.Deserialize(iter.Value())
+	key, val := GetKeyVal(iter)
+	obj.SetUid(key[len(obj.GetPrefix())+1:])
+	obj.Deserialize(val)
+}
+
+func GetKeyVal(iter iterator.Iterator) ([]byte, []byte) {
+	var key = make([]byte, len(iter.Key()))
+	copy(key, iter.Key())
+	var val = make([]byte, len(iter.Value()))
+	copy(val, iter.Value())
+	return key, val
 }

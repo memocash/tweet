@@ -130,11 +130,20 @@ func (s *Stream) InitiateStream(streamConfigs []config.Stream) error {
 			if jerr.HasErrorPart(tweet.Err, "response body closed") {
 				break
 			}
-			return jerr.Get("got error from twitter", tweet.Err)
+			return jerr.Get("error twitter api stream get messages", tweet.Err)
 		}
 		result := tweet.Data.(obj.TweetStreamData)
-		tweetID, _ := strconv.ParseInt(result.Data.ID, 10, 64)
-		userID, _ := strconv.ParseInt(result.Includes.Users[0].ID, 10, 64)
+		if len(result.Errors) > 0 {
+			return jerr.Get("error twitter api stream get messages object", obj.CombineTweetStreamErrors(result.Errors))
+		}
+		tweetID, err := strconv.ParseInt(result.Data.ID, 10, 64)
+		if err != nil {
+			return jerr.Get("error parsing tweet id for api stream", err)
+		}
+		userID, err := strconv.ParseInt(result.Includes.Users[0].ID, 10, 64)
+		if err != nil {
+			return jerr.Get("error parsing user id api stream", err)
+		}
 		var InReplyToStatusID int64
 		if len(result.Data.ReferencedTweets) > 0 && result.Data.ReferencedTweets[0].Type == "replied_to" {
 			InReplyToStatusID, _ = strconv.ParseInt(result.Data.ReferencedTweets[0].ID, 10, 64)
