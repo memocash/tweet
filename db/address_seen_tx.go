@@ -3,6 +3,7 @@ package db
 import (
 	"fmt"
 	"github.com/jchavannes/jgo/jutil"
+	"github.com/syndtr/goleveldb/leveldb/util"
 	"time"
 )
 
@@ -46,4 +47,20 @@ func GetRecentAddressSeenTx(address [25]byte) (*AddressSeenTx, error) {
 		return nil, fmt.Errorf("error getting last address seen tx item; %w", err)
 	}
 	return addressSeenTx, nil
+}
+
+func GetAllAddressSeenTx() ([]*AddressSeenTx, error) {
+	db, err := GetDb()
+	if err != nil {
+		return nil, fmt.Errorf("error getting database handler for get all address seen txs; %w", err)
+	}
+	iter := db.NewIterator(util.BytesPrefix([]byte(fmt.Sprintf("%s-", PrefixAddressSeenTx))), nil)
+	defer iter.Release()
+	var addressSeenTxs []*AddressSeenTx
+	for iter.Next() {
+		var addressSeenTx = new(AddressSeenTx)
+		Set(addressSeenTx, iter)
+		addressSeenTxs = append(addressSeenTxs, addressSeenTx)
+	}
+	return addressSeenTxs, nil
 }
