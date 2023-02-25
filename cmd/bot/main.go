@@ -13,7 +13,7 @@ var botCmd = &cobra.Command{
 }
 
 func GetCommand() *cobra.Command {
-	runCmd.Flags().BoolP(FlagVerbose, "", false, "Verbose logging")
+	runCmd.Flags().BoolP(FlagVerbose, "v", false, "Verbose logging")
 	botCmd.AddCommand(
 		runCmd,
 		infoCmd,

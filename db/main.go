@@ -9,9 +9,10 @@ import (
 )
 
 const (
-	PrefixAddressSeenTx = "address-seen-tx"
-	PrefixCompletedTx   = "completed"
-	PrefixTweetTx       = "tweets"
+	PrefixAddressSeenTx     = "address-seen-tx"
+	PrefixCompletedTx       = "completed"
+	PrefixSavedAddressTweet = "saved"
+	PrefixTweetTx           = "tweets"
 )
 
 var _db *leveldb.DB
@@ -22,7 +23,7 @@ func GetDb() (*leveldb.DB, error) {
 	}
 	db, err := leveldb.OpenFile("tweets.db", nil)
 	if err != nil {
-		return nil, fmt.Errorf("%w; error opening db", err)
+		return nil, fmt.Errorf("error opening db; %w", err)
 	}
 	_db = db
 	return db, nil
@@ -45,14 +46,14 @@ func GetObjectCombinedUid(o ObjectI) []byte {
 func Save(objects []ObjectI) error {
 	db, err := GetDb()
 	if err != nil {
-		return fmt.Errorf("%w; error getting database handler for save", err)
+		return fmt.Errorf("error getting database handler for save; %w", err)
 	}
 	batch := new(leveldb.Batch)
 	for _, object := range objects {
 		batch.Put(GetObjectCombinedUid(object), object.Serialize())
 	}
 	if err := db.Write(batch, nil); err != nil {
-		return fmt.Errorf("%w; error saving leveldb objects", err)
+		return fmt.Errorf("error saving leveldb objects; %w", err)
 	}
 	return nil
 }
@@ -60,14 +61,14 @@ func Save(objects []ObjectI) error {
 func Delete(objects []ObjectI) error {
 	db, err := GetDb()
 	if err != nil {
-		return fmt.Errorf("%w; error getting database handler for delete", err)
+		return fmt.Errorf("error getting database handler for delete; %w", err)
 	}
 	batch := new(leveldb.Batch)
 	for _, object := range objects {
 		batch.Delete(GetObjectCombinedUid(object))
 	}
 	if err := db.Write(batch, nil); err != nil {
-		return fmt.Errorf("%w; error deleting leveldb objects", err)
+		return fmt.Errorf("error deleting leveldb objects; %w", err)
 	}
 	return nil
 }
@@ -75,11 +76,26 @@ func Delete(objects []ObjectI) error {
 func GetItem(obj ObjectI) error {
 	db, err := GetDb()
 	if err != nil {
-		return fmt.Errorf("%w; error getting database handler for save", err)
+		return fmt.Errorf("error getting database handler for save; %w", err)
 	}
 	val, err := db.Get(GetObjectCombinedUid(obj), nil)
 	if err != nil {
-		return fmt.Errorf("%w; error getting db item single", err)
+		return fmt.Errorf("error getting db item single; %w", err)
+	}
+	obj.Deserialize(val)
+	return nil
+}
+
+func GetSpecificItem(obj ObjectI) error {
+	db, err := GetDb()
+	if err != nil {
+		return fmt.Errorf("error getting database handler for specific item; %w", err)
+	}
+	topicPrefix := jutil.CombineBytes([]byte(obj.GetPrefix()), []byte{Spacer})
+	fullUid := jutil.CombineBytes(topicPrefix, obj.GetUid())
+	val, err := db.Get(fullUid, nil)
+	if err != nil {
+		return fmt.Errorf("error getting db item specific; %w", err)
 	}
 	obj.Deserialize(val)
 	return nil
@@ -88,7 +104,7 @@ func GetItem(obj ObjectI) error {
 func GetFirstItem(obj ObjectI, prefix []byte) error {
 	db, err := GetDb()
 	if err != nil {
-		return fmt.Errorf("%w; error getting database handler for save", err)
+		return fmt.Errorf("error getting database handler for save; %w", err)
 	}
 	topicPrefix := jutil.CombineBytes([]byte(obj.GetPrefix()), []byte{Spacer})
 	rng := util.BytesPrefix(jutil.CombineBytes(topicPrefix, prefix))
@@ -103,7 +119,7 @@ func GetFirstItem(obj ObjectI, prefix []byte) error {
 func GetLastItem(obj ObjectI, prefix []byte) error {
 	db, err := GetDb()
 	if err != nil {
-		return fmt.Errorf("%w; error getting database handler for save", err)
+		return fmt.Errorf("error getting database handler for save; %w", err)
 	}
 	topicPrefix := jutil.CombineBytes([]byte(obj.GetPrefix()), []byte{Spacer})
 	rng := util.BytesPrefix(jutil.CombineBytes(topicPrefix, prefix))
@@ -118,7 +134,7 @@ func GetLastItem(obj ObjectI, prefix []byte) error {
 func GetNum(prefix []byte) (int, error) {
 	db, err := GetDb()
 	if err != nil {
-		return 0, fmt.Errorf("%w; error getting database handler for get num db objects", err)
+		return 0, fmt.Errorf("error getting database handler for get num db objects; %w", err)
 	}
 	iter := db.NewIterator(util.BytesPrefix(prefix), nil)
 	defer iter.Release()

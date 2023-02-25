@@ -151,10 +151,11 @@ func (s *Stream) InitiateStream(streamConfigs []config.Stream) error {
 			InReplyToStatusID = 0
 		}
 		var tweetText = result.Data.Text
-		//pretty print result object
-		b, _ := json.MarshalIndent(result, "", "  ")
-		fmt.Println(string(b))
-
+		b, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return jerr.Get("error pretty printing result object", err)
+		}
+		jlog.Logf("stream result object: %s\n", b)
 		if len(result.Data.Attachments.MediaKeys) > 0 {
 			//use regex library to find the string https://t.co in the tweet text
 			match, _ := regexp.MatchString("https://t.co/[a-zA-Z0-9]*$", tweetText)
@@ -178,9 +179,7 @@ func (s *Stream) InitiateStream(streamConfigs []config.Stream) error {
 			},
 			InReplyToStatusID: InReplyToStatusID,
 		}
-		println(tweetText)
-		println("\n\n\n")
-		//fmt.Println(tweetObject.Text)
+		jlog.Logf("tweetText: %s\n", tweetText)
 		tweetTx := obj.TweetTx{
 			Tweet:  &tweetObject,
 			TxHash: nil,
@@ -189,7 +188,7 @@ func (s *Stream) InitiateStream(streamConfigs []config.Stream) error {
 		//based on the stream config, get the right address to send the tweet to
 		for _, conf := range streamConfigs {
 			if conf.Name == tweetObject.User.ScreenName {
-				println("sending tweet to key: ", conf.Key)
+				jlog.Logf("sending tweet to key: %s\n", conf.Key)
 				twitterAccountWallet := obj.GetAccountKeyFromArgs([]string{conf.Key, conf.Name})
 				var link = true
 				var date = false
@@ -213,12 +212,12 @@ func (s *Stream) InitiateStream(streamConfigs []config.Stream) error {
 					date = flagsStruct.Date
 				}
 				//may or may not break getnewtweets
-				if err := save.Tweet(conf.Wallet, twitterAccountWallet, tweetTx, s.Db, link, date); err != nil {
+				if err := save.Tweet(conf.Wallet, twitterAccountWallet, tweetTx, link, date); err != nil {
 					return jerr.Get("error streaming tweet in stream", err)
 				}
 			}
 		}
 	}
-	fmt.Println("Stopped Stream")
+	jlog.Log("Stopped Stream")
 	return nil
 }

@@ -1,7 +1,7 @@
 package tweets
 
 import (
-	"fmt"
+	"errors"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/db"
@@ -9,7 +9,7 @@ import (
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/memocash/tweet/wallet"
 	"github.com/spf13/cobra"
-	util2 "github.com/syndtr/goleveldb/leveldb/util"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var getNewCmd = &cobra.Command{
@@ -19,7 +19,7 @@ var getNewCmd = &cobra.Command{
 	Run: func(c *cobra.Command, args []string) {
 		link, _ := c.Flags().GetBool(FlagLink)
 		date, _ := c.Flags().GetBool(FlagDate)
-		db, err := db.GetDb()
+		levelDb, err := db.GetDb()
 		if err != nil {
 			jerr.Get("fatal error getting db", err).Fatal()
 		}
@@ -28,19 +28,19 @@ var getNewCmd = &cobra.Command{
 		for _, streamConfig := range streamConfigs {
 			accountKey := obj.GetAccountKeyFromArgs([]string{streamConfig.Key, streamConfig.Name})
 			//check if there are any transferred tweets with the prefix containing this address and this screenName
-			savedPrefix := fmt.Sprintf("saved-%s-%s", accountKey.Address, accountKey.Account)
-			iter := db.NewIterator(util2.BytesPrefix([]byte(savedPrefix)), nil)
-			tweetsFound := iter.First()
-			iter.Release()
-			if tweetsFound {
-				wlt := wallet.NewWallet(accountKey.Address, accountKey.Key, db)
-				err := tweets.GetSkippedTweets(accountKey, &wlt, tweets.Connect(), db, link, date, 100)
+			savedAddressTweet, err := db.GetRecentSavedAddressTweet(accountKey.Address.GetEncoded(), accountKey.Account)
+			if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
+				jerr.Get("error getting recent saved address tweet", err).Fatal()
+			}
+			if savedAddressTweet != nil {
+				wlt := wallet.NewWallet(accountKey.Address, accountKey.Key, levelDb)
+				err := tweets.GetSkippedTweets(accountKey, &wlt, tweets.Connect(), link, date, 100)
 				if err != nil {
 					jerr.Get("error getting skipped tweets for get new tweets", err).Fatal()
 				}
 			}
 		}
-		stream, err := tweets.NewStream(db)
+		stream, err := tweets.NewStream(levelDb)
 		if err != nil {
 			jerr.Get("error getting new tweet stream", err).Fatal()
 		}

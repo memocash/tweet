@@ -30,7 +30,7 @@ var transferCmd = &cobra.Command{
 			jerr.Get("error getting all tweets", err).Fatal()
 		}
 		wlt := wallet.NewWallet(accountKey.Address, accountKey.Key, db)
-		if _, err = tweets.Transfer(accountKey, db, link, date, wlt); err != nil {
+		if _, err = tweets.Transfer(accountKey, link, date, wlt); err != nil {
 			jerr.Get("fatal error transferring tweets", err).Fatal()
 		}
 	},

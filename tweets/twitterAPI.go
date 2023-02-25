@@ -11,7 +11,6 @@ import (
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/memocash/tweet/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
-	util2 "github.com/syndtr/goleveldb/leveldb/util"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 	"log"
@@ -134,17 +133,7 @@ func getNewTweetsLocal(accountKey obj.AccountKey, numTweets int) ([]obj.TweetTx,
 	return tweetTxs, nil
 }
 
-func getNumSavedTweets(accountKey obj.AccountKey, db *leveldb.DB) int {
-	numTweets := 0
-	iter := db.NewIterator(util2.BytesPrefix([]byte(fmt.Sprintf("saved-%s-%s", accountKey.Address, accountKey.Account))), nil)
-	for iter.Next() {
-		numTweets++
-	}
-	iter.Release()
-	return numTweets
-}
-
-func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, client *twitter.Client, db *leveldb.DB, link bool, date bool, numTweets int) error {
+func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, client *twitter.Client, link bool, date bool, numTweets int) error {
 	txList, err := getNewTweets(accountKey, client, numTweets)
 	//txList, err := getNewTweetsLocal(accountKey, db, numTweets)
 	if err != nil {
@@ -162,16 +151,14 @@ func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, client *twi
 		if totalSaved >= numTweets {
 			break
 		}
-		//check if the tweet with the ID of the newest tweet in txList is in the database
-		prefix := fmt.Sprintf("saved-%s-%s-%019d", accountKey.Address, accountKey.Account, tweetID)
-		_, err := db.Get([]byte(prefix), nil)
-		if err == nil {
+		savedAddressTweet, err := db.GetSavedAddressTweet(accountKey.Address.GetEncoded(), accountKey.Account, tweetID)
+		if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
+			return jerr.Get("error getting saved address tweet for get skipped", err)
+		}
+		if savedAddressTweet != nil {
 			break
 		}
-		if err != leveldb.ErrNotFound {
-			return jerr.Get("error getting tweet from database", err)
-		}
-		numSaved, err := Transfer(accountKey, db, link, date, *wlt)
+		numSaved, err := Transfer(accountKey, link, date, *wlt)
 		if err != nil {
 			return jerr.Get("fatal error transferring tweets", err)
 		}

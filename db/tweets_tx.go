@@ -23,6 +23,9 @@ func (t *TweetTx) GetUid() []byte {
 
 func (t *TweetTx) SetUid(b []byte) {
 	parts := strings.Split(string(b), "-")
+	if len(parts) != 2 {
+		return
+	}
 	t.ScreenName = parts[0]
 	t.TweetId = jutil.GetInt64FromString(strings.TrimLeft("0", parts[1]))
 }
@@ -38,7 +41,7 @@ func (t *TweetTx) Deserialize(d []byte) {
 func GetTweetTxs(screenName string, startTweetId int64) ([]*TweetTx, error) {
 	db, err := GetDb()
 	if err != nil {
-		return nil, fmt.Errorf("%w; error getting database handler for get tweet txs", err)
+		return nil, fmt.Errorf("error getting database handler for get tweet txs; %w", err)
 	}
 	iter := db.NewIterator(util.BytesPrefix([]byte(fmt.Sprintf("%s-%s-", PrefixTweetTx, screenName))), nil)
 	defer iter.Release()
@@ -58,7 +61,7 @@ func GetTweetTxs(screenName string, startTweetId int64) ([]*TweetTx, error) {
 func GetRecentTweetTx(screenName string) (*TweetTx, error) {
 	var tweetTx = new(TweetTx)
 	if err := GetLastItem(tweetTx, []byte(screenName)); err != nil {
-		return nil, fmt.Errorf("%w; error getting last tweet tx item", err)
+		return nil, fmt.Errorf("error getting recent tweet tx item; %w", err)
 	}
 	return tweetTx, nil
 }
@@ -66,7 +69,7 @@ func GetRecentTweetTx(screenName string) (*TweetTx, error) {
 func GetOldestTweetTx(screenName string) (*TweetTx, error) {
 	var tweetTx = new(TweetTx)
 	if err := GetFirstItem(tweetTx, []byte(screenName)); err != nil {
-		return nil, fmt.Errorf("%w; error getting first tweet tx item", err)
+		return nil, fmt.Errorf("error getting oldest tweet tx item; %w", err)
 	}
 	return tweetTx, nil
 }
@@ -74,7 +77,7 @@ func GetOldestTweetTx(screenName string) (*TweetTx, error) {
 func GetNumTweetTxs(screenName string) (int, error) {
 	count, err := GetNum([]byte(fmt.Sprintf("%s-%s-", PrefixTweetTx, screenName)))
 	if err != nil {
-		return 0, fmt.Errorf("%w; error getting num tweets using get num", err)
+		return 0, fmt.Errorf("error getting num tweets using get num; %w", err)
 	}
 	return count, nil
 }

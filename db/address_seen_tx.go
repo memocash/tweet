@@ -43,7 +43,7 @@ func (t *AddressSeenTx) Deserialize([]byte) {
 func GetRecentAddressSeenTx(address [25]byte) (*AddressSeenTx, error) {
 	var addressSeenTx = &AddressSeenTx{}
 	if err := GetLastItem(addressSeenTx, address[:]); err != nil {
-		return nil, fmt.Errorf("%w; error getting last address seen tx item", err)
+		return nil, fmt.Errorf("error getting last address seen tx item; %w", err)
 	}
 	return addressSeenTx, nil
 }

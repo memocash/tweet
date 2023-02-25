@@ -2,6 +2,7 @@ package tweets
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/tweet/db"
@@ -9,25 +10,18 @@ import (
 	"github.com/memocash/tweet/tweets/save"
 	"github.com/memocash/tweet/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/util"
 	"regexp"
-	"strconv"
 )
 
-func Transfer(accountKey obj.AccountKey, levelDb *leveldb.DB, appendLink bool, appendDate bool, wlt wallet.Wallet) (int, error) {
-	//find the greatest ID of all the already saved tweets
-	prefix := fmt.Sprintf("saved-%s-%s", accountKey.Address, accountKey.Account)
-	iter := levelDb.NewIterator(util.BytesPrefix([]byte(prefix)), nil)
-	var startID int64 = 0
-	for iter.Next() {
-		key := iter.Key()
-		tweetID, _ := strconv.ParseInt(string(key[len(prefix)+1:]), 10, 64)
-		if tweetID > startID || startID == 0 {
-			startID = tweetID
-		}
+func Transfer(accountKey obj.AccountKey, appendLink bool, appendDate bool, wlt wallet.Wallet) (int, error) {
+	savedAddressTweet, err := db.GetRecentSavedAddressTweet(accountKey.Address.GetEncoded(), accountKey.Account)
+	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
+		jerr.Get("error getting recent saved address tweet", err).Fatal()
 	}
-	iter.Release()
-	//get up to 20 tweets from the tweets-twittername-tweetID prefix with the smallest IDs greater than the startID
+	var startID int64 = 0
+	if savedAddressTweet != nil {
+		startID = savedAddressTweet.TweetId
+	}
 	tweetTxs, err := db.GetTweetTxs(accountKey.Account, startID)
 	if err != nil {
 		return 0, jerr.Get("error getting tweet txs from db", err)
@@ -51,7 +45,7 @@ func Transfer(accountKey obj.AccountKey, levelDb *leveldb.DB, appendLink bool, a
 				tweet.Tweet.Text += fmt.Sprintf("\n%s", media.MediaURL)
 			}
 		}
-		if err := save.Tweet(wlt, accountKey, tweet, levelDb, appendLink, appendDate); err != nil {
+		if err := save.Tweet(wlt, accountKey, tweet, appendLink, appendDate); err != nil {
 			return numTransferred, jerr.Get("error streaming tweets for transfer", err)
 		}
 		numTransferred++

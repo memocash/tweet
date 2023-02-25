@@ -155,13 +155,11 @@ func (b *Bot) Listen() error {
 		return jerr.Get("error updating stream", err)
 	}
 	for _, stream := range streamArray {
-		accountKey := obj.AccountKey{
+		if err = tweets.GetSkippedTweets(obj.AccountKey{
 			Account: stream.Name,
 			Key:     stream.Wallet.Key,
 			Address: stream.Wallet.Address,
-		}
-		err = tweets.GetSkippedTweets(accountKey, &stream.Wallet, b.TweetClient, b.Db, true, false, 100)
-		if err != nil {
+		}, &stream.Wallet, b.TweetClient, true, false, 100); err != nil {
 			return jerr.Get("error getting skipped tweets on bot listen", err)
 		}
 	}
@@ -311,8 +309,7 @@ func (b *Bot) SaveTx(tx Tx) error {
 			accountKey := *accountKeyPointer
 			if history {
 				client := tweets.Connect()
-				err = tweets.GetSkippedTweets(accountKey, wlt, client, b.Db, link, date, historyNum)
-				if err != nil {
+				if err = tweets.GetSkippedTweets(accountKey, wlt, client, link, date, historyNum); err != nil {
 					return jerr.Get("error getting skipped tweets on bot save tx", err)
 				}
 
