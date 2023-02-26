@@ -158,7 +158,7 @@ func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, client *twi
 		if savedAddressTweet != nil {
 			break
 		}
-		numSaved, err := Transfer(accountKey, link, date, *wlt)
+		numSaved, err := CreateMemoPostsFromDb(accountKey, link, date, *wlt)
 		if err != nil {
 			return jerr.Get("fatal error transferring tweets", err)
 		}

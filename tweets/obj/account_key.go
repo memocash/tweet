@@ -10,8 +10,8 @@ type AccountKey struct {
 	Address wallet.Address
 }
 
-func (t AccountKey) GetAddress() wallet.Address {
-	return t.GetAddress()
+func (t AccountKey) GetAddress() string {
+	return t.Address.GetEncoded()
 }
 
 func GetAccountKeyFromArgs(args []string) AccountKey {

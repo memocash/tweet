@@ -13,8 +13,8 @@ import (
 	"regexp"
 )
 
-func Transfer(accountKey obj.AccountKey, appendLink bool, appendDate bool, wlt wallet.Wallet) (int, error) {
-	savedAddressTweet, err := db.GetRecentSavedAddressTweet(accountKey.Address.GetEncoded(), accountKey.Account)
+func CreateMemoPostsFromDb(accountKey obj.AccountKey, appendLink bool, appendDate bool, wlt wallet.Wallet) (int, error) {
+	savedAddressTweet, err := db.GetRecentSavedAddressTweet(accountKey.GetAddress(), accountKey.Account)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		jerr.Get("error getting recent saved address tweet", err).Fatal()
 	}
@@ -26,14 +26,12 @@ func Transfer(accountKey obj.AccountKey, appendLink bool, appendDate bool, wlt w
 	if err != nil {
 		return 0, jerr.Get("error getting tweet txs from db", err)
 	}
-	var tweetList = make([]obj.TweetTx, len(tweetTxs))
-	for i := range tweetTxs {
-		if err := json.Unmarshal(tweetTxs[i].Tx, &tweetList[i]); err != nil {
+	numTransferred := 0
+	for _, tweetTx := range tweetTxs {
+		var tweet obj.TweetTx
+		if err := json.Unmarshal(tweetTx.Tx, &tweet); err != nil {
 			return 0, jerr.Get("error unmarshalling tweetTx for transfer", err)
 		}
-	}
-	numTransferred := 0
-	for _, tweet := range tweetList {
 		match, _ := regexp.MatchString("https://t.co/[a-zA-Z0-9]*$", tweet.Tweet.Text)
 		if match {
 			//remove the https://t.co from the tweet text
@@ -45,7 +43,7 @@ func Transfer(accountKey obj.AccountKey, appendLink bool, appendDate bool, wlt w
 				tweet.Tweet.Text += fmt.Sprintf("\n%s", media.MediaURL)
 			}
 		}
-		if err := save.Tweet(wlt, accountKey, tweet, appendLink, appendDate); err != nil {
+		if err := save.Tweet(wlt, accountKey.GetAddress(), tweet, appendLink, appendDate); err != nil {
 			return numTransferred, jerr.Get("error streaming tweets for transfer", err)
 		}
 		numTransferred++

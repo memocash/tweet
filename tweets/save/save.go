@@ -14,9 +14,16 @@ import (
 	"html"
 )
 
-func Tweet(wlt wallet.Wallet, accountKey obj.AccountKey, tweet obj.TweetTx, appendLink bool, appendDate bool) error {
+func Tweet(wlt wallet.Wallet, address string, tweet obj.TweetTx, appendLink bool, appendDate bool) error {
 	if tweet.Tweet == nil {
 		return jerr.New("tweet is nil")
+	}
+	existingSavedAddressTweet, err := db.GetSavedAddressTweet(address, tweet.Tweet.User.ScreenName, tweet.Tweet.ID)
+	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
+		return jerr.Get("error getting existing saved address tweet for save", err)
+	}
+	if existingSavedAddressTweet != nil {
+		return nil
 	}
 	tweetLink := fmt.Sprintf("\nhttps://twitter.com/twitter/status/%d\n", tweet.Tweet.ID)
 	tweetDate := fmt.Sprintf("\n%s\n", tweet.Tweet.CreatedAt)
@@ -42,7 +49,7 @@ func Tweet(wlt wallet.Wallet, accountKey obj.AccountKey, tweet obj.TweetTx, appe
 		tweet.TxHash = parentHash
 	} else {
 		parentSavedTweet, err := db.GetSavedAddressTweet(
-			accountKey.Address.GetEncoded(), tweet.Tweet.User.ScreenName, tweet.Tweet.InReplyToStatusID)
+			address, tweet.Tweet.User.ScreenName, tweet.Tweet.InReplyToStatusID)
 		if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 			return jerr.Get("error getting saved address tweet for tweet parent reply", err)
 		}
@@ -69,7 +76,7 @@ func Tweet(wlt wallet.Wallet, accountKey obj.AccountKey, tweet obj.TweetTx, appe
 		}
 	}
 	if err := db.Save([]db.ObjectI{&db.SavedAddressTweet{
-		Address:    accountKey.Address.GetEncoded(),
+		Address:    address,
 		ScreenName: tweet.Tweet.User.ScreenName,
 		TweetId:    tweet.Tweet.ID,
 		TxHash:     tweet.TxHash,

@@ -212,7 +212,7 @@ func (s *Stream) InitiateStream(streamConfigs []config.Stream) error {
 					date = flagsStruct.Date
 				}
 				//may or may not break getnewtweets
-				if err := save.Tweet(conf.Wallet, twitterAccountWallet, tweetTx, link, date); err != nil {
+				if err := save.Tweet(conf.Wallet, twitterAccountWallet.GetAddress(), tweetTx, link, date); err != nil {
 					return jerr.Get("error streaming tweet in stream", err)
 				}
 			}

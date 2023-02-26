@@ -2,7 +2,6 @@ package maint
 
 import (
 	"encoding/json"
-	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/spf13/cobra"
@@ -16,14 +15,14 @@ var checkSavedTweetsCmd = &cobra.Command{
 		verbose, _ := c.Flags().GetBool(FlagVerbose)
 		allTweetTxs, err := db.GetAllTweetTx()
 		if err != nil {
-			jerr.Get("fatal error getting all saved address tweets", err).Fatal()
+			log.Fatalf("fatal error getting all saved address tweets; %v", err)
 		}
 		log.Printf("count all tweet txs: %d\n", len(allTweetTxs))
 		for _, dbTweetTx := range allTweetTxs {
 			tweetTx := obj.TweetTx{}
 			err := json.Unmarshal(dbTweetTx.Tx, &tweetTx)
 			if err != nil {
-				jerr.Get("fatal error unmarshalling tweet tx", err).Fatal()
+				log.Fatalf("fatal error unmarshalling tweet tx; %v", err)
 			}
 			if verbose {
 				log.Printf("screen name: %s, tweetId: %d\n", dbTweetTx.ScreenName, tweetTx.Tweet.ID)
@@ -31,7 +30,7 @@ var checkSavedTweetsCmd = &cobra.Command{
 		}
 		savedTweets, err := db.GetAllSavedAddressTweet()
 		if err != nil {
-			jerr.Get("fatal error getting all saved address tweets", err).Fatal()
+			log.Fatalf("fatal error getting all saved address tweets; %v", err)
 		}
 		log.Printf("count all saved address tweets: %d\n", len(savedTweets))
 		if verbose {
