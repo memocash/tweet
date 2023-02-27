@@ -64,7 +64,7 @@ func getBotStreams(cryptKey []byte) ([]config.Stream, error) {
 func createBotStream(b *Bot, twitterName string, senderAddress string, tx graph.Tx, coinIndex uint32) (*obj.AccountKey, *tweetWallet.Wallet, error) {
 	//check if the value of the transaction is less than 5,000 or this address already has a bot for this account in the database
 	botExists := false
-	_, err := b.Db.Get([]byte("linked-"+senderAddress+"-"+twitterName), nil)
+	_, err := db.GetAddressKey(senderAddress, twitterName)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		return nil, nil, jerr.Get("error getting bot from database", err)
 	} else if err == nil {
@@ -107,11 +107,11 @@ func createBotStream(b *Bot, twitterName string, senderAddress string, tx graph.
 	if botExists {
 		//get the key from the database
 		//decrypt
-		rawKey, err := b.Db.Get([]byte("linked-"+senderAddress+"-"+twitterName), nil)
+		addressKey, err := db.GetAddressKey(senderAddress, twitterName)
 		if err != nil {
 			return nil, nil, jerr.Get("error getting key from database", err)
 		}
-		decryptedKey, err := tweetWallet.Decrypt(rawKey, b.Crypt)
+		decryptedKey, err := tweetWallet.Decrypt(addressKey.Key, b.Crypt)
 		if err != nil {
 			return nil, nil, jerr.Get("error decrypting key", err)
 		}
