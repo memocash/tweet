@@ -19,10 +19,6 @@ var getNewCmd = &cobra.Command{
 	Run: func(c *cobra.Command, args []string) {
 		link, _ := c.Flags().GetBool(FlagLink)
 		date, _ := c.Flags().GetBool(FlagDate)
-		levelDb, err := db.GetDb()
-		if err != nil {
-			jerr.Get("fatal error getting db", err).Fatal()
-		}
 		streamConfigs := config.GetConfig().Streams
 		//before starting the stream, ge the latest tweets newer than the last tweet in the db
 		for _, streamConfig := range streamConfigs {
@@ -33,14 +29,14 @@ var getNewCmd = &cobra.Command{
 				jerr.Get("error getting recent saved address tweet", err).Fatal()
 			}
 			if savedAddressTweet != nil {
-				wlt := wallet.NewWallet(accountKey.Address, accountKey.Key, levelDb)
-				err := tweets.GetSkippedTweets(accountKey, &wlt, tweets.Connect(), link, date, 100)
+				wlt := wallet.NewWallet(accountKey.Address, accountKey.Key)
+				err := tweets.GetSkippedTweets(accountKey, &wlt, tweets.Connect(), db.Flags{Link: link, Date: date}, 100)
 				if err != nil {
 					jerr.Get("error getting skipped tweets for get new tweets", err).Fatal()
 				}
 			}
 		}
-		stream, err := tweets.NewStream(levelDb)
+		stream, err := tweets.NewStream()
 		if err != nil {
 			jerr.Get("error getting new tweet stream", err).Fatal()
 		}

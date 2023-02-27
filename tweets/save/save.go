@@ -14,7 +14,7 @@ import (
 	"html"
 )
 
-func Tweet(wlt wallet.Wallet, address string, tweet obj.TweetTx, appendLink bool, appendDate bool) error {
+func Tweet(wlt wallet.Wallet, address string, tweet obj.TweetTx, flags db.Flags) error {
 	if tweet.Tweet == nil {
 		return jerr.New("tweet is nil")
 	}
@@ -40,7 +40,7 @@ func Tweet(wlt wallet.Wallet, address string, tweet obj.TweetTx, appendLink bool
 		return jerr.Get("error saving tweetTx db object", err)
 	}
 	if tweet.Tweet.InReplyToStatusID == 0 {
-		tweetText = trimTweet(tweetText, tweetLink, tweetDate, appendLink, appendDate, memo.OldMaxPostSize)
+		tweetText = trimTweet(tweetText, tweetLink, tweetDate, flags.Link, flags.Date, memo.OldMaxPostSize)
 		jlog.Log("making post (twitter post was not a reply)")
 		parentHash, err := wallet.MakePost(wlt, html.UnescapeString(tweetText))
 		if err != nil {
@@ -55,7 +55,7 @@ func Tweet(wlt wallet.Wallet, address string, tweet obj.TweetTx, appendLink bool
 		}
 		//if it turns out this tweet was actually a reply to another person's tweet, post it as a regular post
 		if parentSavedTweet == nil {
-			tweetText = trimTweet(tweetText, tweetLink, tweetDate, appendLink, appendDate, memo.OldMaxPostSize)
+			tweetText = trimTweet(tweetText, tweetLink, tweetDate, flags.Link, flags.Date, memo.OldMaxPostSize)
 			jlog.Log("making post (reply parent not found)")
 			parentHash, err := wallet.MakePost(wlt, html.UnescapeString(tweetText))
 			//find this tweet in archive and set its hash to the hash of the post that was just made
@@ -65,7 +65,7 @@ func Tweet(wlt wallet.Wallet, address string, tweet obj.TweetTx, appendLink bool
 			}
 			//otherwise, it's part of a thread, so post it as a reply to the parent tweet
 		} else {
-			tweetText = trimTweet(tweetText, tweetLink, tweetDate, appendLink, appendDate, memo.OldMaxReplySize)
+			tweetText = trimTweet(tweetText, tweetLink, tweetDate, flags.Link, flags.Date, memo.OldMaxReplySize)
 			jlog.Log("making reply")
 			replyHash, err := wallet.MakeReply(wlt, parentSavedTweet.TxHash, html.UnescapeString(tweetText))
 			//find this tweet in archive and set its hash to the hash of the post that was just made

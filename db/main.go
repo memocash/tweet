@@ -13,6 +13,7 @@ const (
 	PrefixAddressTime       = "addresstime"
 	PrefixBlock             = "block"
 	PrefixCompletedTx       = "completed"
+	PrefixFlag              = "flags"
 	PrefixProfile           = "profile"
 	PrefixSavedAddressTweet = "saved"
 	PrefixTweetTx           = "tweets"

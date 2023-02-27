@@ -2,6 +2,7 @@ package tweets
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/dghubble/go-twitter/twitter"
 	"github.com/fallenstedt/twitter-stream"
@@ -10,6 +11,7 @@ import (
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jlog"
 	"github.com/memocash/tweet/config"
+	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/memocash/tweet/tweets/save"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -23,7 +25,7 @@ type Stream struct {
 	Token *token_generator.RequestBearerTokenResponse
 }
 
-func NewStream(db *leveldb.DB) (*Stream, error) {
+func NewStream() (*Stream, error) {
 	conf := config.GetTwitterAPIConfig()
 	if !conf.IsSet() {
 		return nil, jerr.New("Application Access Token required")
@@ -33,7 +35,6 @@ func NewStream(db *leveldb.DB) (*Stream, error) {
 		return nil, jerr.Get("error getting twitter API token", err)
 	}
 	return &Stream{
-		Db:    db,
 		Token: token,
 	}, nil
 }
@@ -191,29 +192,14 @@ func (s *Stream) ListenForNewTweets(streamConfigs []config.Stream) error {
 			if conf.Name == tweetObject.User.ScreenName {
 				jlog.Logf("sending tweet to key: %s\n", conf.Key)
 				twitterAccountWallet := obj.GetAccountKeyFromArgs([]string{conf.Key, conf.Name})
-				var link = true
-				var date = false
-				flags, err := s.Db.Get([]byte("flags-"+conf.Sender+"-"+conf.Name), nil)
-				if err != nil {
-					if err == leveldb.ErrNotFound {
-						continue
-					} else {
-						return jerr.Get("error getting flags from db", err)
-					}
-				} else {
-					type Flags struct {
-						Link bool `json:"link"`
-						Date bool `json:"date"`
-					}
-					var flagsStruct Flags
-					if err := json.Unmarshal(flags, &flagsStruct); err != nil {
-						return jerr.Get("error unmarshalling flags", err)
-					}
-					link = flagsStruct.Link
-					date = flagsStruct.Date
+				flag, err := db.GetFlag(conf.Sender, conf.Name)
+				if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
+					return jerr.Get("error getting flags from db", err)
+				} else if err == leveldb.ErrNotFound {
+					continue
 				}
 				//may or may not break getnewtweets
-				if err := save.Tweet(conf.Wallet, twitterAccountWallet.GetAddress(), tweetTx, link, date); err != nil {
+				if err := save.Tweet(conf.Wallet, twitterAccountWallet.GetAddress(), tweetTx, flag.Flags); err != nil {
 					return jerr.Get("error streaming tweet in stream", err)
 				}
 			}

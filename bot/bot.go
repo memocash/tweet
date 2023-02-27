@@ -1,23 +1,20 @@
 package bot
 
 import (
-	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/dghubble/go-twitter/twitter"
-	"github.com/hasura/go-graphql-client"
-	"github.com/hasura/go-graphql-client/pkg/jsonutil"
 	"github.com/jchavannes/btcd/chaincfg/chainhash"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jlog"
-	"github.com/jchavannes/jgo/jutil"
 	"github.com/memocash/index/ref/bitcoin/memo"
 	"github.com/memocash/index/ref/bitcoin/tx/hs"
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/db"
+	"github.com/memocash/tweet/graph"
 	"github.com/memocash/tweet/tweets"
 	"github.com/memocash/tweet/tweets/obj"
 	tweetWallet "github.com/memocash/tweet/wallet"
@@ -65,72 +62,43 @@ func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey
 	}, nil
 }
 
-type GraphQlDate string
-
-func (d GraphQlDate) GetGraphQLType() string {
-	return "Date"
-}
-
-func (d GraphQlDate) GetTime() time.Time {
-	t, _ := time.Parse(time.RFC3339, string(d))
-	return t
-}
-
 func (b *Bot) ProcessMissedTxs() error {
-	client := graphql.NewClient("http://127.0.0.1:26770/graphql", nil)
-	var updateQuery = new(UpdateQuery)
 	recentAddressSeenTx, err := db.GetRecentAddressSeenTx(b.Addr)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		return jerr.Get("error getting recent address seen tx for addr", err)
 	}
-	var vars = map[string]interface{}{
-		"address": b.Addresses[0],
+	var start time.Time
+	if recentAddressSeenTx != nil {
+		start = recentAddressSeenTx.Seen
 	}
-	var startDate string
-	if recentAddressSeenTx != nil && !jutil.IsTimeZero(recentAddressSeenTx.Seen) {
-		startDate = recentAddressSeenTx.Seen.Format(time.RFC3339)
-	} else {
-		startDate = time.Date(2009, 1, 1, 0, 0, 0, 0, time.Local).Format(time.RFC3339)
+	if b.Verbose {
+		jlog.Logf("Processing missed txs using start: %s\n", start.Format(time.RFC3339))
 	}
-	vars["start"] = GraphQlDate(startDate)
-	jlog.Logf("Processing missed txs using start: %s\n", startDate)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if err := client.Query(ctx, updateQuery, vars); err != nil {
-		return jerr.Get("error querying graphql process missed txs", err)
+	txs, err := graph.GetAddressUpdates(b.Addresses[0], start)
+	if err != nil {
+		return jerr.Get("error getting address update txs", err)
+	} else if b.Verbose {
+		jlog.Logf("Found %d missed txs\n", len(txs))
 	}
-	jlog.Logf("Found %d missed txs\n", len(updateQuery.Address.Txs))
-	for _, tx := range updateQuery.Address.Txs {
+	for _, tx := range txs {
 		if err := b.SaveTx(tx); err != nil {
 			return jerr.Get("error saving missed process tx", err)
+		} else if b.Verbose {
+			jlog.Logf("Found missed process tx: %s, seen: %s\n", tx.Hash, tx.Seen.GetTime().Format(time.RFC3339))
 		}
-		jlog.Logf("Found missed process tx: %s - %s\n", tx.Hash, tx.Seen.GetTime().Format(time.RFC3339))
 	}
 	return nil
 }
 
 func (b *Bot) Listen() error {
 	jlog.Logf("Bot listening to address: %s\n", b.Addresses[0])
-	client := graphql.NewSubscriptionClient("ws://127.0.0.1:26770/graphql")
-	defer client.Close()
-	var subscription = new(Subscription)
-	client.OnError(func(sc *graphql.SubscriptionClient, err error) error {
-		b.ErrorChan <- jerr.Get("error in client subscription", err)
-		return nil
-	})
-	_, err := client.Subscribe(&subscription, map[string]interface{}{"addresses": b.Addresses}, b.ReceiveNewTx)
-	if err != nil {
-		return jerr.Get("error subscribing to graphql", err)
+	if err := graph.AddressListen(b.Addresses, b.SaveTx, b.ErrorChan); err != nil {
+		return jerr.Get("error listening to address on graphql", err)
 	}
 	updateInterval := config.GetConfig().UpdateInterval
 	if updateInterval == 0 {
 		updateInterval = 180
 	}
-	go func() {
-		if err = client.Run(); err != nil {
-			b.ErrorChan <- jerr.Get("error running graphql client", err)
-		}
-	}()
 	go func() {
 		for {
 			t := time.NewTimer(time.Duration(updateInterval) * time.Minute)
@@ -147,7 +115,8 @@ func (b *Bot) Listen() error {
 			}
 		}
 	}()
-	if b.Stream, err = tweets.NewStream(b.Db); err != nil {
+	var err error
+	if b.Stream, err = tweets.NewStream(); err != nil {
 		return jerr.Get("error getting new tweet stream", err)
 	}
 	streamArray, err := b.SafeUpdate()
@@ -159,7 +128,7 @@ func (b *Bot) Listen() error {
 			Account: stream.Name,
 			Key:     stream.Wallet.Key,
 			Address: stream.Wallet.Address,
-		}, &stream.Wallet, b.TweetClient, true, false, 100); err != nil {
+		}, &stream.Wallet, b.TweetClient, db.GetDefaultFlags(), 100); err != nil {
 			return jerr.Get("error getting skipped tweets on bot listen", err)
 		}
 	}
@@ -169,24 +138,9 @@ func (b *Bot) Listen() error {
 	return jerr.Get("error in listen", <-b.ErrorChan)
 }
 
-func (b *Bot) ReceiveNewTx(dataValue []byte, errValue error) error {
+func (b *Bot) SaveTx(tx graph.Tx) error {
 	b.Mutex.Lock()
 	defer b.Mutex.Unlock()
-	if errValue != nil {
-		return jerr.Get("error in subscription", errValue)
-	}
-	data := Subscription{}
-	err := jsonutil.UnmarshalGraphQL(dataValue, &data)
-	if err != nil {
-		return jerr.Get("error marshaling subscription", err)
-	}
-	if err := b.SaveTx(data.Addresses); err != nil {
-		return jerr.Get("error saving new received tx", err)
-	}
-	return nil
-}
-
-func (b *Bot) SaveTx(tx Tx) error {
 	for _, input := range tx.Inputs {
 		if input.Output.Lock.Address == b.Addresses[0] {
 			return nil
@@ -260,8 +214,7 @@ func (b *Bot) SaveTx(tx Tx) error {
 		}
 		//check if --history is in the message
 		history := false
-		link := true
-		date := false
+		var flags = db.GetDefaultFlags()
 		var historyNum = 100
 		for index, word := range splitMessage {
 			if word == "--history" {
@@ -274,10 +227,10 @@ func (b *Bot) SaveTx(tx Tx) error {
 				}
 			}
 			if word == "--nolink" {
-				link = false
+				flags.Link = false
 			}
 			if word == "--date" {
-				date = true
+				flags.Date = true
 			}
 		}
 		if historyNum > 1000 {
@@ -287,18 +240,12 @@ func (b *Bot) SaveTx(tx Tx) error {
 			}
 			return nil
 		}
-		//write date and link into flags-senderAddress-twitterName
-		type Flags struct {
-			Link bool `json:"link"`
-			Date bool `json:"date"`
-		}
-		flags := Flags{Link: link, Date: date}
-		flagsBytes, err := json.Marshal(flags)
-		if err != nil {
-			return jerr.Get("error marshaling flags", err)
-		}
-		if err := b.Db.Put([]byte("flags-"+senderAddress+"-"+twitterName), flagsBytes, nil); err != nil {
-			return jerr.Get("error putting flags into database", err)
+		if err := db.Save([]db.ObjectI{&db.Flag{
+			Address:     senderAddress,
+			TwitterName: twitterName,
+			Flags:       flags,
+		}}); err != nil {
+			return jerr.Get("error saving flags to db", err)
 		}
 		accountKeyPointer, wlt, err := createBot(b, twitterName, senderAddress, tx, coinIndex)
 		if err != nil {
@@ -309,7 +256,7 @@ func (b *Bot) SaveTx(tx Tx) error {
 			accountKey := *accountKeyPointer
 			if history {
 				client := tweets.Connect()
-				if err = tweets.GetSkippedTweets(accountKey, wlt, client, link, date, historyNum); err != nil {
+				if err = tweets.GetSkippedTweets(accountKey, wlt, client, flags, historyNum); err != nil {
 					return jerr.Get("error getting skipped tweets on bot save tx", err)
 				}
 
@@ -363,11 +310,7 @@ func (b *Bot) SaveTx(tx Tx) error {
 			}
 			address := key.GetAddress()
 			println("Address: " + address.GetEncoded())
-			inputGetter := tweetWallet.InputGetter{
-				Address: address,
-				UTXOs:   nil,
-				Db:      b.Db,
-			}
+			inputGetter := tweetWallet.InputGetter{Address: address}
 			//use the address object of the spawned key to get the outputs array
 			outputs, err := inputGetter.GetUTXOs(nil)
 			if err != nil {
@@ -425,7 +368,7 @@ func (b *Bot) SaveTx(tx Tx) error {
 	}
 	return nil
 }
-func refund(tx Tx, b *Bot, coinIndex uint32, senderAddress string, errMsg string) error {
+func refund(tx graph.Tx, b *Bot, coinIndex uint32, senderAddress string, errMsg string) error {
 	_, err := b.SafeUpdate()
 	if err != nil {
 		return jerr.Get("error updating stream", err)
@@ -514,7 +457,7 @@ func (b *Bot) UpdateStream() ([]config.Stream, error) {
 	return streamArray, nil
 }
 
-func createBot(b *Bot, twitterName string, senderAddress string, tx Tx, coinIndex uint32) (*obj.AccountKey, *tweetWallet.Wallet, error) {
+func createBot(b *Bot, twitterName string, senderAddress string, tx graph.Tx, coinIndex uint32) (*obj.AccountKey, *tweetWallet.Wallet, error) {
 	//check if the value of the transaction is less than 5,000 or this address already has a bot for this account in the database
 	botExists := false
 	_, err := b.Db.Get([]byte("linked-"+senderAddress+"-"+twitterName), nil)
@@ -595,7 +538,7 @@ func createBot(b *Bot, twitterName string, senderAddress string, tx Tx, coinInde
 	}}, b.Key, newAddr); err != nil {
 		return nil, nil, jerr.Get("error funding twitter address", err)
 	}
-	newWallet := tweetWallet.NewWallet(newAddr, newKey, b.Db)
+	newWallet := tweetWallet.NewWallet(newAddr, newKey)
 	if !botExists {
 		err = updateProfile(b, newWallet, twitterName, senderAddress)
 		if err != nil {
@@ -631,7 +574,7 @@ func updateProfiles(streamAray []config.Stream, b *Bot) error {
 			return jerr.Get("error importing private key", err)
 		}
 		streamAddress := streamKey.GetAddress()
-		newWallet := tweetWallet.NewWallet(streamAddress, streamKey, b.Db)
+		newWallet := tweetWallet.NewWallet(streamAddress, streamKey)
 		err = updateProfile(b, newWallet, stream.Name, stream.Sender)
 		time.Sleep(1 * time.Second)
 	}
@@ -723,8 +666,6 @@ func makeStreamArray(b *Bot) ([]config.Stream, error) {
 		//check the balance of the new key
 		inputGetter := tweetWallet.InputGetter{
 			Address: walletKey.GetAddress(),
-			UTXOs:   nil,
-			Db:      b.Db,
 		}
 		outputs, err := inputGetter.GetUTXOs(nil)
 		if err != nil {
@@ -736,7 +677,7 @@ func makeStreamArray(b *Bot) ([]config.Stream, error) {
 			balance += output.Input.Value
 		}
 		if balance > 800 {
-			wlt := tweetWallet.NewWallet(walletKey.GetAddress(), walletKey, b.Db)
+			wlt := tweetWallet.NewWallet(walletKey.GetAddress(), walletKey)
 			streamArray = append(streamArray, config.Stream{Key: decryptedKey, Name: twitterName, Sender: senderAddress, Wallet: wlt})
 		}
 	}

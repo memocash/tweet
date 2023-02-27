@@ -13,7 +13,6 @@ import (
 	"github.com/memocash/index/ref/bitcoin/tx/parse"
 	"github.com/memocash/index/ref/bitcoin/tx/script"
 	"github.com/memocash/index/ref/bitcoin/wallet"
-	"github.com/syndtr/goleveldb/leveldb"
 	"golang.org/x/crypto/scrypt"
 	"io"
 	"net/http"
@@ -53,11 +52,11 @@ type Wallet struct {
 	Getter  gen.InputGetter
 }
 
-func NewWallet(address wallet.Address, key wallet.PrivateKey, db *leveldb.DB) Wallet {
+func NewWallet(address wallet.Address, key wallet.PrivateKey) Wallet {
 	return Wallet{
 		Address: address,
 		Key:     key,
-		Getter:  &InputGetter{Address: address, Db: db},
+		Getter:  &InputGetter{Address: address},
 	}
 }
 

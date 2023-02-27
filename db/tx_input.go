@@ -41,7 +41,7 @@ func GetTxInput(prevHash string, prevIndex int) (*TxInput, error) {
 		PrevIndex: prevIndex,
 	}
 	if err := GetSpecificItem(txInput); err != nil {
-		return nil, fmt.Errorf("error getting tx intput; %w", err)
+		return nil, fmt.Errorf("error getting tx input; %w", err)
 	}
 	return txInput, nil
 }

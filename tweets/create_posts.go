@@ -13,7 +13,7 @@ import (
 	"regexp"
 )
 
-func CreateMemoPostsFromDb(accountKey obj.AccountKey, appendLink bool, appendDate bool, wlt wallet.Wallet) (int, error) {
+func CreateMemoPostsFromDb(accountKey obj.AccountKey, flags db.Flags, wlt wallet.Wallet) (int, error) {
 	savedAddressTweet, err := db.GetRecentSavedAddressTweet(accountKey.GetAddress(), accountKey.Account)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		jerr.Get("error getting recent saved address tweet", err).Fatal()
@@ -43,7 +43,7 @@ func CreateMemoPostsFromDb(accountKey obj.AccountKey, appendLink bool, appendDat
 				tweet.Tweet.Text += fmt.Sprintf("\n%s", media.MediaURL)
 			}
 		}
-		if err := save.Tweet(wlt, accountKey.GetAddress(), tweet, appendLink, appendDate); err != nil {
+		if err := save.Tweet(wlt, accountKey.GetAddress(), tweet, flags); err != nil {
 			return numTransferred, jerr.Get("error streaming tweets for transfer", err)
 		}
 		numTransferred++

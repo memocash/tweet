@@ -21,16 +21,11 @@ var transferCmd = &cobra.Command{
 		date, _ := c.Flags().GetBool(FlagDate)
 		accountKey := obj.GetAccountKeyFromArgs(args)
 		client := tweets.Connect()
-		db, err := db.GetDb()
-		if err != nil {
-			jerr.Get("error opening db", err).Fatal()
-		}
-		defer db.Close()
 		if _, err := tweets.GetAllTweets(accountKey.Account, client); err != nil {
 			jerr.Get("error getting all tweets", err).Fatal()
 		}
-		wlt := wallet.NewWallet(accountKey.Address, accountKey.Key, db)
-		if _, err = tweets.CreateMemoPostsFromDb(accountKey, link, date, wlt); err != nil {
+		wlt := wallet.NewWallet(accountKey.Address, accountKey.Key)
+		if _, err := tweets.CreateMemoPostsFromDb(accountKey, db.Flags{Link: link, Date: date}, wlt); err != nil {
 			jerr.Get("fatal error transferring tweets", err).Fatal()
 		}
 	},

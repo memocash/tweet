@@ -7,44 +7,6 @@ import (
 	"github.com/memocash/index/ref/bitcoin/memo"
 )
 
-type UpdateQuery struct {
-	Address struct {
-		Txs []Tx `graphql:"txs(start: $start)"`
-	} `graphql:"address(address: $address)"`
-}
-
-type Subscription struct {
-	Addresses Tx `graphql:"addresses(addresses: $addresses)"`
-}
-
-type Tx struct {
-	Hash   string
-	Seen   GraphQlDate
-	Raw    string
-	Inputs []struct {
-		Index     uint32
-		PrevHash  string `graphql:"prev_hash"`
-		PrevIndex uint32 `graphql:"prev_index"`
-		Output    struct {
-			Lock struct {
-				Address string
-			}
-		}
-	}
-	Outputs []struct {
-		Script string
-		Amount int64
-		Lock   struct {
-			Address string
-		}
-	}
-	Blocks []struct {
-		Hash      string
-		Timestamp GraphQlDate
-		Height    int
-	}
-}
-
 func grabMessage(outputScripts []string) string {
 	for _, script := range outputScripts {
 		lockScript, err := hex.DecodeString(script)

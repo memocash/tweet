@@ -133,7 +133,7 @@ func getNewTweetsLocal(accountKey obj.AccountKey, numTweets int) ([]obj.TweetTx,
 	return tweetTxs, nil
 }
 
-func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, client *twitter.Client, link bool, date bool, numTweets int) error {
+func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, client *twitter.Client, flags db.Flags, numTweets int) error {
 	txList, err := getNewTweets(accountKey, client, numTweets)
 	//txList, err := getNewTweetsLocal(accountKey, db, numTweets)
 	if err != nil {
@@ -158,7 +158,7 @@ func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, client *twi
 		if savedAddressTweet != nil {
 			break
 		}
-		numSaved, err := CreateMemoPostsFromDb(accountKey, link, date, *wlt)
+		numSaved, err := CreateMemoPostsFromDb(accountKey, flags, *wlt)
 		if err != nil {
 			return jerr.Get("fatal error transferring tweets", err)
 		}

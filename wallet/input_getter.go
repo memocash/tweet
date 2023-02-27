@@ -9,13 +9,11 @@ import (
 	"github.com/memocash/index/ref/bitcoin/tx/hs"
 	"github.com/memocash/index/ref/bitcoin/tx/script"
 	"github.com/memocash/index/ref/bitcoin/wallet"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 type InputGetter struct {
 	Address wallet.Address
 	UTXOs   []memo.UTXO
-	Db      *leveldb.DB
 	reset   bool
 }
 
