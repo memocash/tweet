@@ -1,21 +1,18 @@
 package wallet
 
 import (
-	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"encoding/hex"
-	"encoding/json"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/index/ref/bitcoin/memo"
 	"github.com/memocash/index/ref/bitcoin/tx/gen"
 	"github.com/memocash/index/ref/bitcoin/tx/parse"
 	"github.com/memocash/index/ref/bitcoin/tx/script"
 	"github.com/memocash/index/ref/bitcoin/wallet"
+	"github.com/memocash/tweet/graph"
 	"golang.org/x/crypto/scrypt"
 	"io"
-	"net/http"
 	"time"
 )
 
@@ -68,7 +65,7 @@ func MakePost(wlt Wallet, message string) ([]byte, error) {
 	}
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
-	if err := completeTransaction(memoTx); err != nil {
+	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
 		return nil, jerr.Get("error completing transaction make post", err)
 	}
 	return memoTx.GetHash(), nil
@@ -80,7 +77,7 @@ func MakeReply(wallet Wallet, parentHash []byte, message string) ([]byte, error)
 	}
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
-	if err := completeTransaction(memoTx); err != nil {
+	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
 		return nil, jerr.Get("error completing transaction memo reply", err)
 	}
 	return memoTx.GetHash(), nil
@@ -105,7 +102,7 @@ func FundTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Ad
 	}
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
-	if err := completeTransaction(memoTx); err != nil {
+	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
 		return jerr.Get("error completing transaction fund twitter address", err)
 	}
 	return nil
@@ -129,7 +126,7 @@ func WithdrawAmount(utxos []memo.UTXO, key wallet.PrivateKey, address wallet.Add
 	}
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
-	if err := completeTransaction(memoTx); err != nil {
+	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
 		return jerr.Get("error completing transaction withdraw amount", err)
 	}
 	return nil
@@ -153,7 +150,7 @@ func WithdrawAll(utxos []memo.UTXO, key wallet.PrivateKey, address wallet.Addres
 	}
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
-	if err := completeTransaction(memoTx); err != nil {
+	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
 		return jerr.Get("error completing transaction withdraw all", err)
 	}
 	return nil
@@ -179,7 +176,7 @@ func SendToTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.
 	}
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
-	if err := completeTransaction(memoTx); err != nil {
+	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
 		return jerr.Get("error completing transaction send to twitter address", err)
 	}
 	return nil
@@ -191,7 +188,7 @@ func UpdateName(wlt Wallet, name string) error {
 	}
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
-	if err := completeTransaction(memoTx); err != nil {
+	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
 		return jerr.Get("error completing transaction update name", err)
 	}
 	return nil
@@ -207,7 +204,7 @@ func UpdateProfileText(wlt Wallet, profile string) error {
 	}
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
-	if err := completeTransaction(memoTx); err != nil {
+	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
 		return jerr.Get("error completing transaction update profile text", err)
 	}
 	return nil
@@ -221,7 +218,7 @@ func UpdateProfilePic(wlt Wallet, url string) error {
 	println("tx", memoTx.GetHash())
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
-	if err := completeTransaction(memoTx); err != nil {
+	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
 		return jerr.Get("error completing transaction update profile pic", err)
 	}
 	return nil
@@ -240,27 +237,6 @@ func buildTx(wlt Wallet, outputScript memo.Script) (*memo.Tx, error) {
 	})
 
 	return memoTx, err
-}
-func completeTransaction(memoTx *memo.Tx) error {
-	jsonData := map[string]interface{}{
-		"query": `mutation ($raw: String!) {
-					broadcast(raw: $raw)
-				}`,
-		"variables": map[string]string{
-			"raw": hex.EncodeToString(memo.GetRaw(memoTx.MsgTx)),
-		},
-	}
-	jsonValue, _ := json.Marshal(jsonData)
-	request, err := http.NewRequest("POST", "http://localhost:26770/graphql", bytes.NewBuffer(jsonValue))
-	if err != nil {
-		return jerr.Get("error making a new request failed complete transaction", err)
-	}
-	request.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Timeout: time.Second * 10}
-	if _, err := client.Do(request); err != nil {
-		return jerr.Get("error the HTTP request failed complete transaction", err)
-	}
-	return nil
 }
 
 var salt = []byte{0xfe, 0xa9, 0xe9, 0x4c, 0xd9, 0x84, 0x50, 0x3d}

@@ -9,6 +9,7 @@ import (
 	"github.com/memocash/index/ref/bitcoin/tx/hs"
 	"github.com/memocash/index/ref/bitcoin/tx/script"
 	"github.com/memocash/index/ref/bitcoin/wallet"
+	"github.com/memocash/tweet/graph"
 )
 
 type InputGetter struct {
@@ -26,8 +27,7 @@ func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
 		g.reset = false
 		return g.UTXOs, nil
 	}
-	database := Database{}
-	client := lib.NewClient("http://localhost:26770/graphql", &database)
+	client := lib.NewClient(graph.ServerUrlHttp, &Database{})
 	address := g.Address.GetAddr()
 	outputs, err := client.GetUtxos(address)
 	if err != nil {
