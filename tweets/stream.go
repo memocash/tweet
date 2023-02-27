@@ -95,7 +95,7 @@ func (s *Stream) ResetRules() error {
 	return nil
 }
 
-func (s *Stream) InitiateStream(streamConfigs []config.Stream) error {
+func (s *Stream) ListenForNewTweets(streamConfigs []config.Stream) error {
 	if s == nil {
 		return jerr.New("error stream is nil for initiate stream")
 	}
@@ -121,6 +121,7 @@ func (s *Stream) InitiateStream(streamConfigs []config.Stream) error {
 		AddExpansion("attachments.media_keys").
 		AddMediaField("url").
 		Build()
+	jlog.Log("Starting Twitter API stream")
 	if err := s.Api.Stream.StartStream(streamExpansions); err != nil {
 		return jerr.Get("error starting twitter stream", err)
 	}

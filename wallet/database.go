@@ -2,20 +2,16 @@ package wallet
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"github.com/jchavannes/jgo/jerr"
-	"github.com/jchavannes/jgo/jutil"
 	"github.com/memocash/index/client/lib/graph"
 	"github.com/memocash/index/ref/bitcoin/wallet"
+	"github.com/memocash/tweet/db"
 	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/util"
-	"strings"
 	"time"
 )
 
-type Database struct {
-	Db *leveldb.DB
-}
+type Database struct{}
 
 func (d *Database) GetAddressBalance(address wallet.Addr) (int64, error) {
 	utxos, err := d.GetUtxos(address)
@@ -30,103 +26,85 @@ func (d *Database) GetAddressBalance(address wallet.Addr) (int64, error) {
 }
 
 func (d *Database) SetAddressLastUpdate(address wallet.Addr, updateTime time.Time) error {
-	err := d.Db.Put([]byte("addresstime-"+address.String()), jutil.GetTimeByte(updateTime), nil)
-	if err != nil {
-		return jerr.Get("error setting address last update", err)
+	if err := db.Save([]db.ObjectI{&db.AddressWalletTime{
+		Address: address.String(),
+		Time:    updateTime,
+	}}); err != nil {
+		return jerr.Get("error saving address wallet last update time to db", err)
 	}
 	return nil
 }
 
 func (d *Database) GetAddressLastUpdate(address wallet.Addr) (time.Time, error) {
-	//timeByte, err := d.Db.Get([]byte("addresstime-"+address.String()), nil)
-	//if err != nil {
-	//	if err == leveldb.ErrNotFound {
-	//		return time.Time{}, nil
-	//	}
-	//	return time.Time{}, jerr.Get("error getting address last update", err)
-	//}
-	//return jutil.GetByteTime(timeByte), nil
+	addressTime, err := db.GetAddressTime(address.String())
+	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
+		return time.Time{}, jerr.Get("error getting address wallet last update from db", err)
+	}
+	if addressTime != nil {
+		return addressTime.Time, nil
+	}
 	return time.Time{}, nil
 }
 
 func (d *Database) GetUtxos(address wallet.Addr) ([]graph.Output, error) {
-	//iterate over all outputs, and search if an input field key exists that matches "input-hash-index"
 	var utxos []graph.Output
-	//create an iterator for the prefix "output-address"
-	iter := d.Db.NewIterator(util.BytesPrefix([]byte("output-"+address.String())), nil)
-	for iter.Next() {
-		//check if the input exists
+	dbTxOutputs, err := db.GetTxOutputs(address.String())
+	if err != nil {
+		return nil, jerr.Get("error getting tx outputs from db for get utxos", err)
+	}
+	for _, dbTxOutput := range dbTxOutputs {
 		var output graph.Output
-		err := json.Unmarshal(iter.Value(), &output)
-		if err != nil {
+		if err := json.Unmarshal(dbTxOutput.Output, &output); err != nil {
 			return nil, jerr.Get("error getting utxos", err)
 		}
-		//get txhash from the name of the output
-		txhash := strings.Split(string(iter.Key()), "-")[2]
-		//check if the input exists
-		inputKey := []byte(fmt.Sprintf("input-%s-%d", txhash, output.Index))
-		_, err = d.Db.Get(inputKey, nil)
-		if err != nil {
-			if err == leveldb.ErrNotFound {
-				//if the input doesn't exist, add the output to the utxos array
-				utxos = append(utxos, output)
-			} else {
-				return nil, jerr.Get("error getting utxos", err)
+		if _, err := db.GetTxInput(dbTxOutput.TxHash, dbTxOutput.Index); err != nil {
+			if err != leveldb.ErrNotFound {
+				return nil, jerr.Get("error getting tx inputs from db for get utxos", err)
 			}
+			utxos = append(utxos, output)
 		}
-	}
-	iter.Release()
-	err := iter.Error()
-	if err != nil {
-		return nil, jerr.Get("error getting utxos", err)
 	}
 	return utxos, nil
 }
 
 func (d *Database) SaveTxs(txs []graph.Tx) error {
+	var objectsToSave []db.ObjectI
 	for _, tx := range txs {
-		//marshal the tx into a byte array
 		for _, input := range tx.Inputs {
-			//input-prevHash-prevIndex
-			key := []byte(fmt.Sprintf("input-%s-%d", input.PrevHash, input.PrevIndex))
-			err := d.Db.Put(key, nil, nil)
-			if err != nil {
-				return jerr.Get("error saving tx", err)
-			}
+			objectsToSave = append(objectsToSave, &db.TxInput{
+				PrevHash:  input.PrevHash,
+				PrevIndex: input.PrevIndex,
+			})
 		}
 		for _, output := range tx.Outputs {
-			//output-address-txhash-index
-			key := []byte(fmt.Sprintf("output-%s-%s-%d", output.Lock.Address, tx.Hash, output.Index))
 			output.Tx.Hash = tx.Hash
-			value, err := json.MarshalIndent(output, "", "  ")
+			outputJson, err := json.MarshalIndent(output, "", "  ")
 			if err != nil {
-				return jerr.Get("error saving tx", err)
+				return jerr.Get("error marshalling tx output for tx save to db", err)
 			}
-			err = d.Db.Put(key, value, nil)
-			if err != nil {
-				return jerr.Get("error saving tx", err)
-			}
+			objectsToSave = append(objectsToSave, &db.TxOutput{
+				Address: output.Lock.Address,
+				TxHash:  tx.Hash,
+				Index:   output.Index,
+				Output:  outputJson,
+			})
 		}
 		for _, block := range tx.Blocks {
-			//txblock-txhash-blockhash
-			//this lets us search the database by txhash and will tell us what block it's in
-			key := []byte(fmt.Sprintf("txblock-%s-%s", tx.Hash, block.Hash))
-			err := d.Db.Put(key, nil, nil)
+			blockJson, err := json.MarshalIndent(block, "", "  ")
 			if err != nil {
 				return jerr.Get("error saving tx", err)
 			}
-			//block-blockhash
-			//this lets us search the database by blockhash and will tell us the height of the block
-			key2 := []byte(fmt.Sprintf("block-%s", block.Hash))
-			value, err := json.MarshalIndent(block, "", "  ")
-			if err != nil {
-				return jerr.Get("error saving tx", err)
-			}
-			err = d.Db.Put(key2, value, nil)
-			if err != nil {
-				return jerr.Get("error saving tx", err)
-			}
+			objectsToSave = append(objectsToSave, &db.TxBlock{
+				TxHash:    tx.Hash,
+				BlockHash: block.Hash,
+			}, &db.Block{
+				BlockHash: block.Hash,
+				Block:     blockJson,
+			})
 		}
+	}
+	if err := db.Save(objectsToSave); err != nil {
+		return jerr.Get("error saving wallet tx objects to db", err)
 	}
 	return nil
 }

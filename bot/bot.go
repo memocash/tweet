@@ -507,7 +507,7 @@ func (b *Bot) UpdateStream() ([]config.Stream, error) {
 		if len(streamArray) == 0 {
 			return
 		}
-		if err := b.Stream.InitiateStream(streamArray); err != nil {
+		if err := b.Stream.ListenForNewTweets(streamArray); err != nil {
 			b.ErrorChan <- jerr.Get("error twitter initiate stream in update", err)
 		}
 	}()
@@ -642,12 +642,11 @@ func updateProfile(b *Bot, newWallet tweetWallet.Wallet, twitterName string, sen
 	if err != nil {
 		return jerr.Get("fatal error getting profile", err)
 	}
-	//look for the profile-senderAddress-twitterName key in the database
-	profileExists, err := b.Db.Get([]byte("profile-"+senderAddress+"-"+twitterName), nil)
+	existingDbProfile, err := db.GetProfile(senderAddress, twitterName)
 	if err != nil && err != leveldb.ErrNotFound {
 		return jerr.Get("error getting profile from database", err)
 	}
-	if err == leveldb.ErrNotFound {
+	if existingDbProfile == nil {
 		if err = tweetWallet.UpdateName(newWallet, profile.Name); err != nil {
 			return jerr.Get("error updating name", err)
 		}
@@ -660,64 +659,50 @@ func updateProfile(b *Bot, newWallet tweetWallet.Wallet, twitterName string, sen
 		if b.Verbose {
 			jlog.Log("updated profile info for the first time")
 		}
-		newProfile := tweetWallet.Profile{
-			Name:        profile.Name,
-			Description: profile.Description,
-			ProfilePic:  profile.ProfilePic,
-		}
-		profileBytes, err := json.Marshal(newProfile)
-		if err != nil {
-			return jerr.Get("error marshalling profile", err)
-		}
-		err = b.Db.Put([]byte("profile-"+senderAddress+"-"+twitterName), profileBytes, nil)
-		if err != nil {
-			return jerr.Get("error putting profile in database", err)
-		}
-	} else if err == nil {
-		//make the profileExists into a string and print it
-		var dbProfile tweetWallet.Profile
-		err = json.Unmarshal(profileExists, &dbProfile)
-		if err != nil {
+	} else {
+		dbProfile := new(tweets.Profile)
+		if err = json.Unmarshal(existingDbProfile.Profile, &dbProfile); err != nil {
 			return jerr.Getf(err, "error unmarshalling profile: %s", dbProfile.Name)
 		}
 		if dbProfile.Name != profile.Name {
-			err = tweetWallet.UpdateName(newWallet, profile.Name)
-			if err != nil {
+			if err = tweetWallet.UpdateName(newWallet, profile.Name); err != nil {
 				return jerr.Get("error updating name", err)
+			} else if b.Verbose {
+				jlog.Logf("updated profile name for %s: %s to %s\n", profile.ID, dbProfile.Name, profile.Name)
 			}
-			jlog.Logf("updated profile name for %s: %s to %s\n", profile.ID, dbProfile.Name, profile.Name)
-			dbProfile.Name = profile.Name
 		}
 		if dbProfile.Description != profile.Description {
-			err = tweetWallet.UpdateProfileText(newWallet, profile.Description)
-			if err != nil {
+			if err = tweetWallet.UpdateProfileText(newWallet, profile.Description); err != nil {
 				return jerr.Get("error updating profile text", err)
+			} else if b.Verbose {
+				jlog.Logf("updated profile text for %s: %s to %s\n", profile.ID, dbProfile.Description, profile.Description)
 			}
-			jlog.Logf("updated profile text for %s: %s to %s\n", profile.ID, dbProfile.Description, profile.Description)
-			dbProfile.Description = profile.Description
 		}
 		if dbProfile.ProfilePic != profile.ProfilePic {
-			err = tweetWallet.UpdateProfilePic(newWallet, profile.ProfilePic)
-			if err != nil {
+			if err = tweetWallet.UpdateProfilePic(newWallet, profile.ProfilePic); err != nil {
 				return jerr.Get("error updating profile pic", err)
+			} else if b.Verbose {
+				jlog.Logf("updated profile pic for %s: %s to %s\n", profile.ID, dbProfile.ProfilePic, profile.ProfilePic)
 			}
-			jlog.Logf("updated profile pic for %s: %s to %s\n", profile.ID, dbProfile.ProfilePic, profile.ProfilePic)
-			dbProfile.ProfilePic = profile.ProfilePic
 		}
-		profileBytes, err := json.Marshal(profile)
-		if err != nil {
-			return jerr.Get("error marshalling profile", err)
-		}
-		err = b.Db.Put([]byte("profile-"+senderAddress+"-"+twitterName), profileBytes, nil)
-		if err != nil {
-			return jerr.Get("error putting profile", err)
-		}
+	}
+	profileBytes, err := json.Marshal(profile)
+	if err != nil {
+		return jerr.Get("error marshalling profile", err)
+	}
+	if err := db.Save([]db.ObjectI{&db.Profile{
+		Address:     senderAddress,
+		TwitterName: twitterName,
+		Profile:     profileBytes,
+	}}); err != nil {
+		return jerr.Get("error saving profile to database", err)
 	}
 	if b.Verbose {
 		jlog.Logf("checked for profile updates: %s (%s)", twitterName, senderAddress)
 	}
 	return nil
 }
+
 func makeStreamArray(b *Bot) ([]config.Stream, error) {
 	streamArray := make([]config.Stream, 0)
 	iter := b.Db.NewIterator(util.BytesPrefix([]byte("linked-")), nil)

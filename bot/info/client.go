@@ -1,4 +1,4 @@
-package bot
+package info
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 	"net/url"
 )
 
-func InfoBalance(address wallet.Addr) error {
+func Balance(address wallet.Addr) error {
 	port := config.GetConfig().InfoServerPort
 	if port == 0 {
 		return fmt.Errorf("error info request port is 0")
@@ -28,13 +28,13 @@ func InfoBalance(address wallet.Addr) error {
 	fmt.Println(string(body))
 	return nil
 }
-func InfoProfile(sender wallet.Addr, twittername string) (error){
+func Profile(sender wallet.Addr, twittername string) error {
 	port := config.GetConfig().InfoServerPort
 	if port == 0 {
 		return fmt.Errorf("error info request port is 0")
 	}
 	resp, err := http.PostForm(fmt.Sprintf("http://localhost:%d/profile", port), url.Values{
-		"sender": {sender.String()},
+		"sender":      {sender.String()},
 		"twittername": {twittername},
 	})
 	if err != nil {

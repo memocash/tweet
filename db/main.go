@@ -10,9 +10,15 @@ import (
 
 const (
 	PrefixAddressSeenTx     = "address-seen-tx"
+	PrefixAddressTime       = "addresstime"
+	PrefixBlock             = "block"
 	PrefixCompletedTx       = "completed"
+	PrefixProfile           = "profile"
 	PrefixSavedAddressTweet = "saved"
 	PrefixTweetTx           = "tweets"
+	PrefixTxBlock           = "txblock"
+	PrefixTxInput           = "input"
+	PrefixTxOutput          = "output"
 )
 
 var _db *leveldb.DB
@@ -40,7 +46,11 @@ type ObjectI interface {
 const Spacer = '-'
 
 func GetObjectCombinedUid(o ObjectI) []byte {
-	return jutil.CombineBytes([]byte(o.GetPrefix()), []byte{Spacer}, o.GetUid())
+	uid := o.GetUid()
+	if len(uid) == 0 {
+		return []byte(o.GetPrefix())
+	}
+	return jutil.CombineBytes([]byte(o.GetPrefix()), []byte{Spacer}, uid)
 }
 
 func Save(objects []ObjectI) error {

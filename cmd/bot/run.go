@@ -4,6 +4,7 @@ import (
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/bot"
+	"github.com/memocash/tweet/bot/info"
 	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets"
@@ -74,7 +75,7 @@ var runCmd = &cobra.Command{
 			errorChan <- jerr.Get("error listening for transactions", err)
 		}()
 		go func() {
-			infoServer := bot.NewInfoServer(db)
+			infoServer := info.NewServer()
 			err = infoServer.Listen()
 			errorChan <- jerr.Get("error info server listener", err)
 		}()

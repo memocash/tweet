@@ -15,12 +15,11 @@ var resetProfileCmd = &cobra.Command{
 		}
 		senderAddr := args[0]
 		twittername := args[1]
-		db, err := db.GetDb()
-		if err != nil {
-			log.Fatalf("error opening db; %v", err)
-		}
-		if err := db.Delete([]byte("profile-"+senderAddr+"-"+twittername), nil); err != nil {
-			log.Fatalf("error removing completed tx item; %v", err)
+		if err := db.Delete([]db.ObjectI{&db.Profile{
+			Address:     senderAddr,
+			TwitterName: twittername,
+		}}); err != nil {
+			log.Fatalf("error removing profile from db for reset; %v", err)
 		}
 		log.Printf("reset %s profile linked to %s\n", twittername, senderAddr)
 	},

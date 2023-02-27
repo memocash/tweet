@@ -28,7 +28,7 @@ func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
 		g.reset = false
 		return g.UTXOs, nil
 	}
-	database := Database{Db: g.Db}
+	database := Database{}
 	client := lib.NewClient("http://localhost:26770/graphql", &database)
 	address := g.Address.GetAddr()
 	outputs, err := client.GetUtxos(address)

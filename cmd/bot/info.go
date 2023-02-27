@@ -2,7 +2,7 @@ package bot
 
 import (
 	"github.com/memocash/index/ref/bitcoin/wallet"
-	"github.com/memocash/tweet/bot"
+	"github.com/memocash/tweet/bot/info"
 	"github.com/spf13/cobra"
 	"log"
 )
@@ -23,7 +23,7 @@ var infoCmd = &cobra.Command{
 			if err != nil {
 				log.Fatalf("error getting address; %v", err)
 			}
-			if err := bot.InfoBalance(*addr); err != nil {
+			if err := info.Balance(*addr); err != nil {
 				log.Fatalf("error info balance; %v", err)
 			}
 		case "profile":
@@ -35,7 +35,7 @@ var infoCmd = &cobra.Command{
 				log.Fatalf("error getting address; %v", err)
 			}
 			twittername := args[2]
-			if err := bot.InfoProfile(*senderAdder, twittername); err != nil {
+			if err := info.Profile(*senderAdder, twittername); err != nil {
 				log.Fatalf("error info profile; %v", err)
 			}
 		default:

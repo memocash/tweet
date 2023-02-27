@@ -44,7 +44,7 @@ var getNewCmd = &cobra.Command{
 		if err != nil {
 			jerr.Get("error getting new tweet stream", err).Fatal()
 		}
-		if err := stream.InitiateStream(streamConfigs); err != nil {
+		if err := stream.ListenForNewTweets(streamConfigs); err != nil {
 			jerr.Get("error twitter initiate stream get new tweets", err).Fatal()
 		}
 	},
