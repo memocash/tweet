@@ -17,12 +17,14 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"regexp"
 	"strconv"
+	"sync"
 )
 
 type Stream struct {
 	Api   *twitterstream.TwitterApi
 	Db    *leveldb.DB
 	Token *token_generator.RequestBearerTokenResponse
+	Mutex sync.Mutex
 }
 
 func NewStream() (*Stream, error) {
@@ -76,8 +78,6 @@ func (s *Stream) FilterAccount(streamConfigs []config.Stream) error {
 }
 
 func (s *Stream) ResetRules() error {
-	/*s.SetFreshApi()
-	defer s.CloseApi()*/
 	res, err := s.Api.Rules.Get()
 	if err != nil {
 		return jerr.Get("error getting twitter API rules", err)
@@ -100,9 +100,14 @@ func (s *Stream) ListenForNewTweets(streamConfigs []config.Stream) error {
 	if s == nil {
 		return jerr.New("error stream is nil for initiate stream")
 	}
+	s.Mutex.Lock()
+	defer s.Mutex.Unlock()
 	s.SetFreshApi()
 	if err := s.ResetRules(); err != nil {
 		return jerr.Get("error twitter stream reset rules", err)
+	}
+	for _, streamConfig := range streamConfigs {
+		jlog.Logf("Adding stream config: %s %s\n", streamConfig.Sender, streamConfig.Name)
 	}
 	if err := s.FilterAccount(streamConfigs); err != nil {
 		return jerr.Get("error twitter stream filter account", err)

@@ -12,8 +12,7 @@ import (
 )
 
 func refund(tx graph.Tx, b *Bot, coinIndex uint32, senderAddress string, errMsg string) error {
-	_, err := b.SafeUpdate()
-	if err != nil {
+	if err := b.SafeUpdate(); err != nil {
 		return jerr.Get("error updating stream", err)
 	}
 	jlog.Logf("Sending refund error message to %s: %s\n", senderAddress, errMsg)

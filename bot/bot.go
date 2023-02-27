@@ -32,7 +32,8 @@ type Bot struct {
 	Db          *leveldb.DB
 	Stream      *tweets.Stream
 	ErrorChan   chan error
-	Mutex       sync.Mutex
+	TxMutex     sync.Mutex
+	UpdateMutex sync.Mutex
 	Crypt       []byte
 	Timer       *time.Timer
 	Verbose     bool
@@ -114,12 +115,11 @@ func (b *Bot) Listen() error {
 	if b.Stream, err = tweets.NewStream(); err != nil {
 		return jerr.Get("error getting new tweet stream", err)
 	}
-
-	streamArray, err := b.SafeUpdate()
+	botStreams, err := getBotStreams(b.Crypt)
 	if err != nil {
-		return jerr.Get("error updating stream", err)
+		return jerr.Get("error getting bot streams for listen skipped", err)
 	}
-	for _, stream := range streamArray {
+	for _, stream := range botStreams {
 		if err = tweets.GetSkippedTweets(obj.AccountKey{
 			Account: stream.Name,
 			Key:     stream.Wallet.Key,
@@ -128,15 +128,15 @@ func (b *Bot) Listen() error {
 			return jerr.Get("error getting skipped tweets on bot listen", err)
 		}
 	}
-	if _, err = b.SafeUpdate(); err != nil {
+	if err = b.SafeUpdate(); err != nil {
 		return jerr.Get("error updating stream 2nd time", err)
 	}
 	return jerr.Get("error in listen", <-b.ErrorChan)
 }
 
 func (b *Bot) SaveTx(tx graph.Tx) error {
-	b.Mutex.Lock()
-	defer b.Mutex.Unlock()
+	b.TxMutex.Lock()
+	defer b.TxMutex.Unlock()
 	for _, input := range tx.Inputs {
 		if input.Output.Lock.Address == b.Addresses[0] {
 			return nil
@@ -257,8 +257,7 @@ func (b *Bot) SaveTx(tx graph.Tx) error {
 				}
 
 			}
-			_, err = b.SafeUpdate()
-			if err != nil {
+			if err = b.SafeUpdate(); err != nil {
 				return jerr.Get("error updating stream", err)
 			}
 		} else {
@@ -344,8 +343,7 @@ func (b *Bot) SaveTx(tx graph.Tx) error {
 				}
 			}
 		}
-		_, err = b.SafeUpdate()
-		if err != nil {
+		if err = b.SafeUpdate(); err != nil {
 			return jerr.Get("error updating stream", err)
 		}
 	} else {
@@ -358,34 +356,36 @@ func (b *Bot) SaveTx(tx graph.Tx) error {
 	return nil
 }
 
-func (b *Bot) SafeUpdate() ([]config.Stream, error) {
-	streamArray, err := b.UpdateStream()
+func (b *Bot) SafeUpdate() error {
+	b.UpdateMutex.Lock()
+	defer b.UpdateMutex.Unlock()
 	var waitCount = 1
+	err := b.UpdateStream()
 	for err != nil && waitCount < 30 {
 		if !jerr.HasErrorPart(err, "DuplicateRule") {
-			return nil, jerr.Get("error updating stream", err)
+			return jerr.Get("error updating stream", err)
 		}
-		fmt.Printf("\n\n\nError updating stream: %s\n\n\n", err.Error())
-		streamArray, err = b.UpdateStream()
+		jlog.Logf("Error updating stream: %s\n", err.Error())
+		err = b.UpdateStream()
 		time.Sleep(time.Duration(waitCount) * time.Second)
 		waitCount *= 2
 	}
 	if err != nil {
-		return nil, jerr.Get("error updating stream", err)
+		return jerr.Get("error updating stream", err)
 	}
-	return streamArray, nil
+	return nil
 }
 
-func (b *Bot) UpdateStream() ([]config.Stream, error) {
+func (b *Bot) UpdateStream() error {
 	//create an array of {twitterName, newKey} objects by searching through the linked-<senderAddress>-<twitterName> fields
 	botStreams, err := getBotStreams(b.Crypt)
 	if err != nil {
-		return nil, jerr.Get("error making stream array update", err)
+		return jerr.Get("error making stream array update", err)
 	}
 	for _, stream := range botStreams {
 		streamKey, err := wallet.ImportPrivateKey(stream.Key)
 		if err != nil {
-			return nil, jerr.Get("error importing private key", err)
+			return jerr.Get("error importing private key", err)
 		}
 		streamAddress := streamKey.GetAddress()
 		if b.Verbose {
@@ -394,7 +394,7 @@ func (b *Bot) UpdateStream() ([]config.Stream, error) {
 	}
 	err = b.Db.Put([]byte("memobot-running-count"), []byte(strconv.FormatUint(uint64(len(botStreams)), 10)), nil)
 	if err != nil {
-		return nil, jerr.Get("error updating running count", err)
+		return jerr.Get("error updating running count", err)
 	}
 	go func() {
 		if len(botStreams) == 0 {
@@ -404,5 +404,5 @@ func (b *Bot) UpdateStream() ([]config.Stream, error) {
 			b.ErrorChan <- jerr.Get("error twitter initiate stream in update", err)
 		}
 	}()
-	return botStreams, nil
+	return nil
 }
