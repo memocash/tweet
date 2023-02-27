@@ -62,5 +62,8 @@ func GetAllAddressSeenTx() ([]*AddressSeenTx, error) {
 		Set(addressSeenTx, iter)
 		addressSeenTxs = append(addressSeenTxs, addressSeenTx)
 	}
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("error iterating over all address seen txs; %w", err)
+	}
 	return addressSeenTxs, nil
 }

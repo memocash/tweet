@@ -65,7 +65,7 @@ var runCmd = &cobra.Command{
 		if err != nil {
 			jerr.Get("fatal error generating encryption key", err).Fatal()
 		}
-		memoBot.Crypt = string(cryptBytes)
+		memoBot.Crypt = cryptBytes
 		if err := memoBot.ProcessMissedTxs(); err != nil {
 			jerr.Get("fatal error updating bot", err).Fatal()
 		}

@@ -53,5 +53,8 @@ func GetTxOutputs(address string) ([]*TxOutput, error) {
 		Set(tweetTx, iter)
 		txOutputs = append(txOutputs, tweetTx)
 	}
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("error iterating over tx outputs for address; %w", err)
+	}
 	return txOutputs, nil
 }

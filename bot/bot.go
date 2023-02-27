@@ -1,8 +1,6 @@
 package bot
 
 import (
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/dghubble/go-twitter/twitter"
@@ -10,7 +8,6 @@ import (
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jlog"
 	"github.com/memocash/index/ref/bitcoin/memo"
-	"github.com/memocash/index/ref/bitcoin/tx/hs"
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/db"
@@ -19,7 +16,6 @@ import (
 	"github.com/memocash/tweet/tweets/obj"
 	tweetWallet "github.com/memocash/tweet/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/util"
 	"regexp"
 	"strconv"
 	"strings"
@@ -37,7 +33,7 @@ type Bot struct {
 	Stream      *tweets.Stream
 	ErrorChan   chan error
 	Mutex       sync.Mutex
-	Crypt       string
+	Crypt       []byte
 	Timer       *time.Timer
 	Verbose     bool
 }
@@ -105,13 +101,12 @@ func (b *Bot) Listen() error {
 			select {
 			case <-t.C:
 			}
-			streamArray, err := makeStreamArray(b)
+			botStreams, err := getBotStreams(b.Crypt)
 			if err != nil {
 				b.ErrorChan <- jerr.Get("error making stream array bot listen", err)
 			}
-			err = updateProfiles(streamArray, b)
-			if err != nil {
-				fmt.Printf("\n\nError updating profiles: %s\n\n", err.Error())
+			if err = updateProfiles(botStreams, b); err != nil {
+				b.ErrorChan <- jerr.Get("error updating profiles for bot listen", err)
 			}
 		}
 	}()
@@ -119,6 +114,7 @@ func (b *Bot) Listen() error {
 	if b.Stream, err = tweets.NewStream(); err != nil {
 		return jerr.Get("error getting new tweet stream", err)
 	}
+
 	streamArray, err := b.SafeUpdate()
 	if err != nil {
 		return jerr.Get("error updating stream", err)
@@ -247,7 +243,7 @@ func (b *Bot) SaveTx(tx graph.Tx) error {
 		}}); err != nil {
 			return jerr.Get("error saving flags to db", err)
 		}
-		accountKeyPointer, wlt, err := createBot(b, twitterName, senderAddress, tx, coinIndex)
+		accountKeyPointer, wlt, err := createBotStream(b, twitterName, senderAddress, tx, coinIndex)
 		if err != nil {
 			return jerr.Get("error creating bot", err)
 		}
@@ -279,28 +275,19 @@ func (b *Bot) SaveTx(tx graph.Tx) error {
 		if twitterName[0] == '@' {
 			twitterName = twitterName[1:]
 		}
-		searchString := "linked-" + senderAddress + "-" + twitterName
-		//refund if this field doesn't exist
-		searchValue, err := b.Db.Get([]byte(searchString), nil)
+		addressKey, err := db.GetAddressKey(senderAddress, twitterName)
 		if err != nil {
-			if err == leveldb.ErrNotFound {
-				//handle refund
-				errMsg := "No linked address found for " + senderAddress + "-" + twitterName
-				err = refund(tx, b, coinIndex, senderAddress, errMsg)
-				if err != nil {
-					return jerr.Get("error refunding", err)
-				}
-				return nil
+			if !errors.Is(err, leveldb.ErrNotFound) {
+				return jerr.Get("error getting linked-"+senderAddress+"-"+twitterName, err)
 			}
-			errMsg := "Error accessing database looking for existing linked address"
-			_ = refund(tx, b, coinIndex, senderAddress, errMsg)
-			return jerr.Get("error getting linked-"+senderAddress+"-"+twitterName, err)
+			errMsg := "No linked address found for " + senderAddress + "-" + twitterName
+			err = refund(tx, b, coinIndex, senderAddress, errMsg)
+			if err != nil {
+				return jerr.Get("error refunding no linked address key found", err)
+			}
+			return nil
 		} else {
-			fieldName := searchString
-			stringKey := searchValue
-			println("Field name: " + string(fieldName))
-			//get the address object from the private key
-			decryptedKey, err := tweetWallet.Decrypt(stringKey, []byte(b.Crypt))
+			decryptedKey, err := tweetWallet.Decrypt(addressKey.Key, b.Crypt)
 			if err != nil {
 				return jerr.Get("error decrypting key", err)
 			}
@@ -309,7 +296,9 @@ func (b *Bot) SaveTx(tx graph.Tx) error {
 				return jerr.Get("error importing private key", err)
 			}
 			address := key.GetAddress()
-			println("Address: " + address.GetEncoded())
+			if b.Verbose {
+				jlog.Logf("Withdrawing from address: %s\n", address.GetEncoded())
+			}
 			inputGetter := tweetWallet.InputGetter{Address: address}
 			//use the address object of the spawned key to get the outputs array
 			outputs, err := inputGetter.GetUTXOs(nil)
@@ -368,47 +357,7 @@ func (b *Bot) SaveTx(tx graph.Tx) error {
 	}
 	return nil
 }
-func refund(tx graph.Tx, b *Bot, coinIndex uint32, senderAddress string, errMsg string) error {
-	_, err := b.SafeUpdate()
-	if err != nil {
-		return jerr.Get("error updating stream", err)
-	}
-	jlog.Logf("Sending refund error message to %s: %s\n", senderAddress, errMsg)
-	sentToMainBot := false
-	//check all the outputs to see if any of them match the bot's address, if not, return nil, if so, continue with the function
-	for _, output := range tx.Outputs {
-		if output.Lock.Address == b.Addresses[0] {
-			sentToMainBot = true
-			break
-		}
-	}
-	if !sentToMainBot {
-		return nil
-	}
-	//handle sending back money
-	//not enough to send back
-	if memo.GetMaxSendFromCount(tx.Outputs[coinIndex].Amount, 1) <= 0 {
-		if b.Verbose {
-			jlog.Log("Not enough funds to refund")
-		}
-		return nil
-	}
-	//create a transaction with the sender address and the amount of the transaction
-	pkScript, err := hex.DecodeString(tx.Outputs[coinIndex].Script)
-	if err != nil {
-		return jerr.Get("error decoding script pk script for refund", err)
-	}
-	if err := tweetWallet.SendToTwitterAddress(memo.UTXO{Input: memo.TxInput{
-		Value:        tx.Outputs[coinIndex].Amount,
-		PrevOutHash:  hs.GetTxHash(tx.Hash),
-		PrevOutIndex: coinIndex,
-		PkHash:       wallet.GetAddressFromString(b.Addresses[0]).GetPkHash(),
-		PkScript:     pkScript,
-	}}, b.Key, wallet.GetAddressFromString(senderAddress), errMsg); err != nil {
-		return jerr.Get("error sending money back", err)
-	}
-	return nil
-}
+
 func (b *Bot) SafeUpdate() ([]config.Stream, error) {
 	streamArray, err := b.UpdateStream()
 	var waitCount = 1
@@ -426,13 +375,14 @@ func (b *Bot) SafeUpdate() ([]config.Stream, error) {
 	}
 	return streamArray, nil
 }
+
 func (b *Bot) UpdateStream() ([]config.Stream, error) {
 	//create an array of {twitterName, newKey} objects by searching through the linked-<senderAddress>-<twitterName> fields
-	streamArray, err := makeStreamArray(b)
+	botStreams, err := getBotStreams(b.Crypt)
 	if err != nil {
 		return nil, jerr.Get("error making stream array update", err)
 	}
-	for _, stream := range streamArray {
+	for _, stream := range botStreams {
 		streamKey, err := wallet.ImportPrivateKey(stream.Key)
 		if err != nil {
 			return nil, jerr.Get("error importing private key", err)
@@ -442,249 +392,17 @@ func (b *Bot) UpdateStream() ([]config.Stream, error) {
 			jlog.Logf("streaming %s to address %s\n", stream.Name, streamAddress.GetEncoded())
 		}
 	}
-	err = b.Db.Put([]byte("memobot-running-count"), []byte(strconv.FormatUint(uint64(len(streamArray)), 10)), nil)
+	err = b.Db.Put([]byte("memobot-running-count"), []byte(strconv.FormatUint(uint64(len(botStreams)), 10)), nil)
 	if err != nil {
 		return nil, jerr.Get("error updating running count", err)
 	}
 	go func() {
-		if len(streamArray) == 0 {
+		if len(botStreams) == 0 {
 			return
 		}
-		if err := b.Stream.ListenForNewTweets(streamArray); err != nil {
+		if err := b.Stream.ListenForNewTweets(botStreams); err != nil {
 			b.ErrorChan <- jerr.Get("error twitter initiate stream in update", err)
 		}
 	}()
-	return streamArray, nil
-}
-
-func createBot(b *Bot, twitterName string, senderAddress string, tx graph.Tx, coinIndex uint32) (*obj.AccountKey, *tweetWallet.Wallet, error) {
-	//check if the value of the transaction is less than 5,000 or this address already has a bot for this account in the database
-	botExists := false
-	_, err := b.Db.Get([]byte("linked-"+senderAddress+"-"+twitterName), nil)
-	if err != nil && err != leveldb.ErrNotFound {
-		return nil, nil, jerr.Get("error getting bot from database", err)
-	} else if err == nil {
-		botExists = true
-	}
-	//check if this twitter account actually exists
-	twitterExists := false
-	if _, _, err := b.TweetClient.Users.Show(&twitter.UserShowParams{ScreenName: twitterName}); err == nil {
-		twitterExists = true
-	}
-	if !twitterExists || tx.Outputs[coinIndex].Amount < 5000 {
-		if tx.Outputs[coinIndex].Amount < 546 {
-			return nil, nil, nil
-		}
-		errMsg := ""
-		if !twitterExists {
-			errMsg = fmt.Sprintf("Twitter account @%s does not exist", twitterName)
-		} else {
-			errMsg = fmt.Sprintf("You need to send at least 5,000 satoshis to create a bot for the account @%s", twitterName)
-		}
-		err = refund(tx, b, coinIndex, senderAddress, errMsg)
-		if err != nil {
-			return nil, nil, jerr.Get("error refunding", err)
-		}
-		return nil, nil, nil
-	}
-	println(b.Addresses[0])
-	var newKey wallet.PrivateKey
-	var newAddr wallet.Address
-	numStreamBytes, err := b.Db.Get([]byte("memobot-num-streams"), nil)
-	if err != nil {
-		return nil, nil, jerr.Get("error getting num-streams", err)
-	}
-	numStream, err := strconv.ParseUint(string(numStreamBytes), 10, 64)
-	if err != nil {
-		return nil, nil, jerr.Get("error parsing num-streams", err)
-	}
-	//convert numStream to a uint
-	numStreamUint := uint(numStream)
-	if botExists {
-		//get the key from the database
-		//decrypt
-		rawKey, err := b.Db.Get([]byte("linked-"+senderAddress+"-"+twitterName), nil)
-		if err != nil {
-			return nil, nil, jerr.Get("error getting key from database", err)
-		}
-		decryptedKey, err := tweetWallet.Decrypt(rawKey, []byte(b.Crypt))
-		if err != nil {
-			return nil, nil, jerr.Get("error decrypting key", err)
-		}
-		newKey, err = wallet.ImportPrivateKey(string(decryptedKey))
-		if err != nil {
-			return nil, nil, jerr.Get("error importing private key", err)
-		}
-		newAddr = newKey.GetAddress()
-	} else {
-		path := wallet.GetBip44Path(wallet.Bip44CoinTypeBTC, numStreamUint+1, false)
-		keyPointer, err := b.Mnemonic.GetPath(path)
-		newKey = *keyPointer
-		if err != nil {
-			return nil, nil, jerr.Get("error getting path", err)
-		}
-		newAddr = newKey.GetAddress()
-	}
-	pkScript, err := hex.DecodeString(tx.Outputs[coinIndex].Script)
-	if err != nil {
-		return nil, nil, jerr.Get("error decoding script pk script for create bot", err)
-	}
-	if err := tweetWallet.FundTwitterAddress(memo.UTXO{Input: memo.TxInput{
-		Value:        tx.Outputs[coinIndex].Amount,
-		PrevOutHash:  hs.GetTxHash(tx.Hash),
-		PrevOutIndex: coinIndex,
-		PkHash:       b.Key.GetAddress().GetPkHash(),
-		PkScript:     pkScript,
-	}}, b.Key, newAddr); err != nil {
-		return nil, nil, jerr.Get("error funding twitter address", err)
-	}
-	newWallet := tweetWallet.NewWallet(newAddr, newKey)
-	if !botExists {
-		err = updateProfile(b, newWallet, twitterName, senderAddress)
-		if err != nil {
-			return nil, nil, jerr.Get("error updating profile", err)
-		}
-	}
-	if b.Verbose {
-		jlog.Logf("Create bot stream Address: " + newAddr.GetEncoded())
-	}
-	if !botExists {
-		err = b.Db.Put([]byte("memobot-num-streams"), []byte(strconv.FormatUint(uint64(numStreamUint+1), 10)), nil)
-		if err != nil {
-			return nil, nil, jerr.Get("error putting num-streams", err)
-		}
-		//add a field to the database that links the sending address and twitter name to the new key
-		//encrypt
-		encryptedKey, err := tweetWallet.Encrypt([]byte(newKey.GetBase58Compressed()), []byte(b.Crypt))
-		if err != nil {
-			return nil, nil, jerr.Get("error encrypting key", err)
-		}
-		err = b.Db.Put([]byte("linked-"+senderAddress+"-"+twitterName), encryptedKey, nil)
-		if err != nil {
-			return nil, nil, jerr.Get("error updating linked-"+senderAddress+"-"+twitterName, err)
-		}
-	}
-	accountKey := obj.GetAccountKeyFromArgs([]string{newKey.GetBase58Compressed(), twitterName})
-	return &accountKey, &newWallet, nil
-}
-func updateProfiles(streamAray []config.Stream, b *Bot) error {
-	for _, stream := range streamAray {
-		streamKey, err := wallet.ImportPrivateKey(stream.Key)
-		if err != nil {
-			return jerr.Get("error importing private key", err)
-		}
-		streamAddress := streamKey.GetAddress()
-		newWallet := tweetWallet.NewWallet(streamAddress, streamKey)
-		err = updateProfile(b, newWallet, stream.Name, stream.Sender)
-		time.Sleep(1 * time.Second)
-	}
-	return nil
-}
-func updateProfile(b *Bot, newWallet tweetWallet.Wallet, twitterName string, senderAddress string) error {
-	profile, err := tweets.GetProfile(twitterName, b.TweetClient)
-	if err != nil {
-		return jerr.Get("fatal error getting profile", err)
-	}
-	existingDbProfile, err := db.GetProfile(senderAddress, twitterName)
-	if err != nil && err != leveldb.ErrNotFound {
-		return jerr.Get("error getting profile from database", err)
-	}
-	if existingDbProfile == nil {
-		if err = tweetWallet.UpdateName(newWallet, profile.Name); err != nil {
-			return jerr.Get("error updating name", err)
-		}
-		if err = tweetWallet.UpdateProfileText(newWallet, profile.Description); err != nil {
-			return jerr.Get("error updating profile text", err)
-		}
-		if err = tweetWallet.UpdateProfilePic(newWallet, profile.ProfilePic); err != nil {
-			return jerr.Get("error updating profile pic", err)
-		}
-		if b.Verbose {
-			jlog.Log("updated profile info for the first time")
-		}
-	} else {
-		dbProfile := new(tweets.Profile)
-		if err = json.Unmarshal(existingDbProfile.Profile, &dbProfile); err != nil {
-			return jerr.Getf(err, "error unmarshalling profile: %s", dbProfile.Name)
-		}
-		if dbProfile.Name != profile.Name {
-			if err = tweetWallet.UpdateName(newWallet, profile.Name); err != nil {
-				return jerr.Get("error updating name", err)
-			} else if b.Verbose {
-				jlog.Logf("updated profile name for %s: %s to %s\n", profile.ID, dbProfile.Name, profile.Name)
-			}
-		}
-		if dbProfile.Description != profile.Description {
-			if err = tweetWallet.UpdateProfileText(newWallet, profile.Description); err != nil {
-				return jerr.Get("error updating profile text", err)
-			} else if b.Verbose {
-				jlog.Logf("updated profile text for %s: %s to %s\n", profile.ID, dbProfile.Description, profile.Description)
-			}
-		}
-		if dbProfile.ProfilePic != profile.ProfilePic {
-			if err = tweetWallet.UpdateProfilePic(newWallet, profile.ProfilePic); err != nil {
-				return jerr.Get("error updating profile pic", err)
-			} else if b.Verbose {
-				jlog.Logf("updated profile pic for %s: %s to %s\n", profile.ID, dbProfile.ProfilePic, profile.ProfilePic)
-			}
-		}
-	}
-	profileBytes, err := json.Marshal(profile)
-	if err != nil {
-		return jerr.Get("error marshalling profile", err)
-	}
-	if err := db.Save([]db.ObjectI{&db.Profile{
-		Address:     senderAddress,
-		TwitterName: twitterName,
-		Profile:     profileBytes,
-	}}); err != nil {
-		return jerr.Get("error saving profile to database", err)
-	}
-	if b.Verbose {
-		jlog.Logf("checked for profile updates: %s (%s)", twitterName, senderAddress)
-	}
-	return nil
-}
-
-func makeStreamArray(b *Bot) ([]config.Stream, error) {
-	streamArray := make([]config.Stream, 0)
-	iter := b.Db.NewIterator(util.BytesPrefix([]byte("linked-")), nil)
-	for iter.Next() {
-		//find the twitterName at the end of the linked-<senderAddress>-<twitterName> field
-		senderAddress := strings.Split(string(iter.Key()), "-")[1]
-		twitterName := strings.Split(string(iter.Key()), "-")[2]
-		//decrypt
-		decryptedKeyByte, err := tweetWallet.Decrypt(iter.Value(), []byte(b.Crypt))
-		if err != nil {
-			return nil, jerr.Get("error decrypting", err)
-		}
-		decryptedKey := string(decryptedKeyByte)
-		walletKey, err := wallet.ImportPrivateKey(decryptedKey)
-		if err != nil {
-			return nil, jerr.Get("error importing private key", err)
-		}
-		//check the balance of the new key
-		inputGetter := tweetWallet.InputGetter{
-			Address: walletKey.GetAddress(),
-		}
-		outputs, err := inputGetter.GetUTXOs(nil)
-		if err != nil {
-			return nil, jerr.Get("error getting utxos", err)
-		}
-		//if the balance is greater than 800, add the twitterName and newKey to the streamArray
-		balance := int64(0)
-		for _, output := range outputs {
-			balance += output.Input.Value
-		}
-		if balance > 800 {
-			wlt := tweetWallet.NewWallet(walletKey.GetAddress(), walletKey)
-			streamArray = append(streamArray, config.Stream{Key: decryptedKey, Name: twitterName, Sender: senderAddress, Wallet: wlt})
-		}
-	}
-	iter.Release()
-	err := iter.Error()
-	if err != nil {
-		return nil, jerr.Get("error iterating", err)
-	}
-	return streamArray, nil
+	return botStreams, nil
 }

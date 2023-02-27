@@ -58,7 +58,7 @@ func (d *Database) GetUtxos(address wallet.Addr) ([]graph.Output, error) {
 			return nil, jerr.Get("error getting utxos", err)
 		}
 		if _, err := db.GetTxInput(dbTxOutput.TxHash, dbTxOutput.Index); err != nil {
-			if err != leveldb.ErrNotFound {
+			if !errors.Is(err, leveldb.ErrNotFound) {
 				return nil, jerr.Get("error getting tx inputs from db for get utxos", err)
 			}
 			utxos = append(utxos, output)

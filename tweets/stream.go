@@ -195,7 +195,7 @@ func (s *Stream) ListenForNewTweets(streamConfigs []config.Stream) error {
 				flag, err := db.GetFlag(conf.Sender, conf.Name)
 				if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 					return jerr.Get("error getting flags from db", err)
-				} else if err == leveldb.ErrNotFound {
+				} else if errors.Is(err, leveldb.ErrNotFound) {
 					continue
 				}
 				//may or may not break getnewtweets

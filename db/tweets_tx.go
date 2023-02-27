@@ -55,6 +55,9 @@ func GetTweetTxs(screenName string, startTweetId int64) ([]*TweetTx, error) {
 			break
 		}
 	}
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("error iterating over get tweet txs; %w", err)
+	}
 	return tweetTxs, nil
 }
 
@@ -86,6 +89,9 @@ func GetAllTweetTx() ([]*TweetTx, error) {
 		var tweetTx = new(TweetTx)
 		Set(tweetTx, iter)
 		tweetTxs = append(tweetTxs, tweetTx)
+	}
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("error iterating over all tweet txs; %w", err)
 	}
 	return tweetTxs, nil
 }

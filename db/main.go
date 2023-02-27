@@ -9,6 +9,7 @@ import (
 )
 
 const (
+	PrefixAddressKey        = "linked"
 	PrefixAddressSeenTx     = "address-seen-tx"
 	PrefixAddressTime       = "addresstime"
 	PrefixBlock             = "block"
@@ -123,6 +124,9 @@ func GetFirstItem(obj ObjectI, prefix []byte) error {
 	if !iter.First() {
 		return leveldb.ErrNotFound
 	}
+	if err := iter.Error(); err != nil {
+		return fmt.Errorf("error iterating first item; %w", err)
+	}
 	Set(obj, iter)
 	return nil
 }
@@ -138,6 +142,9 @@ func GetLastItem(obj ObjectI, prefix []byte) error {
 	if !iter.Last() {
 		return leveldb.ErrNotFound
 	}
+	if err := iter.Error(); err != nil {
+		return fmt.Errorf("error iterating last item; %w", err)
+	}
 	Set(obj, iter)
 	return nil
 }
@@ -152,6 +159,9 @@ func GetNum(prefix []byte) (int, error) {
 	var count int
 	for iter.Next() {
 		count++
+	}
+	if err := iter.Error(); err != nil {
+		return 0, fmt.Errorf("error iterating count items; %w", err)
 	}
 	return count, nil
 }

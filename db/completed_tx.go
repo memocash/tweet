@@ -2,7 +2,7 @@ package db
 
 import (
 	"errors"
-	"github.com/jchavannes/jgo/jerr"
+	"fmt"
 	"github.com/jchavannes/jgo/jutil"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -41,7 +41,7 @@ func HasCompletedTx(txHash [32]byte) (bool, error) {
 		if errors.Is(err, leveldb.ErrNotFound) {
 			return false, nil
 		}
-		return false, jerr.Get("error getting completed tx item", err)
+		return false, fmt.Errorf("error getting completed tx item; %w", err)
 	}
 	return true, nil
 }

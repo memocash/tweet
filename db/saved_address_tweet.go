@@ -81,5 +81,8 @@ func GetAllSavedAddressTweet() ([]*SavedAddressTweet, error) {
 		Set(savedAddressTweet, iter)
 		savedAddressTweets = append(savedAddressTweets, savedAddressTweet)
 	}
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("error iterating over all saved address tweets; %w", err)
+	}
 	return savedAddressTweets, nil
 }
