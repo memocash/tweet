@@ -8,6 +8,8 @@ import (
 	"github.com/memocash/tweet/cmd/update"
 	"github.com/memocash/tweet/config"
 	"github.com/spf13/cobra"
+	"log"
+	"os"
 )
 
 var tweetCmd = &cobra.Command{
@@ -17,6 +19,7 @@ var tweetCmd = &cobra.Command{
 		if err := config.InitConfig(); err != nil {
 			jerr.Get("error initializing config", err).Fatal()
 		}
+		log.SetOutput(os.Stdout)
 	},
 	CompletionOptions: cobra.CompletionOptions{
 		DisableDefaultCmd: true,

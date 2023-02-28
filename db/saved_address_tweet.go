@@ -68,12 +68,16 @@ func GetSavedAddressTweet(address, screenName string, tweetId int64) (*SavedAddr
 	return savedAddressTweet, nil
 }
 
-func GetAllSavedAddressTweet() ([]*SavedAddressTweet, error) {
+func GetAllSavedAddressTweet(prefix []byte) ([]*SavedAddressTweet, error) {
 	db, err := GetDb()
 	if err != nil {
 		return nil, fmt.Errorf("error getting database handler for get all saved address tweets; %w", err)
 	}
-	iter := db.NewIterator(util.BytesPrefix([]byte(fmt.Sprintf("%s-", PrefixSavedAddressTweet))), nil)
+	iterPrefix := []byte(fmt.Sprintf("%s-", PrefixSavedAddressTweet))
+	if len(prefix) > 0 {
+		iterPrefix = append(iterPrefix, prefix...)
+	}
+	iter := db.NewIterator(util.BytesPrefix(iterPrefix), nil)
 	defer iter.Release()
 	var savedAddressTweets []*SavedAddressTweet
 	for iter.Next() {

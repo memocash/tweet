@@ -38,7 +38,7 @@ func (t *TweetTx) Deserialize(d []byte) {
 	t.Tx = d
 }
 
-func GetTweetTxs(screenName string, startTweetId int64) ([]*TweetTx, error) {
+func GetTweetTxs(screenName string, startTweetId int64, max int) ([]*TweetTx, error) {
 	db, err := GetDb()
 	if err != nil {
 		return nil, fmt.Errorf("error getting database handler for get tweet txs; %w", err)
@@ -51,7 +51,7 @@ func GetTweetTxs(screenName string, startTweetId int64) ([]*TweetTx, error) {
 		var tweetTx = new(TweetTx)
 		Set(tweetTx, iter)
 		tweetTxs = append(tweetTxs, tweetTx)
-		if len(tweetTxs) >= 20 {
+		if max > 0 && len(tweetTxs) >= max {
 			break
 		}
 	}

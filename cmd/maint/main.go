@@ -3,7 +3,8 @@ package maint
 import "github.com/spf13/cobra"
 
 const (
-	FlagVerbose = "verbose"
+	FlagVerbose  = "verbose"
+	FlagNoDryRun = "no-dry-run"
 )
 
 var maintCmd = &cobra.Command{
@@ -12,6 +13,8 @@ var maintCmd = &cobra.Command{
 
 func GetCommand() *cobra.Command {
 	checkSavedTweetsCmd.Flags().BoolP(FlagVerbose, "v", false, "Verbose logging")
+	checkSavedTweetCmd.Flags().BoolP(FlagVerbose, "v", false, "Verbose logging")
+	fixSavedTweetCmd.Flags().BoolP(FlagNoDryRun, "", false, "No dry run")
 	maintCmd.AddCommand(
 		checkAddressSeenCmd,
 		removeInvalidAddressSeenCmd,
@@ -20,6 +23,8 @@ func GetCommand() *cobra.Command {
 		removeCompletedCmd,
 		resetProfileCmd,
 		checkSavedTweetsCmd,
+		checkSavedTweetCmd,
+		fixSavedTweetCmd,
 	)
 	return maintCmd
 }
