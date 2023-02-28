@@ -15,7 +15,7 @@ func refund(tx graph.Tx, b *Bot, coinIndex uint32, senderAddress string, errMsg 
 	if err := b.SafeUpdate(); err != nil {
 		return jerr.Get("error updating stream", err)
 	}
-	jlog.Logf("Sending refund error message to %s: %s\n", senderAddress, errMsg)
+	jlog.Logf("Sending refund error message to %s for %s: %s\n", senderAddress, tx.Hash, errMsg)
 	sentToMainBot := false
 	//check all the outputs to see if any of them match the bot's address, if not, return nil, if so, continue with the function
 	for _, output := range tx.Outputs {
