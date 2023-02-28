@@ -13,6 +13,8 @@ const (
 	PrefixAddressSeenTx     = "address-seen-tx"
 	PrefixAddressTime       = "addresstime"
 	PrefixBlock             = "block"
+	PrefixBotRunningCount   = "memobot-running-count"
+	PrefixBotStreamsCount   = "memobot-num-streams"
 	PrefixCompletedTx       = "completed"
 	PrefixFlag              = "flags"
 	PrefixProfile           = "profile"

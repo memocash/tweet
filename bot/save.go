@@ -118,16 +118,12 @@ func (s *SaveTx) HandleTxType() error {
 }
 
 func (s *SaveTx) HandleCreate() error {
-	//check how many streams are running
-	streams, err := s.Bot.Db.Get([]byte("memobot-running-count"), nil)
-	if err != nil {
-		return jerr.Get("error getting running count", err)
+	botRunningCount, err := db.GetBotRunningCount()
+	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
+		return jerr.Get("error getting bot running count", err)
 	}
-	//convert the byte array to an int
-	numStreams, err := strconv.Atoi(string(streams))
-	//if there are more than 25 streams running, refund and return
-	if numStreams >= 25 {
-		err := refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, "There are too many streams running, please try again later")
+	if botRunningCount != nil && botRunningCount.Count >= 25 {
+		err := refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, "There are too many bots, please try again later")
 		if err != nil {
 			return jerr.Get("error refunding", err)
 		}

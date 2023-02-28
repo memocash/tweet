@@ -6,7 +6,6 @@ import (
 	"github.com/memocash/tweet/bot"
 	"github.com/memocash/tweet/bot/info"
 	"github.com/memocash/tweet/config"
-	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets"
 	tweetWallet "github.com/memocash/tweet/wallet"
 	"github.com/spf13/cobra"
@@ -19,7 +18,6 @@ var runCmd = &cobra.Command{
 	Run: func(c *cobra.Command, args []string) {
 		verbose, _ := c.Flags().GetBool(FlagVerbose)
 		botSeed := config.GetConfig().BotSeed
-		//get base key and address from seed
 		mnemonic, err := wallet.GetMnemonicFromString(botSeed)
 		if err != nil {
 			jerr.Get("fatal error getting mnemonic from string", err).Fatal()
@@ -29,35 +27,8 @@ var runCmd = &cobra.Command{
 		if err != nil {
 			jerr.Get("fatal error getting path", err).Fatal()
 		}
-		db, err := db.GetDb()
-		if err != nil {
-			jerr.Get("fatal error opening db", err).Fatal()
-		}
-		//check that memobot-num-streams field of the database exists
-		fieldExists, err := db.Has([]byte("memobot-num-streams"), nil)
-		if err != nil {
-			jerr.Get("fatal error checking if memobot-num-streams field exists", err).Fatal()
-		}
-		//if it doesn't, create it and set it to 0
-		if !fieldExists {
-			err = db.Put([]byte("memobot-num-streams"), []byte("0"), nil)
-			if err != nil {
-				jerr.Get("fatal error creating memobot-num-streams field", err).Fatal()
-			}
-		}
-		fieldExists, err = db.Has([]byte("memobot-running-count"), nil)
-		if err != nil {
-			jerr.Get("fatal error checking if memobot-running-count field exists", err).Fatal()
-		}
-		//if it doesn't, create it and set it to 0
-		if !fieldExists {
-			err = db.Put([]byte("memobot-running-count"), []byte("0"), nil)
-			if err != nil {
-				jerr.Get("fatal error creating memobot-num-streams field", err).Fatal()
-			}
-		}
 		botAddress := botKey.GetPublicKey().GetAddress().GetEncoded()
-		memoBot, err := bot.NewBot(mnemonic, []string{botAddress}, *botKey, tweets.Connect(), db, verbose)
+		memoBot, err := bot.NewBot(mnemonic, []string{botAddress}, *botKey, tweets.Connect(), verbose)
 		if err != nil {
 			jerr.Get("fatal error creating new bot", err).Fatal()
 		}

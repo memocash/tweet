@@ -12,7 +12,6 @@ import (
 	"github.com/memocash/tweet/tweets"
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/syndtr/goleveldb/leveldb"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -23,7 +22,6 @@ type Bot struct {
 	Addr        wallet.Addr
 	Key         wallet.PrivateKey
 	TweetClient *twitter.Client
-	Db          *leveldb.DB
 	Stream      *tweets.Stream
 	ErrorChan   chan error
 	TxMutex     sync.Mutex
@@ -33,7 +31,7 @@ type Bot struct {
 	Verbose     bool
 }
 
-func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey, tweetClient *twitter.Client, db *leveldb.DB, verbose bool) (*Bot, error) {
+func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey, tweetClient *twitter.Client, verbose bool) (*Bot, error) {
 	if len(addresses) == 0 {
 		return nil, jerr.New("error new bot, no addresses")
 	}
@@ -47,7 +45,6 @@ func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey
 		Addr:        *addr,
 		Key:         key,
 		TweetClient: tweetClient,
-		Db:          db,
 		ErrorChan:   make(chan error),
 		Verbose:     verbose,
 	}, nil
@@ -174,9 +171,8 @@ func (b *Bot) UpdateStream() error {
 			jlog.Logf("streaming %s to address %s\n", stream.Name, streamAddress.GetEncoded())
 		}
 	}
-	err = b.Db.Put([]byte("memobot-running-count"), []byte(strconv.FormatUint(uint64(len(botStreams)), 10)), nil)
-	if err != nil {
-		return jerr.Get("error updating running count", err)
+	if err := db.Save([]db.ObjectI{&db.BotRunningCount{Count: len(botStreams)}}); err != nil {
+		return jerr.Get("error saving bot running count", err)
 	}
 	go func() {
 		if len(botStreams) == 0 {

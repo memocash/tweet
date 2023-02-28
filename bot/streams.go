@@ -16,7 +16,6 @@ import (
 	"github.com/memocash/tweet/tweets/obj"
 	tweetWallet "github.com/memocash/tweet/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
-	"strconv"
 )
 
 func getBotStreams(cryptKey []byte) ([]config.Stream, error) {
@@ -94,19 +93,15 @@ func createBotStream(b *Bot, twitterName string, senderAddress string, tx graph.
 	println(b.Addresses[0])
 	var newKey wallet.PrivateKey
 	var newAddr wallet.Address
-	numStreamBytes, err := b.Db.Get([]byte("memobot-num-streams"), nil)
-	if err != nil {
-		return nil, nil, jerr.Get("error getting num-streams", err)
+	botStreamsCount, err := db.GetBotStreamsCount()
+	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
+		return nil, nil, jerr.Get("error getting bot streams count", err)
 	}
-	numStream, err := strconv.ParseUint(string(numStreamBytes), 10, 64)
-	if err != nil {
-		return nil, nil, jerr.Get("error parsing num-streams", err)
+	var numStreamUint uint
+	if botStreamsCount != nil {
+		numStreamUint = uint(botStreamsCount.Count)
 	}
-	//convert numStream to a uint
-	numStreamUint := uint(numStream)
 	if botExists {
-		//get the key from the database
-		//decrypt
 		addressKey, err := db.GetAddressKey(senderAddress, twitterName)
 		if err != nil {
 			return nil, nil, jerr.Get("error getting key from database", err)
@@ -153,12 +148,9 @@ func createBotStream(b *Bot, twitterName string, senderAddress string, tx graph.
 		jlog.Logf("Create bot stream Address: " + newAddr.GetEncoded())
 	}
 	if !botExists {
-		err = b.Db.Put([]byte("memobot-num-streams"), []byte(strconv.FormatUint(uint64(numStreamUint+1), 10)), nil)
-		if err != nil {
-			return nil, nil, jerr.Get("error putting num-streams", err)
+		if err := db.Save([]db.ObjectI{&db.BotStreamsCount{Count: int(numStreamUint + 1)}}); err != nil {
+			return nil, nil, jerr.Get("error saving bot streams count", err)
 		}
-		//add a field to the database that links the sending address and twitter name to the new key
-		//encrypt
 		encryptedKey, err := tweetWallet.Encrypt([]byte(newKey.GetBase58Compressed()), b.Crypt)
 		if err != nil {
 			return nil, nil, jerr.Get("error encrypting key", err)

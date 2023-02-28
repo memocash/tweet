@@ -38,14 +38,14 @@ func (k *AddressLinkedKey) Deserialize(d []byte) {
 }
 
 func GetAddressKey(address, twitterName string) (*AddressLinkedKey, error) {
-	var flag = &AddressLinkedKey{
+	var addressKey = &AddressLinkedKey{
 		Address:     address,
 		TwitterName: twitterName,
 	}
-	if err := GetSpecificItem(flag); err != nil {
-		return nil, fmt.Errorf("error getting flag from db; %w", err)
+	if err := GetSpecificItem(addressKey); err != nil {
+		return nil, fmt.Errorf("error getting address key from db; %w", err)
 	}
-	return flag, nil
+	return addressKey, nil
 }
 
 func GetAllAddressKey() ([]*AddressLinkedKey, error) {
