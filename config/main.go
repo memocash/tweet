@@ -2,7 +2,7 @@ package config
 
 import (
 	"github.com/jchavannes/jgo/jerr"
-	"github.com/memocash/tweet/database"
+	"github.com/memocash/tweet/wallet"
 	"github.com/spf13/viper"
 )
 
@@ -25,10 +25,10 @@ func (t TwitterAPI) IsSet() bool {
 }
 
 type Stream struct {
-	Key    string          `mapstructure:"KEY"`
-	Name   string          `mapstructure:"NAME"`
-	Sender string          `mapstructure:"SENDER"`
-	Wallet database.Wallet `mapstructure:"WALLET"`
+	Key    string        `mapstructure:"KEY"`
+	Name   string        `mapstructure:"NAME"`
+	Sender string        `mapstructure:"SENDER"`
+	Wallet wallet.Wallet `mapstructure:"WALLET"`
 }
 
 var _config Config

@@ -3,22 +3,23 @@ package cmd
 import (
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/tweet/cmd/bot"
-	"github.com/memocash/tweet/cmd/getnewtweets"
 	"github.com/memocash/tweet/cmd/maint"
-	"github.com/memocash/tweet/cmd/test"
-	"github.com/memocash/tweet/cmd/transfertweets"
+	"github.com/memocash/tweet/cmd/tweets"
 	"github.com/memocash/tweet/cmd/update"
 	"github.com/memocash/tweet/config"
 	"github.com/spf13/cobra"
+	"log"
+	"os"
 )
 
-var indexCmd = &cobra.Command{
-	Use:   "memotweet",
+var tweetCmd = &cobra.Command{
+	Use:   "tweet",
 	Short: "Twitter Content -> Memo Content",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		if err := config.InitConfig(); err != nil {
 			jerr.Get("error initializing config", err).Fatal()
 		}
+		log.SetOutput(os.Stdout)
 	},
 	CompletionOptions: cobra.CompletionOptions{
 		DisableDefaultCmd: true,
@@ -26,16 +27,14 @@ var indexCmd = &cobra.Command{
 }
 
 func Execute() error {
-	indexCmd.AddCommand(
-		transfertweets.GetCommand(),
-		update.GetCommand(),
-		getnewtweets.GetCommand(),
+	tweetCmd.AddCommand(
 		bot.GetCommand(),
-		test.GetCommand(),
 		maint.GetCommand(),
+		tweets.GetCommand(),
+		update.GetCommand(),
 	)
-	if err := indexCmd.Execute(); err != nil {
-		return jerr.Get("error executing server command", err)
+	if err := tweetCmd.Execute(); err != nil {
+		return jerr.Get("error executing tweet command", err)
 	}
 	return nil
 }

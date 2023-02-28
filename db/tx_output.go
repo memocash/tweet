@@ -1,0 +1,60 @@
+package db
+
+import (
+	"fmt"
+	"github.com/jchavannes/jgo/jutil"
+	"github.com/syndtr/goleveldb/leveldb/util"
+	"strings"
+)
+
+type TxOutput struct {
+	Address string
+	TxHash  string
+	Index   int
+	Output  []byte
+}
+
+func (o *TxOutput) GetPrefix() string {
+	return PrefixTxOutput
+}
+
+func (o *TxOutput) GetUid() []byte {
+	return []byte(fmt.Sprintf("%s-%s-%d", o.Address, o.TxHash, o.Index))
+}
+
+func (o *TxOutput) SetUid(b []byte) {
+	parts := strings.Split(string(b), "-")
+	if len(parts) != 3 {
+		return
+	}
+	o.Address = parts[0]
+	o.TxHash = parts[1]
+	o.Index = jutil.GetIntFromString(parts[2])
+}
+
+func (o *TxOutput) Serialize() []byte {
+	return o.Output
+}
+
+func (o *TxOutput) Deserialize(d []byte) {
+	o.Output = d
+}
+
+func GetTxOutputs(address string) ([]*TxOutput, error) {
+	db, err := GetDb()
+	if err != nil {
+		return nil, fmt.Errorf("error getting database handler for get tx outputs; %w", err)
+	}
+	iter := db.NewIterator(util.BytesPrefix([]byte(fmt.Sprintf("%s-%s-", PrefixTxOutput, address))), nil)
+	defer iter.Release()
+	var txOutputs []*TxOutput
+	for iter.Next() {
+		var tweetTx = new(TxOutput)
+		Set(tweetTx, iter)
+		txOutputs = append(txOutputs, tweetTx)
+	}
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("error iterating over tx outputs for address; %w", err)
+	}
+	return txOutputs, nil
+}

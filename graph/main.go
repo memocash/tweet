@@ -1,10 +1,12 @@
-package bot
+package graph
 
 import (
-	"bytes"
-	"encoding/hex"
-	"github.com/jchavannes/btcd/txscript"
-	"github.com/memocash/index/ref/bitcoin/memo"
+	"time"
+)
+
+const (
+	ServerUrlHttp = "http://127.0.0.1:26770/graphql"
+	ServerUrlWs   = "ws://127.0.0.1:26770/graphql"
 )
 
 type UpdateQuery struct {
@@ -19,7 +21,7 @@ type Subscription struct {
 
 type Tx struct {
 	Hash   string
-	Seen   GraphQlDate
+	Seen   Date
 	Raw    string
 	Inputs []struct {
 		Index     uint32
@@ -40,26 +42,18 @@ type Tx struct {
 	}
 	Blocks []struct {
 		Hash      string
-		Timestamp GraphQlDate
+		Timestamp Date
 		Height    int
 	}
 }
 
-func grabMessage(outputScripts []string) string {
-	for _, script := range outputScripts {
-		lockScript, err := hex.DecodeString(script)
-		if err != nil {
-			panic(err)
-		}
-		pushData, err := txscript.PushedData(lockScript)
-		if err != nil {
-			panic(err)
-		}
+type Date string
 
-		if len(pushData) > 2 && bytes.Equal(pushData[0], memo.PrefixSendMoney) {
-			message := string(pushData[2])
-			return message
-		}
-	}
-	return ""
+func (d Date) GetGraphQLType() string {
+	return "Date"
+}
+
+func (d Date) GetTime() time.Time {
+	t, _ := time.Parse(time.RFC3339, string(d))
+	return t
 }

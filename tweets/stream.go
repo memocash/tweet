@@ -2,6 +2,7 @@ package tweets
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/dghubble/go-twitter/twitter"
 	"github.com/fallenstedt/twitter-stream"
@@ -10,20 +11,23 @@ import (
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jlog"
 	"github.com/memocash/tweet/config"
-	"github.com/memocash/tweet/database"
+	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets/obj"
+	"github.com/memocash/tweet/tweets/save"
 	"github.com/syndtr/goleveldb/leveldb"
 	"regexp"
 	"strconv"
+	"sync"
 )
 
 type Stream struct {
 	Api   *twitterstream.TwitterApi
 	Db    *leveldb.DB
 	Token *token_generator.RequestBearerTokenResponse
+	Mutex sync.Mutex
 }
 
-func NewStream(db *leveldb.DB) (*Stream, error) {
+func NewStream() (*Stream, error) {
 	conf := config.GetTwitterAPIConfig()
 	if !conf.IsSet() {
 		return nil, jerr.New("Application Access Token required")
@@ -33,7 +37,6 @@ func NewStream(db *leveldb.DB) (*Stream, error) {
 		return nil, jerr.Get("error getting twitter API token", err)
 	}
 	return &Stream{
-		Db:    db,
 		Token: token,
 	}, nil
 }
@@ -75,8 +78,6 @@ func (s *Stream) FilterAccount(streamConfigs []config.Stream) error {
 }
 
 func (s *Stream) ResetRules() error {
-	/*s.SetFreshApi()
-	defer s.CloseApi()*/
 	res, err := s.Api.Rules.Get()
 	if err != nil {
 		return jerr.Get("error getting twitter API rules", err)
@@ -95,13 +96,18 @@ func (s *Stream) ResetRules() error {
 	return nil
 }
 
-func (s *Stream) InitiateStream(streamConfigs []config.Stream) error {
+func (s *Stream) ListenForNewTweets(streamConfigs []config.Stream) error {
 	if s == nil {
 		return jerr.New("error stream is nil for initiate stream")
 	}
+	s.Mutex.Lock()
+	defer s.Mutex.Unlock()
 	s.SetFreshApi()
 	if err := s.ResetRules(); err != nil {
 		return jerr.Get("error twitter stream reset rules", err)
+	}
+	for _, streamConfig := range streamConfigs {
+		jlog.Logf("Adding stream config: %s %s\n", streamConfig.Sender, streamConfig.Name)
 	}
 	if err := s.FilterAccount(streamConfigs); err != nil {
 		return jerr.Get("error twitter stream filter account", err)
@@ -121,6 +127,7 @@ func (s *Stream) InitiateStream(streamConfigs []config.Stream) error {
 		AddExpansion("attachments.media_keys").
 		AddMediaField("url").
 		Build()
+	jlog.Log("Starting Twitter API stream")
 	if err := s.Api.Stream.StartStream(streamExpansions); err != nil {
 		return jerr.Get("error starting twitter stream", err)
 	}
@@ -130,11 +137,20 @@ func (s *Stream) InitiateStream(streamConfigs []config.Stream) error {
 			if jerr.HasErrorPart(tweet.Err, "response body closed") {
 				break
 			}
-			return jerr.Get("got error from twitter", tweet.Err)
+			return jerr.Get("error twitter api stream get messages", tweet.Err)
 		}
 		result := tweet.Data.(obj.TweetStreamData)
-		tweetID, _ := strconv.ParseInt(result.Data.ID, 10, 64)
-		userID, _ := strconv.ParseInt(result.Includes.Users[0].ID, 10, 64)
+		if len(result.Errors) > 0 {
+			return jerr.Get("error twitter api stream get messages object", obj.CombineTweetStreamErrors(result.Errors))
+		}
+		tweetID, err := strconv.ParseInt(result.Data.ID, 10, 64)
+		if err != nil {
+			return jerr.Get("error parsing tweet id for api stream", err)
+		}
+		userID, err := strconv.ParseInt(result.Includes.Users[0].ID, 10, 64)
+		if err != nil {
+			return jerr.Get("error parsing user id api stream", err)
+		}
 		var InReplyToStatusID int64
 		if len(result.Data.ReferencedTweets) > 0 && result.Data.ReferencedTweets[0].Type == "replied_to" {
 			InReplyToStatusID, _ = strconv.ParseInt(result.Data.ReferencedTweets[0].ID, 10, 64)
@@ -142,10 +158,11 @@ func (s *Stream) InitiateStream(streamConfigs []config.Stream) error {
 			InReplyToStatusID = 0
 		}
 		var tweetText = result.Data.Text
-		//pretty print result object
-		b, _ := json.MarshalIndent(result, "", "  ")
-		fmt.Println(string(b))
-
+		b, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return jerr.Get("error pretty printing result object", err)
+		}
+		jlog.Logf("stream result object: %s\n", b)
 		if len(result.Data.Attachments.MediaKeys) > 0 {
 			//use regex library to find the string https://t.co in the tweet text
 			match, _ := regexp.MatchString("https://t.co/[a-zA-Z0-9]*$", tweetText)
@@ -169,9 +186,7 @@ func (s *Stream) InitiateStream(streamConfigs []config.Stream) error {
 			},
 			InReplyToStatusID: InReplyToStatusID,
 		}
-		println(tweetText)
-		println("\n\n\n")
-		//fmt.Println(tweetObject.Text)
+		jlog.Logf("tweetText: %s\n", tweetText)
 		tweetTx := obj.TweetTx{
 			Tweet:  &tweetObject,
 			TxHash: nil,
@@ -180,36 +195,21 @@ func (s *Stream) InitiateStream(streamConfigs []config.Stream) error {
 		//based on the stream config, get the right address to send the tweet to
 		for _, conf := range streamConfigs {
 			if conf.Name == tweetObject.User.ScreenName {
-				println("sending tweet to key: ", conf.Key)
+				jlog.Logf("sending tweet to key: %s\n", conf.Key)
 				twitterAccountWallet := obj.GetAccountKeyFromArgs([]string{conf.Key, conf.Name})
-				var link = true
-				var date = false
-				flags, err := s.Db.Get([]byte("flags-"+conf.Sender+"-"+conf.Name), nil)
-				if err != nil {
-					if err == leveldb.ErrNotFound {
-						continue
-					} else {
-						return jerr.Get("error getting flags from db", err)
-					}
-				} else {
-					type Flags struct {
-						Link bool `json:"link"`
-						Date bool `json:"date"`
-					}
-					var flagsStruct Flags
-					if err := json.Unmarshal(flags, &flagsStruct); err != nil {
-						return jerr.Get("error unmarshalling flags", err)
-					}
-					link = flagsStruct.Link
-					date = flagsStruct.Date
+				flag, err := db.GetFlag(conf.Sender, conf.Name)
+				if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
+					return jerr.Get("error getting flags from db", err)
+				} else if errors.Is(err, leveldb.ErrNotFound) {
+					continue
 				}
 				//may or may not break getnewtweets
-				if err := database.SaveTweet(conf.Wallet, twitterAccountWallet, tweetTx, s.Db, link, date); err != nil {
+				if err := save.Tweet(conf.Wallet, twitterAccountWallet.GetAddress(), tweetTx, flag.Flags); err != nil {
 					return jerr.Get("error streaming tweet in stream", err)
 				}
 			}
 		}
 	}
-	fmt.Println("Stopped Stream")
+	jlog.Log("Stopped Stream")
 	return nil
 }
