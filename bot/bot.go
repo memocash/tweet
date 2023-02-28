@@ -2,23 +2,17 @@ package bot
 
 import (
 	"errors"
-	"fmt"
 	"github.com/dghubble/go-twitter/twitter"
-	"github.com/jchavannes/btcd/chaincfg/chainhash"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jlog"
-	"github.com/memocash/index/ref/bitcoin/memo"
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/graph"
 	"github.com/memocash/tweet/tweets"
 	"github.com/memocash/tweet/tweets/obj"
-	tweetWallet "github.com/memocash/tweet/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
-	"regexp"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -137,221 +131,9 @@ func (b *Bot) Listen() error {
 func (b *Bot) SaveTx(tx graph.Tx) error {
 	b.TxMutex.Lock()
 	defer b.TxMutex.Unlock()
-	for _, input := range tx.Inputs {
-		if input.Output.Lock.Address == b.Addresses[0] {
-			return nil
-		}
-	}
-	var scriptArray []string
-	for _, output := range tx.Outputs {
-		scriptArray = append(scriptArray, output.Script)
-	}
-	message := grabMessage(scriptArray)
-	if message == "" {
-		println("No message found, skipping")
-		return nil
-	}
-	senderAddress := ""
-	for _, input := range tx.Inputs {
-		if input.Output.Lock.Address != b.Addresses[0] {
-			senderAddress = input.Output.Lock.Address
-			break
-		}
-	}
-	coinIndex := uint32(0)
-	for i, output := range tx.Outputs {
-		if output.Lock.Address == b.Addresses[0] {
-			coinIndex = uint32(i)
-			break
-		}
-	}
-	txHash, err := chainhash.NewHashFromStr(tx.Hash)
-	if err != nil {
-		return jerr.Get("error parsing address receive tx hash", err)
-	}
-	defer func() {
-		var addressSeenTx = &db.AddressSeenTx{Address: b.Addr, Seen: tx.Seen.GetTime(), TxHash: *txHash}
-		var completed = &db.CompletedTx{TxHash: *txHash}
-		if err := db.Save([]db.ObjectI{addressSeenTx, completed}); err != nil {
-			b.ErrorChan <- jerr.Get("error adding tx hash to database", err)
-		}
-	}()
-	hasCompletedTx, err := db.HasCompletedTx(*txHash)
-	if err != nil {
-		return jerr.Get("error getting completed tx", err)
-	}
-	if hasCompletedTx {
-		jlog.Logf("Already completed tx: %s\n", tx.Hash)
-		return nil
-	}
-	match, _ := regexp.MatchString("^CREATE @?([a-zA-Z0-9_]{1,15})(( --history( [0-9]+)?)?( --nolink)?( --date)?)*$", message)
-	if match {
-		//check how many streams are running
-		streams, err := b.Db.Get([]byte("memobot-running-count"), nil)
-		if err != nil {
-			return jerr.Get("error getting running count", err)
-		}
-		//convert the byte array to an int
-		numStreams, err := strconv.Atoi(string(streams))
-		//if there are more than 25 streams running, refund and return
-		if numStreams >= 25 {
-			err := refund(tx, b, coinIndex, senderAddress, "There are too many streams running, please try again later")
-			if err != nil {
-				return jerr.Get("error refunding", err)
-			}
-			return nil
-		}
-		//split the message into an array of strings
-		splitMessage := strings.Split(message, " ")
-		//get the twitter name from the message
-		twitterName := splitMessage[1]
-		if twitterName[0] == '@' {
-			twitterName = twitterName[1:]
-		}
-		//check if --history is in the message
-		history := false
-		var flags = db.GetDefaultFlags()
-		var historyNum = 100
-		for index, word := range splitMessage {
-			if word == "--history" {
-				history = true
-				if len(splitMessage) > index+1 {
-					historyNum, err = strconv.Atoi(splitMessage[index+1])
-					if err != nil {
-						continue
-					}
-				}
-			}
-			if word == "--nolink" {
-				flags.Link = false
-			}
-			if word == "--date" {
-				flags.Date = true
-			}
-		}
-		if historyNum > 1000 {
-			err = refund(tx, b, coinIndex, senderAddress, "Number of tweets must be less than 1000")
-			if err != nil {
-				return jerr.Get("error refunding", err)
-			}
-			return nil
-		}
-		if err := db.Save([]db.ObjectI{&db.Flag{
-			Address:     senderAddress,
-			TwitterName: twitterName,
-			Flags:       flags,
-		}}); err != nil {
-			return jerr.Get("error saving flags to db", err)
-		}
-		accountKeyPointer, wlt, err := createBotStream(b, twitterName, senderAddress, tx, coinIndex)
-		if err != nil {
-			return jerr.Get("error creating bot", err)
-		}
-		//transfer all the tweets from the twitter account to the new bot
-		if accountKeyPointer != nil {
-			accountKey := *accountKeyPointer
-			if history {
-				client := tweets.Connect()
-				if err = tweets.GetSkippedTweets(accountKey, wlt, client, flags, historyNum); err != nil {
-					return jerr.Get("error getting skipped tweets on bot save tx", err)
-				}
-
-			}
-			if err = b.SafeUpdate(); err != nil {
-				return jerr.Get("error updating stream", err)
-			}
-		} else {
-			if b.Verbose {
-				jlog.Log("account key pointer is nil, not transferring tweets, bot not created")
-			}
-			return nil
-		}
-	} else if regexp.MustCompile("^WITHDRAW @?([a-zA-Z0-9_]{1,15})( [0-9]+)?$").MatchString(message) {
-		//check the database for each field that matches linked-<senderAddress>-<twitterName>
-		//if there is a match, print out the address and key
-		//if there is no match, print out an error message
-		twitterName := regexp.MustCompile("^WITHDRAW @?([a-zA-Z0-9_]{1,15})( [0-9]+)?$").FindStringSubmatch(message)[1]
-		if twitterName[0] == '@' {
-			twitterName = twitterName[1:]
-		}
-		addressKey, err := db.GetAddressKey(senderAddress, twitterName)
-		if err != nil {
-			if !errors.Is(err, leveldb.ErrNotFound) {
-				return jerr.Get("error getting linked-"+senderAddress+"-"+twitterName, err)
-			}
-			errMsg := "No linked address found for " + senderAddress + "-" + twitterName
-			err = refund(tx, b, coinIndex, senderAddress, errMsg)
-			if err != nil {
-				return jerr.Get("error refunding no linked address key found", err)
-			}
-			return nil
-		} else {
-			decryptedKey, err := tweetWallet.Decrypt(addressKey.Key, b.Crypt)
-			if err != nil {
-				return jerr.Get("error decrypting key", err)
-			}
-			key, err := wallet.ImportPrivateKey(string(decryptedKey))
-			if err != nil {
-				return jerr.Get("error importing private key", err)
-			}
-			address := key.GetAddress()
-			if b.Verbose {
-				jlog.Logf("Withdrawing from address: %s\n", address.GetEncoded())
-			}
-			inputGetter := tweetWallet.InputGetter{Address: address}
-			//use the address object of the spawned key to get the outputs array
-			outputs, err := inputGetter.GetUTXOs(nil)
-			if err != nil {
-				return jerr.Get("error getting utxos", err)
-			}
-			//check if the message contains a number
-			var amount int64
-			var maxSend = memo.GetMaxSendForUTXOs(outputs)
-			if regexp.MustCompile("^WITHDRAW @?([a-zA-Z0-9_]{1,15}) [0-9]+$").MatchString(message) {
-				amount, _ = strconv.ParseInt(regexp.MustCompile("^WITHDRAW @?([a-zA-Z0-9_]{1,15}) ([0-9]+)$").FindStringSubmatch(message)[2], 10, 64)
-				if amount > maxSend {
-					err = refund(tx, b, coinIndex, senderAddress, "Cannot withdraw more than the total balance is capable of sending")
-					if err != nil {
-						return jerr.Get("error refunding", err)
-					}
-					return nil
-				} else if amount+memo.DustMinimumOutput+memo.OutputFeeP2PKH > maxSend {
-					errmsg := fmt.Sprintf("Not enough funds will be left over to send change to bot account, please withdraw less than %d", maxSend+1-memo.DustMinimumOutput-memo.OutputFeeP2PKH)
-					err = refund(tx, b, coinIndex, senderAddress, errmsg)
-					if err != nil {
-						return jerr.Get("error refunding", err)
-					}
-					return nil
-				} else {
-					err := tweetWallet.WithdrawAmount(outputs, key, wallet.GetAddressFromString(senderAddress), amount)
-					if err != nil {
-						return jerr.Get("error withdrawing amount", err)
-					}
-				}
-			} else {
-				if maxSend > 0 {
-					err := tweetWallet.WithdrawAll(outputs, key, wallet.GetAddressFromString(senderAddress))
-					if err != nil {
-						return jerr.Get("error withdrawing all", err)
-					}
-				} else {
-					err = refund(tx, b, coinIndex, senderAddress, "Not enough balance to withdraw anything")
-					if err != nil {
-						return jerr.Get("error refunding", err)
-					}
-					return nil
-				}
-			}
-		}
-		if err = b.SafeUpdate(); err != nil {
-			return jerr.Get("error updating stream", err)
-		}
-	} else {
-		errMsg := "Invalid command. Please use the following format: CREATE <twitterName> or WITHDRAW <twitterName>"
-		err = refund(tx, b, coinIndex, senderAddress, errMsg)
-		if err != nil {
-			return jerr.Get("error refunding", err)
-		}
+	saveTx := NewSaveTx(b)
+	if err := saveTx.Save(tx); err != nil {
+		return jerr.Get("error saving bot tx", err)
 	}
 	return nil
 }
