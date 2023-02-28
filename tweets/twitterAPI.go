@@ -52,7 +52,7 @@ func getOldTweets(screenName string, client *twitter.Client) ([]obj.TweetTx, err
 	return tweetTxs, nil
 }
 
-func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, numTweets int) ([]obj.TweetTx, error) {
+func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, numTweets int, newBot bool) ([]obj.TweetTx, error) {
 	excludeReplies := false
 	var userTimelineParams = &twitter.UserTimelineParams{
 		ScreenName:     accountKey.Account,
@@ -62,6 +62,9 @@ func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, numTweets i
 	recentTweetTx, err := db.GetRecentTweetTx(accountKey.Account)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		return nil, jerr.Get("error getting recent tweet tx", err)
+	}
+	if errors.Is(err, leveldb.ErrNotFound) && !newBot {
+		return nil, nil
 	}
 	if recentTweetTx != nil {
 		userTimelineParams.SinceID = recentTweetTx.TweetId
@@ -133,11 +136,14 @@ func getNewTweetsLocal(accountKey obj.AccountKey, numTweets int) ([]obj.TweetTx,
 	return tweetTxs, nil
 }
 
-func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, client *twitter.Client, flags db.Flags, numTweets int) error {
-	txList, err := getNewTweets(accountKey, client, numTweets)
+func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, client *twitter.Client, flags db.Flags, numTweets int, newBot bool) error {
+	txList, err := getNewTweets(accountKey, client, numTweets, newBot)
 	//txList, err := getNewTweetsLocal(accountKey, db, numTweets)
 	if err != nil {
 		return jerr.Get("error getting tweets since the bot was last run", err)
+	}
+	if len(txList) == 0 {
+		return nil
 	}
 	//get the ID of the newest tweet in txList
 	tweetID := int64(0)
