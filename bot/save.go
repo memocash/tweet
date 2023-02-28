@@ -49,7 +49,9 @@ func (s *SaveTx) Save(tx graph.Tx) error {
 		jlog.Logf("Already completed tx: %s\n", tx.Hash)
 		return nil
 	}
-
+	if err := s.HandleTxType(); err != nil {
+		return jerr.Get("error handling tx type for save tx", err)
+	}
 	return nil
 }
 
