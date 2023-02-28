@@ -39,11 +39,16 @@ func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey
 	if err != nil {
 		return nil, jerr.Get("error getting address from string for new bot", err)
 	}
+	stream, err := tweets.NewStream()
+	if err != nil {
+		return nil, jerr.Get("error getting new tweet stream", err)
+	}
 	return &Bot{
 		Mnemonic:    mnemonic,
 		Addresses:   addresses,
 		Addr:        *addr,
 		Key:         key,
+		Stream:      stream,
 		TweetClient: tweetClient,
 		ErrorChan:   make(chan error),
 		Verbose:     verbose,
@@ -102,10 +107,6 @@ func (b *Bot) Listen() error {
 			}
 		}
 	}()
-	var err error
-	if b.Stream, err = tweets.NewStream(); err != nil {
-		return jerr.Get("error getting new tweet stream", err)
-	}
 	botStreams, err := getBotStreams(b.Crypt)
 	if err != nil {
 		return jerr.Get("error getting bot streams for listen skipped", err)

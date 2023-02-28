@@ -27,7 +27,7 @@ type SaveTx struct {
 	Message       string
 	SenderAddress string
 	CoinIndex     uint32
-	TxHash        *chainhash.Hash
+	TxHash        chainhash.Hash
 }
 
 func NewSaveTx(bot *Bot) *SaveTx {
@@ -41,7 +41,7 @@ func (s *SaveTx) Save(tx graph.Tx) error {
 		return jerr.Get("error setting vars for save tx", err)
 	}
 	defer s.FinishSave()
-	hasCompletedTx, err := db.HasCompletedTx(*s.TxHash)
+	hasCompletedTx, err := db.HasCompletedTx(s.TxHash)
 	if err != nil {
 		return jerr.Get("error getting completed tx", err)
 	}
@@ -83,16 +83,17 @@ func (s *SaveTx) SetVars(tx graph.Tx) error {
 			break
 		}
 	}
-	var err error
-	if s.TxHash, err = chainhash.NewHashFromStr(tx.Hash); err != nil {
+	txHash, err := chainhash.NewHashFromStr(tx.Hash)
+	if err != nil {
 		return jerr.Get("error parsing address receive tx hash for save", err)
 	}
+	s.TxHash = *txHash
 	return nil
 }
 
 func (s *SaveTx) FinishSave() {
-	var addressSeenTx = &db.AddressSeenTx{Address: s.Bot.Addr, Seen: s.Tx.Seen.GetTime(), TxHash: *s.TxHash}
-	var completed = &db.CompletedTx{TxHash: *s.TxHash}
+	var addressSeenTx = &db.AddressSeenTx{Address: s.Bot.Addr, Seen: s.Tx.Seen.GetTime(), TxHash: s.TxHash}
+	var completed = &db.CompletedTx{TxHash: s.TxHash}
 	if err := db.Save([]db.ObjectI{addressSeenTx, completed}); err != nil {
 		s.Bot.ErrorChan <- jerr.Get("error adding tx hash to database", err)
 	}
