@@ -11,9 +11,11 @@ import (
 	"github.com/jchavannes/jgo/jlog"
 	"github.com/memocash/index/ref/bitcoin/memo"
 	"github.com/memocash/index/ref/bitcoin/wallet"
+	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/graph"
 	"github.com/memocash/tweet/tweets"
+	"github.com/memocash/tweet/tweets/obj"
 	tweetWallet "github.com/memocash/tweet/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
 	"regexp"
@@ -67,10 +69,6 @@ func (s *SaveTx) SetVars(tx graph.Tx) error {
 		scriptArray = append(scriptArray, output.Script)
 	}
 	s.Message = getMessageFromOutputScripts(scriptArray)
-	if s.Message == "" {
-		jlog.Log("No message found, skipping")
-		return nil
-	}
 	for _, input := range tx.Inputs {
 		if input.Output.Lock.Address != s.Bot.Addresses[0] {
 			s.SenderAddress = input.Output.Lock.Address
@@ -100,19 +98,68 @@ func (s *SaveTx) FinishSave() {
 }
 
 func (s *SaveTx) HandleTxType() error {
-	switch {
-	case regexp.MustCompile("^CREATE @?([a-zA-Z0-9_]{1,15})(( --history( [0-9]+)?)?( --nolink)?( --date)?)*$").MatchString(s.Message):
-		if err := s.HandleCreate(); err != nil {
-			return jerr.Get("error handling create save tx", err)
+	if s.Tx.Outputs[s.CoinIndex].Lock.Address == s.Bot.Addresses[0] {
+		switch {
+		case regexp.MustCompile("^CREATE @?([a-zA-Z0-9_]{1,15})(( --history( [0-9]+)?)?( --nolink)?( --date)?( --no-catch-up)?)*$").MatchString(s.Message):
+			if err := s.HandleCreate(); err != nil {
+				return jerr.Get("error handling create save tx", err)
+			}
+		case regexp.MustCompile("^WITHDRAW @?([a-zA-Z0-9_]{1,15})( [0-9]+)?$").MatchString(s.Message):
+			if err := s.HandleWithdraw(); err != nil {
+				return jerr.Get("error handling withdraw save tx", err)
+			}
+		default:
+			fmt.Printf("Invalid command: %s\n.", s.Message)
+			errMsg := "Invalid command. Please use the following format: CREATE <twitterName> or WITHDRAW <twitterName>"
+			if err := refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, errMsg); err != nil {
+				return jerr.Get("error refunding", err)
+			}
 		}
-	case regexp.MustCompile("^WITHDRAW @?([a-zA-Z0-9_]{1,15})( [0-9]+)?$").MatchString(s.Message):
-		if err := s.HandleWithdraw(); err != nil {
-			return jerr.Get("error handling withdraw save tx", err)
+		return nil
+	}
+	//otherwise, one of the sub-bots has just been sent some funds, so based on the value of CatchUp, decide if we try to GetSkippedTweets
+	address := s.Tx.Outputs[s.CoinIndex].Lock.Address
+	botStreams, err := getBotStreams(s.Bot.Crypt)
+	var matchedStream *config.Stream = nil
+	if err != nil {
+		return jerr.Get("error getting bot streams", err)
+	}
+	for _, botStream := range botStreams {
+		if botStream.Wallet.Address.GetEncoded() == address {
+			stream := config.Stream{
+				Key:    botStream.Key,
+				Name:   botStream.Name,
+				Sender: botStream.Sender,
+				Wallet: botStream.Wallet,
+			}
+			matchedStream = &stream
+			println("Matched stream: " + stream.Name)
+			break
 		}
-	default:
-		errMsg := "Invalid command. Please use the following format: CREATE <twitterName> or WITHDRAW <twitterName>"
-		if err := refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, errMsg); err != nil {
-			return jerr.Get("error refunding", err)
+	}
+	if matchedStream == nil {
+		println("No stream matched the address: " + address)
+		return nil
+	}
+	//get the flags from the flags-senderAddress-twittername key in the database
+	flag, err := db.GetFlag(matchedStream.Sender, matchedStream.Name)
+	if err != nil {
+		return jerr.Get("error getting flag", err)
+	}
+	if flag == nil {
+		return nil
+	}
+	if flag.Flags.CatchUp {
+		accountKey := obj.AccountKey{
+			Account: matchedStream.Name,
+			Key:     matchedStream.Wallet.Key,
+			Address: matchedStream.Wallet.Address,
+		}
+		wlt := matchedStream.Wallet
+		client := tweets.Connect()
+		err = tweets.GetSkippedTweets(accountKey, &wlt, client, flag.Flags, 100, false)
+		if err != nil {
+			return jerr.Get("error getting skipped tweets", err)
 		}
 	}
 	return nil
@@ -156,6 +203,9 @@ func (s *SaveTx) HandleCreate() error {
 		}
 		if word == "--date" {
 			flags.Date = true
+		}
+		if word == "--no-catch-up" {
+			flags.CatchUp = false
 		}
 	}
 	if historyNum > 1000 {

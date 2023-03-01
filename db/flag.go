@@ -7,14 +7,16 @@ import (
 )
 
 type Flags struct {
-	Link bool `json:"link"`
-	Date bool `json:"date"`
+	Link    bool `json:"link"`
+	Date    bool `json:"date"`
+	CatchUp bool `json:"catch_up"`
 }
 
 func GetDefaultFlags() Flags {
 	return Flags{
-		Link: true,
-		Date: false,
+		Link:    true,
+		Date:    false,
+		CatchUp: true,
 	}
 }
 

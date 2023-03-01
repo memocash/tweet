@@ -54,6 +54,7 @@ func getOldTweets(screenName string, client *twitter.Client) ([]obj.TweetTx, err
 
 func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, numTweets int, newBot bool) ([]obj.TweetTx, error) {
 	excludeReplies := false
+	println("getting new tweets", accountKey.Account)
 	var userTimelineParams = &twitter.UserTimelineParams{
 		ScreenName:     accountKey.Account,
 		ExcludeReplies: &excludeReplies,
@@ -68,6 +69,7 @@ func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, numTweets i
 	}
 	if recentTweetTx != nil {
 		userTimelineParams.SinceID = recentTweetTx.TweetId
+		println("recent tweet tx", recentTweetTx.TweetId)
 	}
 	tweetTxs, err := GetAndSaveTwitterTweets(client, userTimelineParams)
 	if err != nil {
@@ -143,6 +145,7 @@ func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, client *twi
 		return jerr.Get("error getting tweets since the bot was last run", err)
 	}
 	if len(txList) == 0 {
+		println("no new tweets")
 		return nil
 	}
 	//get the ID of the newest tweet in txList

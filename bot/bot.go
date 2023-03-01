@@ -171,6 +171,21 @@ func (b *Bot) UpdateStream() error {
 		if b.Verbose {
 			jlog.Logf("streaming %s to address %s\n", stream.Name, streamAddress.GetEncoded())
 		}
+		//check if the streamAddress is already in b.Addresses
+		found := false
+		for _, address := range b.Addresses {
+			if address == streamAddress.GetEncoded() {
+				found = true
+				break
+			}
+		}
+		if !found {
+			b.Addresses = append(b.Addresses, streamAddress.GetEncoded())
+		}
+
+		if err := graph.AddressListen(b.Addresses, b.SaveTx, b.ErrorChan); err != nil {
+			return jerr.Get("error listening to address on graphql", err)
+		}
 	}
 	if err := db.Save([]db.ObjectI{&db.BotRunningCount{Count: len(botStreams)}}); err != nil {
 		return jerr.Get("error saving bot running count", err)
