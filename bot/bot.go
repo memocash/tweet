@@ -116,7 +116,7 @@ func (b *Bot) Listen() error {
 			Account: stream.Name,
 			Key:     stream.Wallet.Key,
 			Address: stream.Wallet.Address,
-		}, &stream.Wallet, b.TweetClient, db.GetDefaultFlags(), 100); err != nil {
+		}, &stream.Wallet, b.TweetClient, db.GetDefaultFlags(), 100, false); err != nil {
 			return jerr.Get("error getting skipped tweets on bot listen", err)
 		}
 	}

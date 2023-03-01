@@ -30,7 +30,7 @@ var getNewCmd = &cobra.Command{
 			}
 			if savedAddressTweet != nil {
 				wlt := wallet.NewWallet(accountKey.Address, accountKey.Key)
-				err := tweets.GetSkippedTweets(accountKey, &wlt, tweets.Connect(), db.Flags{Link: link, Date: date}, 100)
+				err := tweets.GetSkippedTweets(accountKey, &wlt, tweets.Connect(), db.Flags{Link: link, Date: date}, 100, true)
 				if err != nil {
 					jerr.Get("error getting skipped tweets for get new tweets", err).Fatal()
 				}

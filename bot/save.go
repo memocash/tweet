@@ -181,7 +181,7 @@ func (s *SaveTx) HandleCreate() error {
 		accountKey := *accountKeyPointer
 		if history {
 			client := tweets.Connect()
-			if err = tweets.GetSkippedTweets(accountKey, wlt, client, flags, historyNum); err != nil {
+			if err = tweets.GetSkippedTweets(accountKey, wlt, client, flags, historyNum, true); err != nil {
 				return jerr.Get("error getting skipped tweets on bot save tx", err)
 			}
 
