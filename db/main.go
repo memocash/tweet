@@ -105,8 +105,7 @@ func GetSpecificItem(obj ObjectI) error {
 	if err != nil {
 		return fmt.Errorf("error getting database handler for specific item; %w", err)
 	}
-	topicPrefix := jutil.CombineBytes([]byte(obj.GetPrefix()), []byte{Spacer})
-	fullUid := jutil.CombineBytes(topicPrefix, obj.GetUid())
+	fullUid := GetObjectCombinedUid(obj)
 	val, err := db.Get(fullUid, nil)
 	if err != nil {
 		return fmt.Errorf("error getting db item specific; %w", err)
