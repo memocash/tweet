@@ -139,27 +139,30 @@ func (s *SaveTx) HandleTxType() error {
 	}
 	if matchedStream == nil {
 		println("No stream matched the address: " + address)
-		return nil
-	}
-	//get the flags from the flags-senderAddress-twittername key in the database
-	flag, err := db.GetFlag(matchedStream.Sender, matchedStream.Name)
-	if err != nil {
-		return jerr.Get("error getting flag", err)
-	}
-	if flag == nil {
-		return nil
-	}
-	if flag.Flags.CatchUp {
-		accountKey := obj.AccountKey{
-			Account: matchedStream.Name,
-			Key:     matchedStream.Wallet.Key,
-			Address: matchedStream.Wallet.Address,
-		}
-		wlt := matchedStream.Wallet
-		client := tweets.Connect()
-		err = tweets.GetSkippedTweets(accountKey, &wlt, client, flag.Flags, 100, false)
+	} else {
+		flag, err := db.GetFlag(matchedStream.Sender, matchedStream.Name)
 		if err != nil {
-			return jerr.Get("error getting skipped tweets", err)
+			return jerr.Get("error getting flag", err)
+		}
+		if flag == nil {
+			return nil
+		}
+		if flag.Flags.CatchUp {
+			accountKey := obj.AccountKey{
+				Account: matchedStream.Name,
+				Key:     matchedStream.Wallet.Key,
+				Address: matchedStream.Wallet.Address,
+			}
+			wlt := matchedStream.Wallet
+			client := tweets.Connect()
+			err = tweets.GetSkippedTweets(accountKey, &wlt, client, flag.Flags, 100, false)
+			if err != nil {
+				return jerr.Get("error getting skipped tweets", err)
+			}
+			err = s.Bot.UpdateStream()
+			if err != nil {
+				return jerr.Get("error updating stream", err)
+			}
 		}
 	}
 	return nil

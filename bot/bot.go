@@ -85,7 +85,14 @@ func (b *Bot) ProcessMissedTxs() error {
 
 func (b *Bot) Listen() error {
 	jlog.Logf("Bot listening to address: %s\n", b.Addresses[0])
-	if err := graph.AddressListen(b.Addresses, b.SaveTx, b.ErrorChan); err != nil {
+	addressKeys, err := db.GetAllAddressKey()
+	if err != nil {
+		return jerr.Get("error getting all address keys", err)
+	}
+	for _, addressKey := range addressKeys {
+		b.Addresses = append(b.Addresses, addressKey.Address)
+	}
+	if err = graph.AddressListen(b.Addresses, b.SaveTx, b.ErrorChan); err != nil {
 		return jerr.Get("error listening to address on graphql", err)
 	}
 	updateInterval := config.GetConfig().UpdateInterval
@@ -159,6 +166,14 @@ func (b *Bot) SafeUpdate() error {
 func (b *Bot) UpdateStream() error {
 	//create an array of {twitterName, newKey} objects by searching through the linked-<senderAddress>-<twitterName> fields
 	botStreams, err := getBotStreams(b.Crypt)
+	addressKeys, err := db.GetAllAddressKey()
+	b.Addresses = []string{b.Addresses[0]}
+	if err != nil {
+		return jerr.Get("error getting all address keys", err)
+	}
+	for _, addressKey := range addressKeys {
+		b.Addresses = append(b.Addresses, addressKey.Address)
+	}
 	if err != nil {
 		return jerr.Get("error making stream array update", err)
 	}
@@ -171,24 +186,12 @@ func (b *Bot) UpdateStream() error {
 		if b.Verbose {
 			jlog.Logf("streaming %s to address %s\n", stream.Name, streamAddress.GetEncoded())
 		}
-		//check if the streamAddress is already in b.Addresses
-		found := false
-		for _, address := range b.Addresses {
-			if address == streamAddress.GetEncoded() {
-				found = true
-				break
-			}
-		}
-		if !found {
-			b.Addresses = append(b.Addresses, streamAddress.GetEncoded())
-		}
-
-		if err := graph.AddressListen(b.Addresses, b.SaveTx, b.ErrorChan); err != nil {
-			return jerr.Get("error listening to address on graphql", err)
-		}
 	}
 	if err := db.Save([]db.ObjectI{&db.BotRunningCount{Count: len(botStreams)}}); err != nil {
 		return jerr.Get("error saving bot running count", err)
+	}
+	if err := graph.AddressListen(b.Addresses, b.SaveTx, b.ErrorChan); err != nil {
+		return jerr.Get("error listening to address on graphql", err)
 	}
 	go func() {
 		if len(botStreams) == 0 {
