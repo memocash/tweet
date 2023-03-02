@@ -5,6 +5,7 @@ import (
 	"github.com/dghubble/go-twitter/twitter"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jlog"
+	"github.com/memocash/index/ref/bitcoin/tx/gen"
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/db"
@@ -119,11 +120,12 @@ func (b *Bot) Listen() error {
 		return jerr.Get("error getting bot streams for listen skipped", err)
 	}
 	for _, stream := range botStreams {
-		if err = tweets.GetSkippedTweets(obj.AccountKey{
+		err = tweets.GetSkippedTweets(obj.AccountKey{
 			Account: stream.Name,
 			Key:     stream.Wallet.Key,
 			Address: stream.Wallet.Address,
-		}, &stream.Wallet, b.TweetClient, db.GetDefaultFlags(), 100, false); err != nil {
+		}, &stream.Wallet, b.TweetClient, db.GetDefaultFlags(), 100, false)
+		if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 			return jerr.Get("error getting skipped tweets on bot listen", err)
 		}
 	}
@@ -197,8 +199,18 @@ func (b *Bot) UpdateStream() error {
 		if len(botStreams) == 0 {
 			return
 		}
-		if err := b.Stream.ListenForNewTweets(botStreams); err != nil {
-			b.ErrorChan <- jerr.Get("error twitter initiate stream in update", err)
+		err := b.Stream.ListenForNewTweets(botStreams)
+		if err != nil {
+			if jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
+				err := b.UpdateStream()
+				if err != nil {
+					b.ErrorChan <- jerr.Get("error updating stream", err)
+				}
+			} else {
+				//otherwise, it's a different error, so we should send it to the error channel
+				b.ErrorChan <- jerr.Get("error twitter initiate stream in update", err)
+
+			}
 		}
 	}()
 	return nil

@@ -76,7 +76,16 @@ func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, numTweets i
 		return nil, jerr.Get("error getting new tweets from twitter", err)
 	}
 	recentSavedTweetTx, err := db.GetRecentSavedAddressTweet(accountKey.Address.GetEncoded(), accountKey.Account)
-	tweetTxs, err := db.GetTweetTxs(accountKey.Account, recentSavedTweetTx.TweetId, numTweets)
+	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
+		return nil, jerr.Get("error getting recent saved address tweet", err)
+	}
+	var recentTweetId int64
+	if recentSavedTweetTx == nil {
+		recentTweetId = 0
+	} else {
+		recentTweetId = recentSavedTweetTx.TweetId
+	}
+	tweetTxs, err := db.GetTweetTxs(accountKey.Account, recentTweetId, numTweets)
 	return tweetTxs, nil
 }
 

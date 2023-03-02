@@ -10,6 +10,7 @@ import (
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jlog"
 	"github.com/memocash/index/ref/bitcoin/memo"
+	"github.com/memocash/index/ref/bitcoin/tx/gen"
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/db"
@@ -156,7 +157,7 @@ func (s *SaveTx) HandleTxType() error {
 			wlt := matchedStream.Wallet
 			client := tweets.Connect()
 			err = tweets.GetSkippedTweets(accountKey, &wlt, client, flag.Flags, 100, false)
-			if err != nil {
+			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 				return jerr.Get("error getting skipped tweets", err)
 			}
 			err = s.Bot.UpdateStream()
@@ -234,7 +235,7 @@ func (s *SaveTx) HandleCreate() error {
 		accountKey := *accountKeyPointer
 		if history {
 			client := tweets.Connect()
-			if err = tweets.GetSkippedTweets(accountKey, wlt, client, flags, historyNum, true); err != nil {
+			if err = tweets.GetSkippedTweets(accountKey, wlt, client, flags, historyNum, true); err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 				return jerr.Get("error getting skipped tweets on bot save tx", err)
 			}
 

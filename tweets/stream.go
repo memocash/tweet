@@ -203,8 +203,8 @@ func (s *Stream) ListenForNewTweets(streamConfigs []config.Stream) error {
 				} else if errors.Is(err, leveldb.ErrNotFound) {
 					continue
 				}
-				//may or may not break getnewtweets
-				if err := save.Tweet(conf.Wallet, twitterAccountWallet.GetAddress(), tweetTx, flag.Flags); err != nil {
+				err = save.Tweet(conf.Wallet, twitterAccountWallet.GetAddress(), tweetTx, flag.Flags)
+				if err != nil {
 					return jerr.Get("error streaming tweet in stream", err)
 				}
 			}
