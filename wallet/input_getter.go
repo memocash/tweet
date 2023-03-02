@@ -39,12 +39,13 @@ func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
 	if err != nil {
 		return nil, jerr.Get("error getting pk script", err)
 	}
+outputsLoop:
 	for _, output := range outputs {
 		txHash := hs.GetTxHash(output.Tx.Hash)
 		for _, utxo := range g.UTXOs {
 			if bytes.Equal(utxo.Input.PrevOutHash, txHash) &&
 				utxo.Input.PrevOutIndex == uint32(output.Index) {
-				continue
+				continue outputsLoop
 			}
 		}
 		utxos = append(utxos, memo.UTXO{
