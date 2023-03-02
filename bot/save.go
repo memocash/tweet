@@ -160,10 +160,10 @@ func (s *SaveTx) HandleTxType() error {
 			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 				return jerr.Get("error getting skipped tweets", err)
 			}
-			err = s.Bot.UpdateStream()
-			if err != nil {
-				return jerr.Get("error updating stream", err)
-			}
+		}
+		err = s.Bot.UpdateStream()
+		if err != nil {
+			return jerr.Get("error updating stream", err)
 		}
 	}
 	return nil
