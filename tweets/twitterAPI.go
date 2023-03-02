@@ -52,7 +52,7 @@ func getOldTweets(screenName string, client *twitter.Client) ([]obj.TweetTx, err
 	return tweetTxs, nil
 }
 
-func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, numTweets int, newBot bool) ([]obj.TweetTx, error) {
+func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, numTweets int, newBot bool) ([]*db.TweetTx, error) {
 	excludeReplies := false
 	println("getting new tweets", accountKey.Account)
 	var userTimelineParams = &twitter.UserTimelineParams{
@@ -71,10 +71,12 @@ func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, numTweets i
 		userTimelineParams.SinceID = recentTweetTx.TweetId
 		println("recent tweet tx", recentTweetTx.TweetId)
 	}
-	tweetTxs, err := GetAndSaveTwitterTweets(client, userTimelineParams)
+	_, err = GetAndSaveTwitterTweets(client, userTimelineParams)
 	if err != nil {
 		return nil, jerr.Get("error getting new tweets from twitter", err)
 	}
+	recentSavedTweetTx, err := db.GetRecentSavedAddressTweet(accountKey.Address.GetEncoded(), accountKey.Account)
+	tweetTxs, err := db.GetTweetTxs(accountKey.Account, recentSavedTweetTx.TweetId, numTweets)
 	return tweetTxs, nil
 }
 
@@ -98,7 +100,6 @@ func GetAndSaveTwitterTweets(client *twitter.Client, params *twitter.UserTimelin
 			TweetId:    tweets[i].ID,
 			Tx:         tweetTxJson,
 		}
-		tweetTxs[i] = obj.TweetTx{Tweet: &tweets[i]}
 	}
 	if err := db.Save(dbTweetTxs); err != nil {
 		return nil, jerr.Get("error saving db tweet from twitter tweet", err)
@@ -151,8 +152,8 @@ func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, client *twi
 	//get the ID of the newest tweet in txList
 	tweetID := int64(0)
 	for _, tweetTx := range txList {
-		if tweetTx.Tweet.ID > tweetID {
-			tweetID = tweetTx.Tweet.ID
+		if tweetTx.TweetId > tweetID {
+			tweetID = tweetTx.TweetId
 		}
 	}
 	totalSaved := 0
