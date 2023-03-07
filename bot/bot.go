@@ -120,8 +120,7 @@ func (b *Bot) Listen() error {
 		return jerr.Get("error getting bot streams for listen skipped", err)
 	}
 	for _, stream := range botStreams {
-
-		flag, err := db.GetFlag(stream.Sender, stream.Name)
+		flag, err := db.GetFlag(stream.Sender, stream.UserID)
 		if err != nil {
 			return jerr.Get("error getting flag for listen skipped", err)
 		}
@@ -130,7 +129,7 @@ func (b *Bot) Listen() error {
 		}
 		if flag.Flags.CatchUp {
 			err = tweets.GetSkippedTweets(obj.AccountKey{
-				Account: stream.Name,
+				UserID:  stream.UserID,
 				Key:     stream.Wallet.Key,
 				Address: stream.Wallet.Address,
 			}, &stream.Wallet, b.TweetClient, flag.Flags, 100, false)
@@ -176,7 +175,7 @@ func (b *Bot) SafeUpdate() error {
 }
 
 func (b *Bot) UpdateStream() error {
-	//create an array of {twitterName, newKey} objects by searching through the linked-<senderAddress>-<twitterName> fields
+	//create an array of {userId, newKey} objects by searching through the linked-<senderAddress>-<userId> fields
 	botStreams, err := getBotStreams(b.Crypt)
 	addressKeys, err := db.GetAllAddressKey()
 	b.Addresses = []string{b.Addresses[0]}
@@ -196,7 +195,7 @@ func (b *Bot) UpdateStream() error {
 		}
 		streamAddress := streamKey.GetAddress()
 		if b.Verbose {
-			jlog.Logf("streaming %s to address %s\n", stream.Name, streamAddress.GetEncoded())
+			jlog.Logf("streaming %s to address %s\n", stream.UserID, streamAddress.GetEncoded())
 		}
 	}
 	if err := db.Save([]db.ObjectI{&db.BotRunningCount{Count: len(botStreams)}}); err != nil {

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 )
 
 func Balance(address wallet.Addr) error {
@@ -28,14 +29,14 @@ func Balance(address wallet.Addr) error {
 	fmt.Println(string(body))
 	return nil
 }
-func Profile(sender wallet.Addr, twittername string) error {
+func Profile(sender wallet.Addr, userId int64) error {
 	port := config.GetConfig().InfoServerPort
 	if port == 0 {
 		return fmt.Errorf("error info request port is 0")
 	}
 	resp, err := http.PostForm(fmt.Sprintf("http://localhost:%d/profile", port), url.Values{
-		"sender":      {sender.String()},
-		"twittername": {twittername},
+		"sender": {sender.String()},
+		"userId": {strconv.FormatInt(userId, 10)},
 	})
 	if err != nil {
 		return fmt.Errorf("error info request: %w", err)

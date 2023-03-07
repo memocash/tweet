@@ -3,6 +3,7 @@ package db
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -52,10 +53,10 @@ func (f *Flag) Deserialize(d []byte) {
 	json.Unmarshal(d, &f.Flags)
 }
 
-func GetFlag(address, twitterName string) (*Flag, error) {
+func GetFlag(address string, userId int64) (*Flag, error) {
 	var flag = &Flag{
 		Address: address,
-		UserID:  twitterName,
+		UserID:  strconv.FormatInt(userId, 10),
 	}
 	if err := GetSpecificItem(flag); err != nil {
 		return nil, fmt.Errorf("error getting flag from db; %w", err)

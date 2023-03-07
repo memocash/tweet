@@ -26,7 +26,6 @@ func (t TwitterAPI) IsSet() bool {
 
 type Stream struct {
 	Key    string        `mapstructure:"KEY"`
-	Name   string        `mapstructure:"NAME"`
 	UserID int64         `mapstructure:"USER_ID"`
 	Sender string        `mapstructure:"SENDER"`
 	Wallet wallet.Wallet `mapstructure:"WALLET"`
