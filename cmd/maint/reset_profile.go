@@ -8,19 +8,19 @@ import (
 
 var resetProfileCmd = &cobra.Command{
 	Use:   "reset-profile",
-	Short: "reset-profile <senderAddr> <twittername>",
+	Short: "reset-profile <senderAddr> <userId>",
 	Run: func(c *cobra.Command, args []string) {
 		if len(args) < 2 {
-			log.Fatal("must specify sender address and twittername")
+			log.Fatal("must specify sender address and userId")
 		}
 		senderAddr := args[0]
-		twittername := args[1]
+		userId := args[1]
 		if err := db.Delete([]db.ObjectI{&db.Profile{
-			Address:     senderAddr,
-			TwitterName: twittername,
+			Address: senderAddr,
+			UserID:  userId,
 		}}); err != nil {
 			log.Fatalf("error removing profile from db for reset; %v", err)
 		}
-		log.Printf("reset %s profile linked to %s\n", twittername, senderAddr)
+		log.Printf("reset %s profile linked to %s\n", userId, senderAddr)
 	},
 }

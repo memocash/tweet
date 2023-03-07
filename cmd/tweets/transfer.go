@@ -21,7 +21,7 @@ var transferCmd = &cobra.Command{
 		date, _ := c.Flags().GetBool(FlagDate)
 		accountKey := obj.GetAccountKeyFromArgs(args)
 		client := tweets.Connect()
-		if _, err := tweets.GetAllTweets(accountKey.Account, client); err != nil {
+		if _, err := tweets.GetAllTweets(accountKey.UserID, client); err != nil {
 			jerr.Get("error getting all tweets", err).Fatal()
 		}
 		wlt := wallet.NewWallet(accountKey.Address, accountKey.Key)

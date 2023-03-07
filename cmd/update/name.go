@@ -14,7 +14,7 @@ var nameCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(2),
 	Run: func(c *cobra.Command, args []string) {
 		accountKey := obj.GetAccountKeyFromArgs(args)
-		profile, err := tweets.GetProfile(accountKey.Account, tweets.Connect())
+		profile, err := tweets.GetProfile(accountKey.UserID, tweets.Connect())
 		if err != nil {
 			jerr.Get("fatal error getting profile", err).Fatal()
 		}
