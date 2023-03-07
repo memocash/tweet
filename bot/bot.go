@@ -120,13 +120,23 @@ func (b *Bot) Listen() error {
 		return jerr.Get("error getting bot streams for listen skipped", err)
 	}
 	for _, stream := range botStreams {
-		err = tweets.GetSkippedTweets(obj.AccountKey{
-			Account: stream.Name,
-			Key:     stream.Wallet.Key,
-			Address: stream.Wallet.Address,
-		}, &stream.Wallet, b.TweetClient, db.GetDefaultFlags(), 100, false)
-		if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
-			return jerr.Get("error getting skipped tweets on bot listen", err)
+
+		flag, err := db.GetFlag(stream.Sender, stream.Name)
+		if err != nil {
+			return jerr.Get("error getting flag for listen skipped", err)
+		}
+		if flag == nil {
+			continue
+		}
+		if flag.Flags.CatchUp {
+			err = tweets.GetSkippedTweets(obj.AccountKey{
+				Account: stream.Name,
+				Key:     stream.Wallet.Key,
+				Address: stream.Wallet.Address,
+			}, &stream.Wallet, b.TweetClient, flag.Flags, 100, false)
+			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
+				return jerr.Get("error getting skipped tweets on bot listen", err)
+			}
 		}
 	}
 	if err = b.SafeUpdate(); err != nil {
