@@ -12,13 +12,14 @@ import (
 	"github.com/memocash/tweet/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
 	"html"
+	"strconv"
 )
 
 func Tweet(wlt wallet.Wallet, address string, tweet obj.TweetTx, flags db.Flags) error {
 	if tweet.Tweet == nil {
 		return jerr.New("tweet is nil")
 	}
-	existingSavedAddressTweet, err := db.GetSavedAddressTweet(address, tweet.Tweet.User.ScreenName, tweet.Tweet.ID)
+	existingSavedAddressTweet, err := db.GetSavedAddressTweet(address, tweet.Tweet.User.ID, tweet.Tweet.ID)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		return jerr.Get("error getting existing saved address tweet for save", err)
 	}
@@ -33,9 +34,9 @@ func Tweet(wlt wallet.Wallet, address string, tweet obj.TweetTx, flags db.Flags)
 		return jerr.Get("error marshaling tweetTx", err)
 	}
 	if err := db.Save([]db.ObjectI{&db.TweetTx{
-		ScreenName: tweet.Tweet.User.ScreenName,
-		TweetId:    tweet.Tweet.ID,
-		Tx:         tweetJson,
+		UserID:  strconv.FormatInt(tweet.Tweet.User.ID, 10),
+		TweetId: tweet.Tweet.ID,
+		Tx:      tweetJson,
 	}}); err != nil {
 		return jerr.Get("error saving tweetTx db object", err)
 	}
@@ -49,7 +50,7 @@ func Tweet(wlt wallet.Wallet, address string, tweet obj.TweetTx, flags db.Flags)
 		tweet.TxHash = parentHash
 	} else {
 		parentSavedTweet, err := db.GetSavedAddressTweet(
-			address, tweet.Tweet.User.ScreenName, tweet.Tweet.InReplyToStatusID)
+			address, tweet.Tweet.User.ID, tweet.Tweet.InReplyToStatusID)
 		if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 			return jerr.Get("error getting saved address tweet for tweet parent reply", err)
 		}
@@ -76,10 +77,10 @@ func Tweet(wlt wallet.Wallet, address string, tweet obj.TweetTx, flags db.Flags)
 		}
 	}
 	if err := db.Save([]db.ObjectI{&db.SavedAddressTweet{
-		Address:    address,
-		ScreenName: tweet.Tweet.User.ScreenName,
-		TweetId:    tweet.Tweet.ID,
-		TxHash:     tweet.TxHash,
+		Address: address,
+		UserID:  strconv.FormatInt(tweet.Tweet.User.ID, 10),
+		TweetId: tweet.Tweet.ID,
+		TxHash:  tweet.TxHash,
 	}}); err != nil {
 		return jerr.Get("error saving saved address tweet", err)
 	}

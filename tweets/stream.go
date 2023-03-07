@@ -60,12 +60,12 @@ func (s *Stream) FilterAccount(streamConfigs []config.Stream) error {
 	var res *rules.TwitterRuleResponse
 	var err error
 	//remove duplicate names from stream configs
-	uniqueNames := make(map[string]bool)
+	uniqueIds := make(map[string]bool)
 	for _, streamConfig := range streamConfigs {
-		uniqueNames[streamConfig.Name] = true
+		uniqueIds[strconv.FormatInt(streamConfig.UserID, 10)] = true
 	}
-	for name := range uniqueNames {
-		streamRules := twitterstream.NewRuleBuilder().AddRule("from:"+name, "get tweets from this account").Build()
+	for userId := range uniqueIds {
+		streamRules := twitterstream.NewRuleBuilder().AddRule("from:"+userId, "get tweets from this account").Build()
 		res, err = s.Api.Rules.Create(streamRules, false) // dryRun is set to false.
 		if err != nil {
 			return jerr.Get("error creating twitter API rules", err)
@@ -194,10 +194,10 @@ func (s *Stream) ListenForNewTweets(streamConfigs []config.Stream) error {
 		//call streamtweet
 		//based on the stream config, get the right address to send the tweet to
 		for _, conf := range streamConfigs {
-			if conf.Name == tweetObject.User.ScreenName {
+			if conf.UserID == tweetObject.User.ID {
 				jlog.Logf("sending tweet to key: %s\n", conf.Key)
-				twitterAccountWallet := obj.GetAccountKeyFromArgs([]string{conf.Key, conf.Name})
-				flag, err := db.GetFlag(conf.Sender, conf.Name)
+				twitterAccountWallet := obj.GetAccountKeyFromArgs([]string{conf.Key, strconv.FormatInt(conf.UserID, 10)})
+				flag, err := db.GetFlag(conf.Sender, strconv.FormatInt(conf.UserID, 10))
 				if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 					return jerr.Get("error getting flags from db", err)
 				} else if errors.Is(err, leveldb.ErrNotFound) {
