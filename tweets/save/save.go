@@ -25,7 +25,7 @@ func Tweet(wlt wallet.Wallet, address string, tweet obj.TweetTx, flags db.Flags)
 	if existingSavedAddressTweet != nil {
 		return nil
 	}
-	tweetLink := fmt.Sprintf("\nhttps://twitter.com/twitter/status/%d\n", tweet.Tweet.ID)
+	tweetLink := fmt.Sprintf("\nhttps://twitter.com/%s/status/%d\n", tweet.Tweet.User.ScreenName, tweet.Tweet.ID)
 	tweetDate := fmt.Sprintf("\n%s\n", tweet.Tweet.CreatedAt)
 	tweetText := tweet.Tweet.Text
 	tweetJson, err := json.Marshal(tweet)
