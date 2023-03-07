@@ -107,7 +107,7 @@ func (s *Stream) ListenForNewTweets(streamConfigs []config.Stream) error {
 		return jerr.Get("error twitter stream reset rules", err)
 	}
 	for _, streamConfig := range streamConfigs {
-		jlog.Logf("Adding stream config: %s %s\n", streamConfig.Sender, streamConfig.Name)
+		jlog.Logf("Adding stream config: %s %s\n", streamConfig.Sender, streamConfig.UserID)
 	}
 	if err := s.FilterAccount(streamConfigs); err != nil {
 		return jerr.Get("error twitter stream filter account", err)
@@ -197,7 +197,7 @@ func (s *Stream) ListenForNewTweets(streamConfigs []config.Stream) error {
 			if conf.UserID == tweetObject.User.ID {
 				jlog.Logf("sending tweet to key: %s\n", conf.Key)
 				twitterAccountWallet := obj.GetAccountKeyFromArgs([]string{conf.Key, strconv.FormatInt(conf.UserID, 10)})
-				flag, err := db.GetFlag(conf.Sender, strconv.FormatInt(conf.UserID, 10))
+				flag, err := db.GetFlag(conf.Sender, conf.UserID)
 				if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 					return jerr.Get("error getting flags from db", err)
 				} else if errors.Is(err, leveldb.ErrNotFound) {
