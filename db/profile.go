@@ -2,13 +2,14 @@ package db
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
 type Profile struct {
-	Address     string
-	TwitterName string
-	Profile     []byte
+	Address string
+	UserID  string
+	Profile []byte
 }
 
 func (o *Profile) GetPrefix() string {
@@ -16,7 +17,7 @@ func (o *Profile) GetPrefix() string {
 }
 
 func (o *Profile) GetUid() []byte {
-	return []byte(fmt.Sprintf("%s-%s", o.Address, o.TwitterName))
+	return []byte(fmt.Sprintf("%s-%s", o.Address, o.UserID))
 }
 
 func (o *Profile) SetUid(b []byte) {
@@ -25,7 +26,7 @@ func (o *Profile) SetUid(b []byte) {
 		return
 	}
 	o.Address = parts[0]
-	o.TwitterName = parts[1]
+	o.UserID = parts[1]
 }
 
 func (o *Profile) Serialize() []byte {
@@ -36,10 +37,10 @@ func (o *Profile) Deserialize(d []byte) {
 	o.Profile = d
 }
 
-func GetProfile(address, twitterName string) (*Profile, error) {
+func GetProfile(address string, userId int64) (*Profile, error) {
 	var profile = &Profile{
-		Address:     address,
-		TwitterName: twitterName,
+		Address: address,
+		UserID:  strconv.FormatInt(userId, 10),
 	}
 	if err := GetSpecificItem(profile); err != nil {
 		return nil, fmt.Errorf("error getting specific profile from db; %w", err)

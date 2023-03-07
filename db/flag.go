@@ -21,9 +21,9 @@ func GetDefaultFlags() Flags {
 }
 
 type Flag struct {
-	Address     string
-	TwitterName string
-	Flags       Flags
+	Address string
+	UserID  string
+	Flags   Flags
 }
 
 func (f *Flag) GetPrefix() string {
@@ -31,7 +31,7 @@ func (f *Flag) GetPrefix() string {
 }
 
 func (f *Flag) GetUid() []byte {
-	return []byte(fmt.Sprintf("%s-%s", f.Address, f.TwitterName))
+	return []byte(fmt.Sprintf("%s-%s", f.Address, f.UserID))
 }
 
 func (f *Flag) SetUid(b []byte) {
@@ -40,7 +40,7 @@ func (f *Flag) SetUid(b []byte) {
 		return
 	}
 	f.Address = parts[0]
-	f.TwitterName = parts[1]
+	f.UserID = parts[1]
 }
 
 func (f *Flag) Serialize() []byte {
@@ -54,8 +54,8 @@ func (f *Flag) Deserialize(d []byte) {
 
 func GetFlag(address, twitterName string) (*Flag, error) {
 	var flag = &Flag{
-		Address:     address,
-		TwitterName: twitterName,
+		Address: address,
+		UserID:  twitterName,
 	}
 	if err := GetSpecificItem(flag); err != nil {
 		return nil, fmt.Errorf("error getting flag from db; %w", err)

@@ -4,14 +4,15 @@ import (
 	"fmt"
 	"github.com/jchavannes/jgo/jutil"
 	"github.com/syndtr/goleveldb/leveldb/util"
+	"strconv"
 	"strings"
 )
 
 type SavedAddressTweet struct {
-	Address    string
-	ScreenName string
-	TweetId    int64
-	TxHash     []byte
+	Address string
+	UserID  string
+	TweetId int64
+	TxHash  []byte
 }
 
 func (t *SavedAddressTweet) GetPrefix() string {
@@ -19,7 +20,7 @@ func (t *SavedAddressTweet) GetPrefix() string {
 }
 
 func (t *SavedAddressTweet) GetUid() []byte {
-	return []byte(fmt.Sprintf("%s-%s-%019d", t.Address, t.ScreenName, t.TweetId))
+	return []byte(fmt.Sprintf("%s-%s-%019d", t.Address, t.UserID, t.TweetId))
 }
 
 func (t *SavedAddressTweet) SetUid(b []byte) {
@@ -28,7 +29,7 @@ func (t *SavedAddressTweet) SetUid(b []byte) {
 		return
 	}
 	t.Address = parts[0]
-	t.ScreenName = parts[1]
+	t.UserID = parts[1]
 	t.TweetId = jutil.GetInt64FromString(strings.TrimLeft(parts[2], "0"))
 }
 
@@ -40,27 +41,27 @@ func (t *SavedAddressTweet) Deserialize(d []byte) {
 	t.TxHash = d
 }
 
-func GetRecentSavedAddressTweet(address, screenName string) (*SavedAddressTweet, error) {
+func GetRecentSavedAddressTweet(address string, userId int64) (*SavedAddressTweet, error) {
 	var savedAddressTweet = new(SavedAddressTweet)
-	if err := GetLastItem(savedAddressTweet, []byte(fmt.Sprintf("%s-%s", address, screenName))); err != nil {
+	if err := GetLastItem(savedAddressTweet, []byte(fmt.Sprintf("%s-%s", address, strconv.FormatInt(userId, 10)))); err != nil {
 		return nil, fmt.Errorf("error getting recent saved address item; %w", err)
 	}
 	return savedAddressTweet, nil
 }
 
-func GetNumSavedAddressTweet(address, screenName string) (int, error) {
-	count, err := GetNum([]byte(fmt.Sprintf("%s-%s-%s-", PrefixSavedAddressTweet, address, screenName)))
+func GetNumSavedAddressTweet(address string, userId int64) (int, error) {
+	count, err := GetNum([]byte(fmt.Sprintf("%s-%s-%s-", PrefixSavedAddressTweet, address, strconv.FormatInt(userId, 10))))
 	if err != nil {
 		return 0, fmt.Errorf("error getting num saved address tweets; %w", err)
 	}
 	return count, nil
 }
 
-func GetSavedAddressTweet(address, screenName string, tweetId int64) (*SavedAddressTweet, error) {
+func GetSavedAddressTweet(address string, userId int64, tweetId int64) (*SavedAddressTweet, error) {
 	var savedAddressTweet = &SavedAddressTweet{
-		Address:    address,
-		ScreenName: screenName,
-		TweetId:    tweetId,
+		Address: address,
+		UserID:  strconv.FormatInt(userId, 10),
+		TweetId: tweetId,
 	}
 	if err := GetSpecificItem(savedAddressTweet); err != nil {
 		return nil, fmt.Errorf("error getting saved address tweet; %w", err)
