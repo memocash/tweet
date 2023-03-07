@@ -53,7 +53,26 @@ func (s *SaveTx) Save(tx graph.Tx) error {
 		return nil
 	}
 	if err := s.HandleTxType(); err != nil {
-		return jerr.Get("error handling tx type for save tx", err)
+		return jerr.Get("error handling request main bot", err)
+	}
+	return nil
+}
+func (s *SaveTx) HandleRequestMainBot() error {
+	switch {
+	case regexp.MustCompile("^CREATE @?([a-zA-Z0-9_]{1,15})(( --history( [0-9]+)?)?( --nolink)?( --date)?( --no-catch-up)?)*$").MatchString(s.Message):
+		if err := s.HandleCreate(); err != nil {
+			return jerr.Get("error handling create save tx", err)
+		}
+	case regexp.MustCompile("^WITHDRAW @?([a-zA-Z0-9_]{1,15})( [0-9]+)?$").MatchString(s.Message):
+		if err := s.HandleWithdraw(); err != nil {
+			return jerr.Get("error handling withdraw save tx", err)
+		}
+	default:
+		fmt.Printf("Invalid command: %s\n.", s.Message)
+		errMsg := "Invalid command. Please use the following format: CREATE <twitterName> or WITHDRAW <twitterName>"
+		if err := refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, errMsg); err != nil {
+			return jerr.Get("error refunding", err)
+		}
 	}
 	return nil
 }
@@ -97,34 +116,34 @@ func (s *SaveTx) FinishSave() {
 		s.Bot.ErrorChan <- jerr.Get("error adding tx hash to database", err)
 	}
 }
-
 func (s *SaveTx) HandleTxType() error {
-	if s.Tx.Outputs[s.CoinIndex].Lock.Address == s.Bot.Addresses[0] {
-		switch {
-		case regexp.MustCompile("^CREATE @?([a-zA-Z0-9_]{1,15})(( --history( [0-9]+)?)?( --nolink)?( --date)?( --no-catch-up)?)*$").MatchString(s.Message):
-			if err := s.HandleCreate(); err != nil {
-				return jerr.Get("error handling create save tx", err)
+	for i, _ := range s.Tx.Outputs {
+		s.CoinIndex = uint32(i)
+		address := s.Tx.Outputs[s.CoinIndex].Lock.Address
+		if address == "unknown: nonstandard" {
+			continue
+		} else if address == s.Bot.Addresses[0] {
+			err := s.HandleRequestMainBot()
+			if err != nil {
+				return jerr.Get("error handling request main bot for save tx", err)
 			}
-		case regexp.MustCompile("^WITHDRAW @?([a-zA-Z0-9_]{1,15})( [0-9]+)?$").MatchString(s.Message):
-			if err := s.HandleWithdraw(); err != nil {
-				return jerr.Get("error handling withdraw save tx", err)
-			}
-		default:
-			fmt.Printf("Invalid command: %s\n.", s.Message)
-			errMsg := "Invalid command. Please use the following format: CREATE <twitterName> or WITHDRAW <twitterName>"
-			if err := refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, errMsg); err != nil {
-				return jerr.Get("error refunding", err)
+		} else {
+			err := s.HandleRequestSubBot()
+			if err != nil {
+				return jerr.Get("error handling request sub bot for save tx", err)
 			}
 		}
-		return nil
 	}
+	return nil
+}
+func (s *SaveTx) HandleRequestSubBot() error {
 	//otherwise, one of the sub-bots has just been sent some funds, so based on the value of CatchUp, decide if we try to GetSkippedTweets
-	address := s.Tx.Outputs[s.CoinIndex].Lock.Address
 	botStreams, err := getBotStreams(s.Bot.Crypt)
 	var matchedStream *config.Stream = nil
 	if err != nil {
 		return jerr.Get("error getting bot streams", err)
 	}
+	address := s.Tx.Outputs[s.CoinIndex].Lock.Address
 	for _, botStream := range botStreams {
 		if botStream.Wallet.Address.GetEncoded() == address {
 			stream := config.Stream{
@@ -149,6 +168,7 @@ func (s *SaveTx) HandleTxType() error {
 			return nil
 		}
 		if flag.Flags.CatchUp {
+			println("CatchUp flag is true, so getting skipped tweets for " + matchedStream.Name)
 			accountKey := obj.AccountKey{
 				Account: matchedStream.Name,
 				Key:     matchedStream.Wallet.Key,
@@ -161,7 +181,7 @@ func (s *SaveTx) HandleTxType() error {
 				return jerr.Get("error getting skipped tweets", err)
 			}
 		}
-		err = s.Bot.UpdateStream()
+		err = s.Bot.SafeUpdate()
 		if err != nil {
 			return jerr.Get("error updating stream", err)
 		}
