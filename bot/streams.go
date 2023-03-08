@@ -90,7 +90,6 @@ func createBotStream(b *Bot, twitterName string, senderAddress string, tx graph.
 		}
 		return nil, nil, nil
 	}
-	println(b.Addresses[0])
 	var newKey wallet.PrivateKey
 	var newAddr wallet.Address
 	botStreamsCount, err := db.GetBotStreamsCount()

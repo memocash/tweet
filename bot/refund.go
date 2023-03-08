@@ -19,7 +19,7 @@ func refund(tx graph.Tx, b *Bot, coinIndex uint32, senderAddress string, errMsg 
 	sentToMainBot := false
 	//check all the outputs to see if any of them match the bot's address, if not, return nil, if so, continue with the function
 	for _, output := range tx.Outputs {
-		if output.Lock.Address == b.Addresses[0] {
+		if output.Lock.Address == b.Addr.String() {
 			sentToMainBot = true
 			break
 		}
@@ -44,7 +44,7 @@ func refund(tx graph.Tx, b *Bot, coinIndex uint32, senderAddress string, errMsg 
 		Value:        tx.Outputs[coinIndex].Amount,
 		PrevOutHash:  hs.GetTxHash(tx.Hash),
 		PrevOutIndex: coinIndex,
-		PkHash:       wallet.GetAddressFromString(b.Addresses[0]).GetPkHash(),
+		PkHash:       wallet.GetAddressFromString(b.Addr.String()).GetPkHash(),
 		PkScript:     pkScript,
 	}}, b.Key, wallet.GetAddressFromString(senderAddress), errMsg); err != nil {
 		return jerr.Get("error sending money back", err)

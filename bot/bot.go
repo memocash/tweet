@@ -68,7 +68,7 @@ func (b *Bot) ProcessMissedTxs() error {
 	if b.Verbose {
 		jlog.Logf("Processing missed txs using start: %s\n", start.Format(time.RFC3339))
 	}
-	txs, err := graph.GetAddressUpdates(b.Addresses[0], start)
+	txs, err := graph.GetAddressUpdates(b.Addr.String(), start)
 	if err != nil {
 		return jerr.Get("error getting address update txs", err)
 	} else if b.Verbose {
@@ -85,13 +85,10 @@ func (b *Bot) ProcessMissedTxs() error {
 }
 
 func (b *Bot) Listen() error {
-	jlog.Logf("Bot listening to address: %s\n", b.Addresses[0])
-	addressKeys, err := db.GetAllAddressKey()
+	jlog.Logf("Bot listening to address: %s\n", b.Addr.String())
+	err := b.SetAddresses()
 	if err != nil {
-		return jerr.Get("error getting all address keys", err)
-	}
-	for _, addressKey := range addressKeys {
-		b.Addresses = append(b.Addresses, addressKey.Address)
+		return jerr.Get("error setting addresses", err)
 	}
 	if err = graph.AddressListen(b.Addresses, b.SaveTx, b.ErrorChan); err != nil {
 		return jerr.Get("error listening to address on graphql", err)
@@ -120,13 +117,9 @@ func (b *Bot) Listen() error {
 		return jerr.Get("error getting bot streams for listen skipped", err)
 	}
 	for _, stream := range botStreams {
-
 		flag, err := db.GetFlag(stream.Sender, stream.Name)
-		if err != nil {
+		if err != nil || flag == nil {
 			return jerr.Get("error getting flag for listen skipped", err)
-		}
-		if flag == nil {
-			continue
 		}
 		if flag.Flags.CatchUp {
 			err = tweets.GetSkippedTweets(obj.AccountKey{
@@ -155,6 +148,18 @@ func (b *Bot) SaveTx(tx graph.Tx) error {
 	return nil
 }
 
+func (b *Bot) SetAddresses() error {
+	b.Addresses = []string{b.Addr.String()}
+	addressKeys, err := db.GetAllAddressKey()
+	if err != nil {
+		return jerr.Get("error getting all address keys", err)
+	}
+	for _, addressKey := range addressKeys {
+		b.Addresses = append(b.Addresses, addressKey.Address)
+	}
+	return nil
+}
+
 func (b *Bot) SafeUpdate() error {
 	b.UpdateMutex.Lock()
 	defer b.UpdateMutex.Unlock()
@@ -178,16 +183,12 @@ func (b *Bot) SafeUpdate() error {
 func (b *Bot) UpdateStream() error {
 	//create an array of {twitterName, newKey} objects by searching through the linked-<senderAddress>-<twitterName> fields
 	botStreams, err := getBotStreams(b.Crypt)
-	addressKeys, err := db.GetAllAddressKey()
-	b.Addresses = []string{b.Addresses[0]}
-	if err != nil {
-		return jerr.Get("error getting all address keys", err)
-	}
-	for _, addressKey := range addressKeys {
-		b.Addresses = append(b.Addresses, addressKey.Address)
-	}
 	if err != nil {
 		return jerr.Get("error making stream array update", err)
+	}
+	err = b.SetAddresses()
+	if err != nil {
+		return jerr.Get("error setting addresses", err)
 	}
 	for _, stream := range botStreams {
 		streamKey, err := wallet.ImportPrivateKey(stream.Key)
