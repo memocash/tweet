@@ -121,9 +121,7 @@ func (s *SaveTx) HandleTxType() error {
 	for i, _ := range s.Tx.Outputs {
 		s.CoinIndex = uint32(i)
 		address := s.Tx.Outputs[s.CoinIndex].Lock.Address
-		if address == "unknown: nonstandard" {
-			continue
-		} else if address == s.Bot.Addresses[0] {
+		if address == s.Bot.Addresses[0] {
 			err := s.HandleRequestMainBot()
 			if err != nil {
 				return jerr.Get("error handling request main bot for save tx", err)
@@ -140,10 +138,10 @@ func (s *SaveTx) HandleTxType() error {
 func (s *SaveTx) HandleRequestSubBot() error {
 	//otherwise, one of the sub-bots has just been sent some funds, so based on the value of CatchUp, decide if we try to GetSkippedTweets
 	botStreams, err := getBotStreams(s.Bot.Crypt)
-	var matchedStream *config.Stream = nil
 	if err != nil {
 		return jerr.Get("error getting bot streams", err)
 	}
+	var matchedStream *config.Stream = nil
 	address := s.Tx.Outputs[s.CoinIndex].Lock.Address
 	for _, botStream := range botStreams {
 		if botStream.Wallet.Address.GetEncoded() == address {
@@ -154,33 +152,27 @@ func (s *SaveTx) HandleRequestSubBot() error {
 				Wallet: botStream.Wallet,
 			}
 			matchedStream = &stream
-			println("Matched stream: " + strconv.FormatInt(stream.UserID, 10))
 			break
 		}
 	}
 	if matchedStream == nil {
-		println("No stream matched the address: " + address)
-	} else {
-		flag, err := db.GetFlag(matchedStream.Sender, matchedStream.UserID)
-		if err != nil {
-			return jerr.Get("error getting flag", err)
+		return nil
+	}
+	flag, err := db.GetFlag(matchedStream.Sender, matchedStream.UserID)
+	if err != nil || flag == nil {
+		return jerr.Get("error getting flag", err)
+	}
+	if flag.Flags.CatchUp {
+		accountKey := obj.AccountKey{
+			UserID:  matchedStream.UserID,
+			Key:     matchedStream.Wallet.Key,
+			Address: matchedStream.Wallet.Address,
 		}
-		if flag == nil {
-			return nil
-		}
-		if flag.Flags.CatchUp {
-			println("CatchUp flag is true, so getting skipped tweets")
-			accountKey := obj.AccountKey{
-				UserID:  matchedStream.UserID,
-				Key:     matchedStream.Wallet.Key,
-				Address: matchedStream.Wallet.Address,
-			}
-			wlt := matchedStream.Wallet
-			client := tweets.Connect()
-			err = tweets.GetSkippedTweets(accountKey, &wlt, client, flag.Flags, 100, false)
-			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
-				return jerr.Get("error getting skipped tweets", err)
-			}
+		wlt := matchedStream.Wallet
+		client := tweets.Connect()
+		err = tweets.GetSkippedTweets(accountKey, &wlt, client, flag.Flags, 100, false)
+		if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
+			return jerr.Get("error getting skipped tweets", err)
 		}
 		err = s.Bot.SafeUpdate()
 		if err != nil {
