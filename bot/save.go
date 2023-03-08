@@ -132,6 +132,9 @@ func (s *SaveTx) HandleTxType() error {
 				return jerr.Get("error handling request sub bot for save tx", err)
 			}
 		}
+		if err := s.Bot.SafeUpdate(); err != nil {
+			return jerr.Get("error updating bot", err)
+		}
 	}
 	return nil
 }
@@ -173,10 +176,6 @@ func (s *SaveTx) HandleRequestSubBot() error {
 		err = tweets.GetSkippedTweets(accountKey, &wlt, client, flag.Flags, 100, false)
 		if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 			return jerr.Get("error getting skipped tweets", err)
-		}
-		err = s.Bot.SafeUpdate()
-		if err != nil {
-			return jerr.Get("error updating stream", err)
 		}
 	}
 	return nil
@@ -266,9 +265,6 @@ func (s *SaveTx) HandleCreate() error {
 			}
 
 		}
-		if err = s.Bot.SafeUpdate(); err != nil {
-			return jerr.Get("error updating stream", err)
-		}
 	} else {
 		if s.Bot.Verbose {
 			jlog.Log("account key pointer is nil, not transferring tweets, bot not created")
@@ -348,9 +344,6 @@ func (s *SaveTx) HandleWithdraw() error {
 			if err != nil {
 				return jerr.Get("error withdrawing amount", err)
 			}
-			if err := s.Bot.SafeUpdate(); err != nil {
-				return jerr.Get("error updating bot", err)
-			}
 		}
 		return nil
 	}
@@ -358,9 +351,6 @@ func (s *SaveTx) HandleWithdraw() error {
 		err := tweetWallet.WithdrawAll(outputs, key, wallet.GetAddressFromString(s.SenderAddress))
 		if err != nil {
 			return jerr.Get("error withdrawing all", err)
-		}
-		if err := s.Bot.SafeUpdate(); err != nil {
-			return jerr.Get("error updating bot", err)
 		}
 	} else {
 		err = refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, "Not enough balance to withdraw anything")
