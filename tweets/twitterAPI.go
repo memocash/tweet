@@ -91,8 +91,8 @@ func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, numTweets i
 }
 
 func GetAndSaveTwitterTweets(client *twitter.Client, params *twitter.UserTimelineParams) ([]obj.TweetTx, error) {
-	if params.ScreenName == "" {
-		return nil, jerr.New("screen name is required")
+	if params.UserID == 0 {
+		return nil, jerr.New("userID is required")
 	}
 	tweets, _, err := client.Timelines.UserTimeline(params)
 	if err != nil {

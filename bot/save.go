@@ -356,6 +356,9 @@ func (s *SaveTx) HandleWithdraw() error {
 			if err != nil {
 				return jerr.Get("error withdrawing amount", err)
 			}
+			if err := s.Bot.SafeUpdate(); err != nil {
+				return jerr.Get("error updating bot", err)
+			}
 		}
 		return nil
 	}
@@ -363,6 +366,9 @@ func (s *SaveTx) HandleWithdraw() error {
 		err := tweetWallet.WithdrawAll(outputs, key, wallet.GetAddressFromString(s.SenderAddress))
 		if err != nil {
 			return jerr.Get("error withdrawing all", err)
+		}
+		if err := s.Bot.SafeUpdate(); err != nil {
+			return jerr.Get("error updating bot", err)
 		}
 	} else {
 		err = refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, "Not enough balance to withdraw anything")
