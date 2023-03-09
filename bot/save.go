@@ -75,6 +75,9 @@ func (s *SaveTx) HandleRequestMainBot() error {
 			return jerr.Get("error refunding", err)
 		}
 	}
+	if err := s.Bot.SafeUpdate(); err != nil {
+		return jerr.Get("error updating bot", err)
+	}
 	return nil
 }
 
@@ -132,9 +135,6 @@ func (s *SaveTx) HandleTxType() error {
 				return jerr.Get("error handling request sub bot for save tx", err)
 			}
 		}
-		if err := s.Bot.SafeUpdate(); err != nil {
-			return jerr.Get("error updating bot", err)
-		}
 	}
 	return nil
 }
@@ -177,6 +177,9 @@ func (s *SaveTx) HandleRequestSubBot() error {
 		if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 			return jerr.Get("error getting skipped tweets", err)
 		}
+	}
+	if err := s.Bot.SafeUpdate(); err != nil {
+		return jerr.Get("error updating bot", err)
 	}
 	return nil
 }
@@ -263,7 +266,11 @@ func (s *SaveTx) HandleCreate() error {
 			if err = tweets.GetSkippedTweets(accountKey, wlt, client, flags, historyNum, true); err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 				return jerr.Get("error getting skipped tweets on bot save tx", err)
 			}
-
+		} else if flags.CatchUp {
+			client := tweets.Connect()
+			if err = tweets.GetSkippedTweets(accountKey, wlt, client, flags, 100, false); err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
+				return jerr.Get("error getting skipped tweets on bot save tx", err)
+			}
 		}
 	} else {
 		if s.Bot.Verbose {
