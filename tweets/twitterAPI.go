@@ -166,11 +166,7 @@ func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, client *twi
 			tweetID = tweetTx.TweetId
 		}
 	}
-	totalSaved := 0
 	for {
-		if totalSaved >= numTweets {
-			break
-		}
 		savedAddressTweet, err := db.GetSavedAddressTweet(accountKey.Address.GetEncoded(), accountKey.UserID, tweetID)
 		if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 			return jerr.Get("error getting saved address tweet for get skipped", err)
@@ -185,7 +181,6 @@ func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, client *twi
 		if numSaved == 0 {
 			break
 		}
-		totalSaved += numSaved
 	}
 	return nil
 }
