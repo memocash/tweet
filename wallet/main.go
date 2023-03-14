@@ -215,7 +215,6 @@ func UpdateProfilePic(wlt Wallet, url string) error {
 	if err != nil {
 		return jerr.Get("error generating memo tx update profile pic", err)
 	}
-	println("tx", memoTx.GetHash())
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
 	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {

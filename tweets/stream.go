@@ -14,6 +14,7 @@ import (
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/memocash/tweet/tweets/save"
+	"github.com/memocash/tweet/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
 	"regexp"
 	"strconv"
@@ -203,6 +204,7 @@ func (s *Stream) ListenForNewTweets(streamConfigs []config.Stream) error {
 				} else if errors.Is(err, leveldb.ErrNotFound) {
 					continue
 				}
+				conf.Wallet = wallet.NewWallet(conf.Wallet.Address, conf.Wallet.Key)
 				if err := save.Tweet(conf.Wallet, twitterAccountWallet.GetAddress(), tweetTx, flag.Flags); err != nil {
 					return jerr.Get("error streaming tweet in stream", err)
 				}

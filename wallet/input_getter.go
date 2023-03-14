@@ -2,9 +2,8 @@ package wallet
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/jchavannes/jgo/jerr"
-	"github.com/jchavannes/jgo/jutil"
+	"github.com/jchavannes/jgo/jlog"
 	"github.com/memocash/index/client/lib"
 	"github.com/memocash/index/ref/bitcoin/memo"
 	"github.com/memocash/index/ref/bitcoin/tx/hs"
@@ -23,13 +22,13 @@ func (g *InputGetter) SetPkHashesToUse([][]byte) {
 }
 
 func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
-	//if g.reset {
-	//	g.reset = false
-	//	if len(g.UTXOs) > 0 {
-	//		jlog.Logf("Using existing UTXOS: %d\n", len(g.UTXOs))
-	//		return g.UTXOs, nil
-	//	}
-	//}
+	if g.reset {
+		g.reset = false
+		if len(g.UTXOs) > 0 {
+			jlog.Logf("Using existing UTXOS: %d\n", len(g.UTXOs))
+			return g.UTXOs, nil
+		}
+	}
 	println("Getting utxos from database...")
 	client := lib.NewClient(graph.ServerUrlHttp, &Database{})
 	address := g.Address.GetAddr()
@@ -67,13 +66,9 @@ outputsLoop:
 }
 
 func (g *InputGetter) MarkUTXOsUsed(used []memo.UTXO) {
-	println("\n\nmarking utxos used\n\n")
-	fmt.Printf("UTXOs in g.UTXOs: %d\n", len(g.UTXOs))
 	for i := 0; i < len(g.UTXOs); i++ {
 		for j := 0; j < len(used); j++ {
 			if g.UTXOs[i].IsEqual(used[j]) {
-				prevout := jutil.ByteReverse(g.UTXOs[i].Input.PrevOutHash)
-				fmt.Printf("\n\n\nUTXO %x:%d used\n\n\n", prevout, g.UTXOs[i].Input.PrevOutIndex)
 				//remove g.UTXOs[i] from the list
 				g.UTXOs = append(g.UTXOs[:i], g.UTXOs[i+1:]...)
 				//decrement i so we don't go out of bounds
