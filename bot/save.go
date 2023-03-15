@@ -10,10 +10,13 @@ import (
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jlog"
 	"github.com/memocash/index/ref/bitcoin/memo"
+	"github.com/memocash/index/ref/bitcoin/tx/gen"
 	"github.com/memocash/index/ref/bitcoin/wallet"
+	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/graph"
 	"github.com/memocash/tweet/tweets"
+	"github.com/memocash/tweet/tweets/obj"
 	tweetWallet "github.com/memocash/tweet/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
 	"regexp"
@@ -50,7 +53,26 @@ func (s *SaveTx) Save(tx graph.Tx) error {
 		return nil
 	}
 	if err := s.HandleTxType(); err != nil {
-		return jerr.Get("error handling tx type for save tx", err)
+		return jerr.Get("error handling request main bot", err)
+	}
+	return nil
+}
+func (s *SaveTx) HandleRequestMainBot() error {
+	switch {
+	case regexp.MustCompile("^CREATE @?([a-zA-Z0-9_]{1,15})(( --history( [0-9]+)?)?( --nolink)?( --date)?( --no-catch-up)?)*$").MatchString(s.Message):
+		if err := s.HandleCreate(); err != nil {
+			return jerr.Get("error handling create save tx", err)
+		}
+	case regexp.MustCompile("^WITHDRAW @?([a-zA-Z0-9_]{1,15})( [0-9]+)?$").MatchString(s.Message):
+		if err := s.HandleWithdraw(); err != nil {
+			return jerr.Get("error handling withdraw save tx", err)
+		}
+	default:
+		fmt.Printf("Invalid command: %s\n.", s.Message)
+		errMsg := "Invalid command. Please use the following format: CREATE <twitterName> or WITHDRAW <twitterName>"
+		if err := refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, errMsg); err != nil {
+			return jerr.Get("error refunding", err)
+		}
 	}
 	return nil
 }
@@ -67,10 +89,6 @@ func (s *SaveTx) SetVars(tx graph.Tx) error {
 		scriptArray = append(scriptArray, output.Script)
 	}
 	s.Message = getMessageFromOutputScripts(scriptArray)
-	if s.Message == "" {
-		jlog.Log("No message found, skipping")
-		return nil
-	}
 	for _, input := range tx.Inputs {
 		if input.Output.Lock.Address != s.Bot.Addresses[0] {
 			s.SenderAddress = input.Output.Lock.Address
@@ -98,21 +116,67 @@ func (s *SaveTx) FinishSave() {
 		s.Bot.ErrorChan <- jerr.Get("error adding tx hash to database", err)
 	}
 }
-
 func (s *SaveTx) HandleTxType() error {
-	switch {
-	case regexp.MustCompile("^CREATE @?([a-zA-Z0-9_]{1,15})(( --history( [0-9]+)?)?( --nolink)?( --date)?)*$").MatchString(s.Message):
-		if err := s.HandleCreate(); err != nil {
-			return jerr.Get("error handling create save tx", err)
+	for i, _ := range s.Tx.Outputs {
+		s.CoinIndex = uint32(i)
+		address := s.Tx.Outputs[s.CoinIndex].Lock.Address
+		if address == s.Bot.Addresses[0] {
+			err := s.HandleRequestMainBot()
+			if err != nil {
+				return jerr.Get("error handling request main bot for save tx", err)
+			}
+		} else {
+			err := s.HandleRequestSubBot()
+			if err != nil {
+				return jerr.Get("error handling request sub bot for save tx", err)
+			}
 		}
-	case regexp.MustCompile("^WITHDRAW @?([a-zA-Z0-9_]{1,15})( [0-9]+)?$").MatchString(s.Message):
-		if err := s.HandleWithdraw(); err != nil {
-			return jerr.Get("error handling withdraw save tx", err)
+	}
+	return nil
+}
+func (s *SaveTx) HandleRequestSubBot() error {
+	//otherwise, one of the sub-bots has just been sent some funds, so based on the value of CatchUp, decide if we try to GetSkippedTweets
+	botStreams, err := getBotStreams(s.Bot.Crypt)
+	if err != nil {
+		return jerr.Get("error getting bot streams", err)
+	}
+	var matchedStream *config.Stream = nil
+	address := s.Tx.Outputs[s.CoinIndex].Lock.Address
+	for _, botStream := range botStreams {
+		if botStream.Wallet.Address.GetEncoded() == address {
+			stream := config.Stream{
+				Key:    botStream.Key,
+				Name:   botStream.Name,
+				Sender: botStream.Sender,
+				Wallet: botStream.Wallet,
+			}
+			matchedStream = &stream
+			break
 		}
-	default:
-		errMsg := "Invalid command. Please use the following format: CREATE <twitterName> or WITHDRAW <twitterName>"
-		if err := refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, errMsg); err != nil {
-			return jerr.Get("error refunding", err)
+	}
+	if matchedStream == nil {
+		return nil
+	}
+
+	flag, err := db.GetFlag(matchedStream.Sender, matchedStream.Name)
+	if err != nil || flag == nil {
+		return jerr.Get("error getting flag", err)
+	}
+	if flag.Flags.CatchUp {
+		accountKey := obj.AccountKey{
+			Account: matchedStream.Name,
+			Key:     matchedStream.Wallet.Key,
+			Address: matchedStream.Wallet.Address,
+		}
+		wlt := matchedStream.Wallet
+		client := tweets.Connect()
+		err = tweets.GetSkippedTweets(accountKey, &wlt, client, flag.Flags, 100, false)
+		if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
+			return jerr.Get("error getting skipped tweets", err)
+		}
+		err = s.Bot.SafeUpdate()
+		if err != nil {
+			return jerr.Get("error updating stream", err)
 		}
 	}
 	return nil
@@ -157,6 +221,9 @@ func (s *SaveTx) HandleCreate() error {
 		if word == "--date" {
 			flags.Date = true
 		}
+		if word == "--no-catch-up" {
+			flags.CatchUp = false
+		}
 	}
 	if historyNum > 1000 {
 		err = refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, "Number of tweets must be less than 1000")
@@ -181,7 +248,7 @@ func (s *SaveTx) HandleCreate() error {
 		accountKey := *accountKeyPointer
 		if history {
 			client := tweets.Connect()
-			if err = tweets.GetSkippedTweets(accountKey, wlt, client, flags, historyNum, true); err != nil {
+			if err = tweets.GetSkippedTweets(accountKey, wlt, client, flags, historyNum, true); err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 				return jerr.Get("error getting skipped tweets on bot save tx", err)
 			}
 
