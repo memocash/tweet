@@ -69,10 +69,12 @@ func (s *SaveTx) HandleRequestMainBot() error {
 			return jerr.Get("error handling withdraw save tx", err)
 		}
 	default:
-		fmt.Printf("Invalid command: %s\n.", s.Message)
-		errMsg := "Invalid command. Please use the following format: CREATE <twitterName> or WITHDRAW <twitterName>"
-		if err := refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, errMsg); err != nil {
-			return jerr.Get("error refunding", err)
+		if s.Message != "" {
+			fmt.Printf("Invalid command: %s\n.", s.Message)
+			errMsg := "Invalid command. Please use the following format: CREATE <twitterName> or WITHDRAW <twitterName>"
+			if err := refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, errMsg); err != nil {
+				return jerr.Get("error refunding", err)
+			}
 		}
 	}
 	if err := s.Bot.SafeUpdate(); err != nil {
