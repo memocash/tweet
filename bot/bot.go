@@ -155,7 +155,7 @@ func (b *Bot) SetAddresses() error {
 		return jerr.Get("error getting all address keys", err)
 	}
 	for _, addressKey := range addressKeys {
-		b.Addresses = append(b.Addresses, string(addressKey.Address[:]))
+		b.Addresses = append(b.Addresses, wallet.Addr(addressKey.Address).String())
 	}
 	return nil
 }

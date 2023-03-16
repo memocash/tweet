@@ -55,7 +55,7 @@ func getBotStreams(cryptKey []byte) ([]config.Stream, error) {
 			botStreams = append(botStreams, config.Stream{
 				Key:    decryptedKey,
 				UserID: addressKey.UserID,
-				Sender: string(addressKey.Address[:]),
+				Sender: wallet.Addr(addressKey.Address).String(),
 				Wallet: wlt,
 			})
 		}
