@@ -2,13 +2,13 @@ package db
 
 import (
 	"fmt"
-	"strconv"
+	"github.com/jchavannes/jgo/jutil"
 	"strings"
 )
 
 type Profile struct {
 	Address string
-	UserID  string
+	UserID  int64
 	Profile []byte
 }
 
@@ -17,7 +17,7 @@ func (o *Profile) GetPrefix() string {
 }
 
 func (o *Profile) GetUid() []byte {
-	return []byte(fmt.Sprintf("%s-%s", o.Address, o.UserID))
+	return []byte(fmt.Sprintf("%s-%d", o.Address, o.UserID))
 }
 
 func (o *Profile) SetUid(b []byte) {
@@ -26,7 +26,7 @@ func (o *Profile) SetUid(b []byte) {
 		return
 	}
 	o.Address = parts[0]
-	o.UserID = parts[1]
+	o.UserID = jutil.GetInt64FromString(strings.TrimLeft(parts[1], "0"))
 }
 
 func (o *Profile) Serialize() []byte {
@@ -40,7 +40,7 @@ func (o *Profile) Deserialize(d []byte) {
 func GetProfile(address string, userId int64) (*Profile, error) {
 	var profile = &Profile{
 		Address: address,
-		UserID:  strconv.FormatInt(userId, 10),
+		UserID:  userId,
 	}
 	if err := GetSpecificItem(profile); err != nil {
 		return nil, fmt.Errorf("error getting specific profile from db; %w", err)

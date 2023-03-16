@@ -2,14 +2,14 @@ package db
 
 import (
 	"fmt"
+	"github.com/jchavannes/jgo/jutil"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"strconv"
 	"strings"
 )
 
 type AddressLinkedKey struct {
 	Address string
-	UserID  string
+	UserID  int64
 	Key     []byte
 }
 
@@ -18,7 +18,7 @@ func (k *AddressLinkedKey) GetPrefix() string {
 }
 
 func (k *AddressLinkedKey) GetUid() []byte {
-	return []byte(fmt.Sprintf("%s-%s", k.Address, k.UserID))
+	return []byte(fmt.Sprintf("%s-%d", k.Address, k.UserID))
 }
 
 func (k *AddressLinkedKey) SetUid(b []byte) {
@@ -27,7 +27,7 @@ func (k *AddressLinkedKey) SetUid(b []byte) {
 		return
 	}
 	k.Address = parts[0]
-	k.UserID = parts[1]
+	k.UserID = jutil.GetInt64FromString(strings.TrimLeft(parts[1], "0"))
 }
 
 func (k *AddressLinkedKey) Serialize() []byte {
@@ -41,7 +41,7 @@ func (k *AddressLinkedKey) Deserialize(d []byte) {
 func GetAddressKey(address string, userId int64) (*AddressLinkedKey, error) {
 	var addressKey = &AddressLinkedKey{
 		Address: address,
-		UserID:  strconv.FormatInt(userId, 10),
+		UserID:  userId,
 	}
 	if err := GetSpecificItem(addressKey); err != nil {
 		return nil, fmt.Errorf("error getting address key from db; %w", err)

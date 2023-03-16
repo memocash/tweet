@@ -16,7 +16,6 @@ import (
 	"github.com/memocash/tweet/tweets/obj"
 	tweetWallet "github.com/memocash/tweet/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
-	"strconv"
 )
 
 func getBotStreams(cryptKey []byte) ([]config.Stream, error) {
@@ -50,13 +49,12 @@ func getBotStreams(cryptKey []byte) ([]config.Stream, error) {
 		}
 		if balance > 800 {
 			wlt := tweetWallet.NewWallet(walletKey.GetAddress(), walletKey)
-			userId, err := strconv.ParseInt(addressKey.UserID, 10, 64)
 			if err != nil {
 				return nil, jerr.Get("error parsing user id", err)
 			}
 			botStreams = append(botStreams, config.Stream{
 				Key:    decryptedKey,
-				UserID: userId,
+				UserID: addressKey.UserID,
 				Sender: addressKey.Address,
 				Wallet: wlt,
 			})
@@ -151,7 +149,7 @@ func createBotStream(b *Bot, twitterAccount *twitter.User, senderAddress string,
 		}
 		if err := db.Save([]db.ObjectI{&db.AddressLinkedKey{
 			Address: senderAddress,
-			UserID:  twitterAccount.IDStr,
+			UserID:  twitterAccount.ID,
 			Key:     encryptedKey,
 		}}); err != nil {
 			return nil, nil, jerr.Get("error updating linked-"+senderAddress+"-"+twitterAccount.IDStr, err)

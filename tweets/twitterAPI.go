@@ -107,7 +107,7 @@ func GetAndSaveTwitterTweets(client *twitter.Client, params *twitter.UserTimelin
 			return nil, jerr.Get("error marshaling tweet tx for saving twitter tweets", err)
 		}
 		dbTweetTxs[i] = &db.TweetTx{
-			UserID:  strconv.FormatInt(params.UserID, 10),
+			UserID:  params.UserID,
 			TweetId: tweets[i].ID,
 			Tx:      tweetTxJson,
 		}
@@ -139,7 +139,7 @@ func getNewTweetsLocal(accountKey obj.AccountKey, numTweets int) ([]obj.TweetTx,
 			return nil, jerr.Get("error marshaling tweet tx for saving twitter tweets local", err)
 		}
 		dbTweetTxs[i] = &db.TweetTx{
-			UserID:  strconv.FormatInt(accountKey.UserID, 10),
+			UserID:  accountKey.UserID,
 			TweetId: tweetTxs[i].Tweet.ID,
 			Tx:      tweetTxJson,
 		}

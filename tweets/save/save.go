@@ -12,7 +12,6 @@ import (
 	"github.com/memocash/tweet/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
 	"html"
-	"strconv"
 )
 
 func Tweet(wlt wallet.Wallet, address string, tweet obj.TweetTx, flags db.Flags) error {
@@ -34,7 +33,7 @@ func Tweet(wlt wallet.Wallet, address string, tweet obj.TweetTx, flags db.Flags)
 		return jerr.Get("error marshaling tweetTx", err)
 	}
 	if err := db.Save([]db.ObjectI{&db.TweetTx{
-		UserID:  strconv.FormatInt(tweet.Tweet.User.ID, 10),
+		UserID:  tweet.Tweet.User.ID,
 		TweetId: tweet.Tweet.ID,
 		Tx:      tweetJson,
 	}}); err != nil {
@@ -78,7 +77,7 @@ func Tweet(wlt wallet.Wallet, address string, tweet obj.TweetTx, flags db.Flags)
 	}
 	if err := db.Save([]db.ObjectI{&db.SavedAddressTweet{
 		Address: address,
-		UserID:  strconv.FormatInt(tweet.Tweet.User.ID, 10),
+		UserID:  tweet.Tweet.User.ID,
 		TweetId: tweet.Tweet.ID,
 		TxHash:  tweet.TxHash,
 	}}); err != nil {

@@ -3,7 +3,7 @@ package db
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
+	"github.com/jchavannes/jgo/jutil"
 	"strings"
 )
 
@@ -23,7 +23,7 @@ func GetDefaultFlags() Flags {
 
 type Flag struct {
 	Address string
-	UserID  string
+	UserID  int64
 	Flags   Flags
 }
 
@@ -32,7 +32,7 @@ func (f *Flag) GetPrefix() string {
 }
 
 func (f *Flag) GetUid() []byte {
-	return []byte(fmt.Sprintf("%s-%s", f.Address, f.UserID))
+	return []byte(fmt.Sprintf("%s-%d", f.Address, f.UserID))
 }
 
 func (f *Flag) SetUid(b []byte) {
@@ -41,7 +41,7 @@ func (f *Flag) SetUid(b []byte) {
 		return
 	}
 	f.Address = parts[0]
-	f.UserID = parts[1]
+	f.UserID = jutil.GetInt64FromString(strings.TrimLeft(parts[1], "0"))
 }
 
 func (f *Flag) Serialize() []byte {
@@ -56,7 +56,7 @@ func (f *Flag) Deserialize(d []byte) {
 func GetFlag(address string, userId int64) (*Flag, error) {
 	var flag = &Flag{
 		Address: address,
-		UserID:  strconv.FormatInt(userId, 10),
+		UserID:  userId,
 	}
 	if err := GetSpecificItem(flag); err != nil {
 		return nil, fmt.Errorf("error getting flag from db; %w", err)

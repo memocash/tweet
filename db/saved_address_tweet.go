@@ -10,7 +10,7 @@ import (
 
 type SavedAddressTweet struct {
 	Address string
-	UserID  string
+	UserID  int64
 	TweetId int64
 	TxHash  []byte
 }
@@ -20,7 +20,7 @@ func (t *SavedAddressTweet) GetPrefix() string {
 }
 
 func (t *SavedAddressTweet) GetUid() []byte {
-	return []byte(fmt.Sprintf("%s-%s-%019d", t.Address, t.UserID, t.TweetId))
+	return []byte(fmt.Sprintf("%s-%d-%019d", t.Address, t.UserID, t.TweetId))
 }
 
 func (t *SavedAddressTweet) SetUid(b []byte) {
@@ -29,7 +29,7 @@ func (t *SavedAddressTweet) SetUid(b []byte) {
 		return
 	}
 	t.Address = parts[0]
-	t.UserID = parts[1]
+	t.UserID = jutil.GetInt64FromString(strings.TrimLeft(parts[1], "0"))
 	t.TweetId = jutil.GetInt64FromString(strings.TrimLeft(parts[2], "0"))
 }
 
@@ -60,7 +60,7 @@ func GetNumSavedAddressTweet(address string, userId int64) (int, error) {
 func GetSavedAddressTweet(address string, userId int64, tweetId int64) (*SavedAddressTweet, error) {
 	var savedAddressTweet = &SavedAddressTweet{
 		Address: address,
-		UserID:  strconv.FormatInt(userId, 10),
+		UserID:  userId,
 		TweetId: tweetId,
 	}
 	if err := GetSpecificItem(savedAddressTweet); err != nil {

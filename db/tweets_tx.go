@@ -9,7 +9,7 @@ import (
 )
 
 type TweetTx struct {
-	UserID  string
+	UserID  int64
 	TweetId int64
 	Tx      []byte
 }
@@ -19,7 +19,7 @@ func (t *TweetTx) GetPrefix() string {
 }
 
 func (t *TweetTx) GetUid() []byte {
-	return []byte(fmt.Sprintf("%s-%019d", t.UserID, t.TweetId))
+	return []byte(fmt.Sprintf("%d-%019d", t.UserID, t.TweetId))
 }
 
 func (t *TweetTx) SetUid(b []byte) {
@@ -27,7 +27,7 @@ func (t *TweetTx) SetUid(b []byte) {
 	if len(parts) != 2 {
 		return
 	}
-	t.UserID = parts[0]
+	t.UserID = jutil.GetInt64FromString(strings.TrimLeft(parts[0], "0"))
 	t.TweetId = jutil.GetInt64FromString(strings.TrimLeft(parts[1], "0"))
 }
 

@@ -3,11 +3,13 @@ package maint
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/jchavannes/jgo/jutil"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/spf13/cobra"
 	"log"
 	"strconv"
+	"strings"
 )
 
 var checkSavedTweetsCmd = &cobra.Command{
@@ -95,7 +97,7 @@ var fixSavedTweetCmd = &cobra.Command{
 		}
 		noDryRun, _ := c.Flags().GetBool(FlagNoDryRun)
 		address := args[0]
-		userId := args[1]
+		userId := jutil.GetInt64FromString(strings.TrimLeft(args[1], "0"))
 		savedTweets, err := db.GetAllSavedAddressTweet(nil)
 		if err != nil {
 			log.Fatalf("fatal error getting all saved address tweets; %v", err)

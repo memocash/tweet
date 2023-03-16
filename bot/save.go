@@ -251,7 +251,7 @@ func (s *SaveTx) HandleCreate() error {
 	}
 	if err := db.Save([]db.ObjectI{&db.Flag{
 		Address: s.SenderAddress,
-		UserID:  twitterAccount.IDStr,
+		UserID:  twitterAccount.ID,
 		Flags:   flags,
 	}}); err != nil {
 		return jerr.Get("error saving flags to db", err)

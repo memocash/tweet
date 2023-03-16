@@ -11,7 +11,6 @@ import (
 	"github.com/memocash/tweet/tweets"
 	tweetWallet "github.com/memocash/tweet/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
-	"strconv"
 	"time"
 )
 
@@ -84,7 +83,7 @@ func updateProfile(b *Bot, newWallet tweetWallet.Wallet, userId int64, senderAdd
 	}
 	if err := db.Save([]db.ObjectI{&db.Profile{
 		Address: senderAddress,
-		UserID:  strconv.FormatInt(userId, 10),
+		UserID:  userId,
 		Profile: profileBytes,
 	}}); err != nil {
 		return jerr.Get("error saving profile to database", err)
