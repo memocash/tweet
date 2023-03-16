@@ -117,7 +117,7 @@ func (b *Bot) Listen() error {
 		return jerr.Get("error getting bot streams for listen skipped", err)
 	}
 	for _, stream := range botStreams {
-		flag, err := db.GetFlag(stream.Sender, stream.UserID)
+		flag, err := db.GetFlag(wallet.GetAddressFromString(stream.Sender).GetAddr(), stream.UserID)
 		if err != nil {
 			return jerr.Get("error getting flag for listen skipped", err)
 		}
@@ -155,7 +155,7 @@ func (b *Bot) SetAddresses() error {
 		return jerr.Get("error getting all address keys", err)
 	}
 	for _, addressKey := range addressKeys {
-		b.Addresses = append(b.Addresses, addressKey.Address)
+		b.Addresses = append(b.Addresses, string(addressKey.Address[:]))
 	}
 	return nil
 }

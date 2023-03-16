@@ -5,7 +5,6 @@ import (
 	"github.com/jchavannes/jgo/jutil"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"strconv"
-	"strings"
 )
 
 type TweetTx struct {
@@ -23,12 +22,11 @@ func (t *TweetTx) GetUid() []byte {
 }
 
 func (t *TweetTx) SetUid(b []byte) {
-	parts := strings.Split(string(b), "-")
-	if len(parts) != 2 {
+	if len(b) != 17 || b[8] != '-' {
 		return
 	}
-	t.UserID = jutil.GetInt64FromString(strings.TrimLeft(parts[0], "0"))
-	t.TweetId = jutil.GetInt64FromString(strings.TrimLeft(parts[1], "0"))
+	t.UserID = jutil.GetInt64Big(b[:8])
+	t.TweetId = jutil.GetInt64Big(b[9:])
 }
 
 func (t *TweetTx) Serialize() []byte {

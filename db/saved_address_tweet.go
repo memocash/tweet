@@ -5,11 +5,10 @@ import (
 	"github.com/jchavannes/jgo/jutil"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"strconv"
-	"strings"
 )
 
 type SavedAddressTweet struct {
-	Address string
+	Address [25]byte
 	UserID  int64
 	TweetId int64
 	TxHash  []byte
@@ -24,13 +23,13 @@ func (t *SavedAddressTweet) GetUid() []byte {
 }
 
 func (t *SavedAddressTweet) SetUid(b []byte) {
-	parts := strings.Split(string(b), "-")
-	if len(parts) != 3 {
+	if len(b) != 43 || b[25] != '-' || b[34] != '-' {
 		return
 	}
-	t.Address = parts[0]
-	t.UserID = jutil.GetInt64FromString(strings.TrimLeft(parts[1], "0"))
-	t.TweetId = jutil.GetInt64FromString(strings.TrimLeft(parts[2], "0"))
+	copy(t.Address[:], b[:25])
+	t.UserID = jutil.GetInt64Big(b[26:34])
+	t.TweetId = jutil.GetInt64Big(b[35:])
+
 }
 
 func (t *SavedAddressTweet) Serialize() []byte {
@@ -57,7 +56,7 @@ func GetNumSavedAddressTweet(address string, userId int64) (int, error) {
 	return count, nil
 }
 
-func GetSavedAddressTweet(address string, userId int64, tweetId int64) (*SavedAddressTweet, error) {
+func GetSavedAddressTweet(address [25]byte, userId int64, tweetId int64) (*SavedAddressTweet, error) {
 	var savedAddressTweet = &SavedAddressTweet{
 		Address: address,
 		UserID:  userId,

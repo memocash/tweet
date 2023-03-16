@@ -2,6 +2,7 @@ package maint
 
 import (
 	"github.com/jchavannes/jgo/jutil"
+	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/db"
 	"github.com/spf13/cobra"
 	"log"
@@ -18,7 +19,7 @@ var resetProfileCmd = &cobra.Command{
 		senderAddr := args[0]
 		userId := jutil.GetInt64FromString(strings.TrimLeft(args[1], "0"))
 		if err := db.Delete([]db.ObjectI{&db.Profile{
-			Address: senderAddr,
+			Address: wallet.GetAddressFromString(senderAddr).GetAddr(),
 			UserID:  userId,
 		}}); err != nil {
 			log.Fatalf("error removing profile from db for reset; %v", err)

@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"github.com/jchavannes/jgo/jutil"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"strings"
 )
 
 type TxOutput struct {
-	Address string
+	Address [25]byte
 	TxHash  string
 	Index   int
 	Output  []byte
@@ -23,13 +22,12 @@ func (o *TxOutput) GetUid() []byte {
 }
 
 func (o *TxOutput) SetUid(b []byte) {
-	parts := strings.Split(string(b), "-")
-	if len(parts) != 3 {
+	if len(b) != 63 || b[25] != '-' || b[58] != '-' {
 		return
 	}
-	o.Address = parts[0]
-	o.TxHash = parts[1]
-	o.Index = jutil.GetIntFromString(parts[2])
+	copy(o.Address[:], b[:25])
+	o.TxHash = string(b[26:58])
+	o.Index = jutil.GetInt(b[59:])
 }
 
 func (o *TxOutput) Serialize() []byte {
@@ -40,7 +38,7 @@ func (o *TxOutput) Deserialize(d []byte) {
 	o.Output = d
 }
 
-func GetTxOutputs(address string) ([]*TxOutput, error) {
+func GetTxOutputs(address [25]byte) ([]*TxOutput, error) {
 	db, err := GetDb()
 	if err != nil {
 		return nil, fmt.Errorf("error getting database handler for get tx outputs; %w", err)

@@ -51,7 +51,7 @@ var handlerProfile = Handler{
 		userIdstr := request.FormValue("userId")
 		writer.Write([]byte(fmt.Sprintf("Searching for profile-%s-%s\n", sender, userIdstr)))
 		userId, err := strconv.ParseInt(userIdstr, 10, 64)
-		dbProfile, err := db.GetProfile(sender, userId)
+		dbProfile, err := db.GetProfile(wallet.GetAddressFromString(sender).GetAddr(), userId)
 		if err != nil {
 			writer.Write([]byte(fmt.Sprintf("error getting profile; %v", err)))
 			return

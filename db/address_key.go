@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"github.com/jchavannes/jgo/jutil"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"strings"
 )
 
 type AddressLinkedKey struct {
-	Address string
+	Address [25]byte
 	UserID  int64
 	Key     []byte
 }
@@ -22,12 +21,11 @@ func (k *AddressLinkedKey) GetUid() []byte {
 }
 
 func (k *AddressLinkedKey) SetUid(b []byte) {
-	parts := strings.Split(string(b), "-")
-	if len(parts) != 2 {
+	if len(b) != 34 || b[25] != '-' {
 		return
 	}
-	k.Address = parts[0]
-	k.UserID = jutil.GetInt64FromString(strings.TrimLeft(parts[1], "0"))
+	copy(k.Address[:], b[:25])
+	k.UserID = jutil.GetInt64Big(b[26:])
 }
 
 func (k *AddressLinkedKey) Serialize() []byte {
@@ -38,7 +36,7 @@ func (k *AddressLinkedKey) Deserialize(d []byte) {
 	k.Key = d
 }
 
-func GetAddressKey(address string, userId int64) (*AddressLinkedKey, error) {
+func GetAddressKey(address [25]byte, userId int64) (*AddressLinkedKey, error) {
 	var addressKey = &AddressLinkedKey{
 		Address: address,
 		UserID:  userId,

@@ -33,7 +33,7 @@ func updateProfile(b *Bot, newWallet tweetWallet.Wallet, userId int64, senderAdd
 	if err != nil {
 		return jerr.Get("fatal error getting profile", err)
 	}
-	existingDbProfile, err := db.GetProfile(senderAddress, userId)
+	existingDbProfile, err := db.GetProfile(wallet.GetAddressFromString(senderAddress).GetAddr(), userId)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		return jerr.Get("error getting profile from database", err)
 	}
@@ -82,7 +82,7 @@ func updateProfile(b *Bot, newWallet tweetWallet.Wallet, userId int64, senderAdd
 		return jerr.Get("error marshalling profile", err)
 	}
 	if err := db.Save([]db.ObjectI{&db.Profile{
-		Address: senderAddress,
+		Address: wallet.GetAddressFromString(senderAddress).GetAddr(),
 		UserID:  userId,
 		Profile: profileBytes,
 	}}); err != nil {

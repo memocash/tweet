@@ -27,7 +27,7 @@ func (d *Database) GetAddressBalance(address wallet.Addr) (int64, error) {
 
 func (d *Database) SetAddressLastUpdate(address wallet.Addr, updateTime time.Time) error {
 	if err := db.Save([]db.ObjectI{&db.AddressWalletTime{
-		Address: address.String(),
+		Address: address,
 		Time:    updateTime,
 	}}); err != nil {
 		return jerr.Get("error saving address wallet last update time to db", err)
@@ -36,7 +36,7 @@ func (d *Database) SetAddressLastUpdate(address wallet.Addr, updateTime time.Tim
 }
 
 func (d *Database) GetAddressLastUpdate(address wallet.Addr) (time.Time, error) {
-	addressTime, err := db.GetAddressTime(address.String())
+	addressTime, err := db.GetAddressTime(address)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		return time.Time{}, jerr.Get("error getting address wallet last update from db", err)
 	}
@@ -48,7 +48,7 @@ func (d *Database) GetAddressLastUpdate(address wallet.Addr) (time.Time, error) 
 
 func (d *Database) GetUtxos(address wallet.Addr) ([]graph.Output, error) {
 	var utxos []graph.Output
-	dbTxOutputs, err := db.GetTxOutputs(address.String())
+	dbTxOutputs, err := db.GetTxOutputs(address)
 	if err != nil {
 		return nil, jerr.Get("error getting tx outputs from db for get utxos", err)
 	}
@@ -83,7 +83,7 @@ func (d *Database) SaveTxs(txs []graph.Tx) error {
 				return jerr.Get("error marshalling tx output for tx save to db", err)
 			}
 			objectsToSave = append(objectsToSave, &db.TxOutput{
-				Address: output.Lock.Address,
+				Address: wallet.GetAddressFromString(output.Lock.Address).GetAddr(),
 				TxHash:  tx.Hash,
 				Index:   output.Index,
 				Output:  outputJson,

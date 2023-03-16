@@ -7,6 +7,7 @@ import (
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jlog"
 	"github.com/memocash/index/ref/bitcoin/memo"
+	wallet2 "github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/memocash/tweet/wallet"
@@ -18,7 +19,8 @@ func Tweet(wlt wallet.Wallet, address string, tweet obj.TweetTx, flags db.Flags)
 	if tweet.Tweet == nil {
 		return jerr.New("tweet is nil")
 	}
-	existingSavedAddressTweet, err := db.GetSavedAddressTweet(address, tweet.Tweet.User.ID, tweet.Tweet.ID)
+	existingSavedAddressTweet, err := db.GetSavedAddressTweet(wallet2.GetAddressFromString(address).GetAddr(),
+		tweet.Tweet.User.ID, tweet.Tweet.ID)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		return jerr.Get("error getting existing saved address tweet for save", err)
 	}
@@ -49,7 +51,7 @@ func Tweet(wlt wallet.Wallet, address string, tweet obj.TweetTx, flags db.Flags)
 		tweet.TxHash = parentHash
 	} else {
 		parentSavedTweet, err := db.GetSavedAddressTweet(
-			address, tweet.Tweet.User.ID, tweet.Tweet.InReplyToStatusID)
+			wallet2.GetAddressFromString(address).GetAddr(), tweet.Tweet.User.ID, tweet.Tweet.InReplyToStatusID)
 		if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 			return jerr.Get("error getting saved address tweet for tweet parent reply", err)
 		}
@@ -76,7 +78,7 @@ func Tweet(wlt wallet.Wallet, address string, tweet obj.TweetTx, flags db.Flags)
 		}
 	}
 	if err := db.Save([]db.ObjectI{&db.SavedAddressTweet{
-		Address: address,
+		Address: wallet2.GetAddressFromString(address).GetAddr(),
 		UserID:  tweet.Tweet.User.ID,
 		TweetId: tweet.Tweet.ID,
 		TxHash:  tweet.TxHash,
