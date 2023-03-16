@@ -82,6 +82,10 @@ func (d *Database) SaveTxs(txs []graph.Tx) error {
 			if err != nil {
 				return jerr.Get("error marshalling tx output for tx save to db", err)
 			}
+			_, err = wallet.GetAddrFromString(output.Lock.Address)
+			if err != nil {
+				continue
+			}
 			objectsToSave = append(objectsToSave, &db.TxOutput{
 				Address: wallet.GetAddressFromString(output.Lock.Address).GetAddr(),
 				TxHash:  tx.Hash,
