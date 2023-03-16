@@ -20,11 +20,11 @@ func (o *Profile) GetUid() []byte {
 }
 
 func (o *Profile) SetUid(b []byte) {
-	if len(b) != 34 || b[25] != byte('-') {
+	if len(b) != 33 {
 		return
 	}
 	copy(o.Address[:], b[:25])
-	o.UserID = jutil.GetInt64Big(b[26:])
+	o.UserID = jutil.GetInt64Big(b[25:])
 }
 
 func (o *Profile) Serialize() []byte {

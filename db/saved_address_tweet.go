@@ -23,12 +23,13 @@ func (t *SavedAddressTweet) GetUid() []byte {
 }
 
 func (t *SavedAddressTweet) SetUid(b []byte) {
-	if len(b) != 43 || b[25] != '-' || b[34] != '-' {
+	if len(b) != 41 {
+		println("\n\n\ninvalid uid for saved address tweet\n\n\n")
 		return
 	}
 	copy(t.Address[:], b[:25])
-	t.UserID = jutil.GetInt64Big(b[26:34])
-	t.TweetId = jutil.GetInt64Big(b[35:])
+	t.UserID = jutil.GetInt64Big(b[25:33])
+	t.TweetId = jutil.GetInt64Big(b[33:])
 
 }
 

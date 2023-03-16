@@ -21,11 +21,11 @@ func (k *AddressLinkedKey) GetUid() []byte {
 }
 
 func (k *AddressLinkedKey) SetUid(b []byte) {
-	if len(b) != 34 || b[25] != '-' {
+	if len(b) != 33 {
 		return
 	}
 	copy(k.Address[:], b[:25])
-	k.UserID = jutil.GetInt64Big(b[26:])
+	k.UserID = jutil.GetInt64Big(b[25:])
 }
 
 func (k *AddressLinkedKey) Serialize() []byte {

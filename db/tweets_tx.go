@@ -22,11 +22,12 @@ func (t *TweetTx) GetUid() []byte {
 }
 
 func (t *TweetTx) SetUid(b []byte) {
-	if len(b) != 17 || b[8] != '-' {
+	if len(b) != 16 {
+		fmt.Printf("\n\n\ninvalid uid for tweet tx: %s\n\n\n", string(b))
 		return
 	}
 	t.UserID = jutil.GetInt64Big(b[:8])
-	t.TweetId = jutil.GetInt64Big(b[9:])
+	t.TweetId = jutil.GetInt64Big(b[8:])
 }
 
 func (t *TweetTx) Serialize() []byte {

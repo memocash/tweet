@@ -22,12 +22,12 @@ func (o *TxOutput) GetUid() []byte {
 }
 
 func (o *TxOutput) SetUid(b []byte) {
-	if len(b) != 63 || b[25] != '-' || b[58] != '-' {
+	if len(b) != 61 {
 		return
 	}
 	copy(o.Address[:], b[:25])
-	o.TxHash = string(b[26:58])
-	o.Index = jutil.GetInt(b[59:])
+	o.TxHash = string(b[25:57])
+	o.Index = jutil.GetInt(b[57:])
 }
 
 func (o *TxOutput) Serialize() []byte {

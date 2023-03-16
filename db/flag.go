@@ -35,11 +35,11 @@ func (f *Flag) GetUid() []byte {
 }
 
 func (f *Flag) SetUid(b []byte) {
-	if len(b) != 34 || b[25] != byte('-') {
+	if len(b) != 33 {
 		return
 	}
 	copy(f.Address[:], b[:25])
-	f.UserID = jutil.GetInt64Big(b[26:])
+	f.UserID = jutil.GetInt64Big(b[25:])
 }
 
 func (f *Flag) Serialize() []byte {
