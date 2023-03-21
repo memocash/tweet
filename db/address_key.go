@@ -17,7 +17,10 @@ func (k *AddressLinkedKey) GetPrefix() string {
 }
 
 func (k *AddressLinkedKey) GetUid() []byte {
-	return []byte(fmt.Sprintf("%s-%d", k.Address, k.UserID))
+	return jutil.CombineBytes(
+		k.Address[:],
+		jutil.GetInt64DataBig(k.UserID),
+	)
 }
 
 func (k *AddressLinkedKey) SetUid(b []byte) {
@@ -52,7 +55,7 @@ func GetAllAddressKey() ([]*AddressLinkedKey, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting database handler for get all address keys; %w", err)
 	}
-	iter := db.NewIterator(util.BytesPrefix([]byte(fmt.Sprintf("%s-", PrefixAddressKey))), nil)
+	iter := db.NewIterator(util.BytesPrefix([]byte(fmt.Sprintf("%s", PrefixAddressKey))), nil)
 	defer iter.Release()
 	var addressKeys []*AddressLinkedKey
 	for iter.Next() {

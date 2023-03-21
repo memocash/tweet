@@ -8,7 +8,7 @@ import (
 
 type TxOutput struct {
 	Address [25]byte
-	TxHash  string
+	TxHash  [32]byte
 	Index   int
 	Output  []byte
 }
@@ -18,7 +18,11 @@ func (o *TxOutput) GetPrefix() string {
 }
 
 func (o *TxOutput) GetUid() []byte {
-	return []byte(fmt.Sprintf("%s-%s-%d", o.Address, o.TxHash, o.Index))
+	return jutil.CombineBytes(
+		o.Address[:],
+		o.TxHash[:],
+		jutil.GetIntData(o.Index),
+	)
 }
 
 func (o *TxOutput) SetUid(b []byte) {
@@ -26,7 +30,7 @@ func (o *TxOutput) SetUid(b []byte) {
 		return
 	}
 	copy(o.Address[:], b[:25])
-	o.TxHash = string(b[25:57])
+	copy(o.TxHash[:], b[25:57])
 	o.Index = jutil.GetInt(b[57:])
 }
 
@@ -43,7 +47,8 @@ func GetTxOutputs(address [25]byte) ([]*TxOutput, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting database handler for get tx outputs; %w", err)
 	}
-	iter := db.NewIterator(util.BytesPrefix([]byte(fmt.Sprintf("%s-%s-", PrefixTxOutput, address))), nil)
+	iterKey := jutil.CombineBytes([]byte(PrefixTxOutput), []byte{Spacer}, address[:])
+	iter := db.NewIterator(util.BytesPrefix(iterKey), nil)
 	defer iter.Release()
 	var txOutputs []*TxOutput
 	for iter.Next() {

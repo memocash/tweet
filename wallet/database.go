@@ -3,6 +3,7 @@ package wallet
 import (
 	"encoding/json"
 	"errors"
+	"github.com/jchavannes/btcd/chaincfg/chainhash"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/index/client/lib/graph"
 	"github.com/memocash/index/ref/bitcoin/wallet"
@@ -71,8 +72,12 @@ func (d *Database) SaveTxs(txs []graph.Tx) error {
 	var objectsToSave []db.ObjectI
 	for _, tx := range txs {
 		for _, input := range tx.Inputs {
+			byteHash, err := chainhash.NewHashFromStr(input.PrevHash)
+			if err != nil {
+				return jerr.Get("error getting hash from string", err)
+			}
 			objectsToSave = append(objectsToSave, &db.TxInput{
-				PrevHash:  input.PrevHash,
+				PrevHash:  *byteHash,
 				PrevIndex: input.PrevIndex,
 			})
 		}
@@ -86,9 +91,13 @@ func (d *Database) SaveTxs(txs []graph.Tx) error {
 			if err != nil {
 				continue
 			}
+			byteHash, err := chainhash.NewHashFromStr(tx.Hash)
+			if err != nil {
+				return jerr.Get("error getting hash from string", err)
+			}
 			objectsToSave = append(objectsToSave, &db.TxOutput{
 				Address: wallet.GetAddressFromString(output.Lock.Address).GetAddr(),
-				TxHash:  tx.Hash,
+				TxHash:  *byteHash,
 				Index:   output.Index,
 				Output:  outputJson,
 			})
@@ -98,9 +107,17 @@ func (d *Database) SaveTxs(txs []graph.Tx) error {
 			if err != nil {
 				return jerr.Get("error saving tx", err)
 			}
+			txByteHash, err := chainhash.NewHashFromStr(tx.Hash)
+			if err != nil {
+				return jerr.Get("error saving tx", err)
+			}
+			blockByteHash, err := chainhash.NewHashFromStr(block.Hash)
+			if err != nil {
+				return jerr.Get("error saving tx", err)
+			}
 			objectsToSave = append(objectsToSave, &db.TxBlock{
-				TxHash:    tx.Hash,
-				BlockHash: block.Hash,
+				TxHash:    *txByteHash,
+				BlockHash: *blockByteHash,
 			}, &db.Block{
 				BlockHash: block.Hash,
 				Block:     blockJson,

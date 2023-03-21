@@ -3,11 +3,10 @@ package db
 import (
 	"fmt"
 	"github.com/jchavannes/jgo/jutil"
-	"strings"
 )
 
 type TxInput struct {
-	PrevHash  string
+	PrevHash  [32]byte
 	PrevIndex int
 }
 
@@ -16,16 +15,18 @@ func (i *TxInput) GetPrefix() string {
 }
 
 func (i *TxInput) GetUid() []byte {
-	return []byte(fmt.Sprintf("%s-%d", i.PrevHash, i.PrevIndex))
+	return jutil.CombineBytes(
+		i.PrevHash[:],
+		jutil.GetIntData(i.PrevIndex),
+	)
 }
 
 func (i *TxInput) SetUid(b []byte) {
-	parts := strings.Split(string(b), "-")
-	if len(parts) != 2 {
+	if len(b) != 36 {
 		return
 	}
-	i.PrevHash = parts[0]
-	i.PrevIndex = jutil.GetIntFromString(parts[1])
+	copy(i.PrevHash[:], b[:32])
+	i.PrevIndex = jutil.GetInt(b[32:])
 }
 
 func (i *TxInput) Serialize() []byte {
@@ -35,7 +36,7 @@ func (i *TxInput) Serialize() []byte {
 func (i *TxInput) Deserialize([]byte) {
 }
 
-func GetTxInput(prevHash string, prevIndex int) (*TxInput, error) {
+func GetTxInput(prevHash [32]byte, prevIndex int) (*TxInput, error) {
 	var txInput = &TxInput{
 		PrevHash:  prevHash,
 		PrevIndex: prevIndex,

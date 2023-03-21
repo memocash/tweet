@@ -75,7 +75,7 @@ var checkSavedTweetCmd = &cobra.Command{
 				log.Printf("userId: %s, tweetId: %d\n", dbTweetTx.UserID, tweetTx.Tweet.ID)
 			}
 		}
-		savedTweets, err := db.GetAllSavedAddressTweet([]byte(fmt.Sprintf("%s-%s", address, strconv.FormatInt(userId, 10))))
+		savedTweets, err := db.GetAllSavedAddressTweet([]byte(fmt.Sprintf("%s%s", address, strconv.FormatInt(userId, 10))))
 		if err != nil {
 			log.Fatalf("fatal error getting address userId saved address tweets; %v", err)
 		}

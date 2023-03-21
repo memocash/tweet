@@ -31,7 +31,10 @@ func (f *Flag) GetPrefix() string {
 }
 
 func (f *Flag) GetUid() []byte {
-	return []byte(fmt.Sprintf("%s-%d", f.Address, f.UserID))
+	return jutil.CombineBytes(
+		f.Address[:],
+		jutil.GetInt64DataBig(f.UserID),
+	)
 }
 
 func (f *Flag) SetUid(b []byte) {

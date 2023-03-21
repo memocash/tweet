@@ -16,7 +16,10 @@ func (o *Profile) GetPrefix() string {
 }
 
 func (o *Profile) GetUid() []byte {
-	return []byte(fmt.Sprintf("%s-%d", o.Address, o.UserID))
+	return jutil.CombineBytes(
+		o.Address[:],
+		jutil.GetInt64DataBig(o.UserID),
+	)
 }
 
 func (o *Profile) SetUid(b []byte) {
