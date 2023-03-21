@@ -4,6 +4,8 @@ replace github.com/fallenstedt/twitter-stream => github.com/jchavannes/twitter-s
 
 replace github.com/gin-gonic/gin v1.6.3 => github.com/gin-gonic/gin v1.7.7
 
+replace golang.org/x/net => golang.org/x/net v0.1.1-0.20221104162952-702349b0e862
+
 go 1.16
 
 require (
