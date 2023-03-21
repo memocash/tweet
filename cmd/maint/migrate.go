@@ -1,14 +1,16 @@
 package maint
 
 import (
-	"github.com/dghubble/go-twitter/twitter"
+	"github.com/jchavannes/btcd/chaincfg/chainhash"
 	"github.com/jchavannes/jgo/jerr"
+	"github.com/jchavannes/jgo/jutil"
+	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/db"
-	"github.com/memocash/tweet/tweets"
 	"github.com/spf13/cobra"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"log"
+	"strconv"
 	"strings"
 )
 
@@ -18,77 +20,178 @@ var migrateCmd = &cobra.Command{
 	Run: func(c *cobra.Command, args []string) {
 		levelDb, err := db.GetDb()
 		if err != nil {
-			log.Fatalf("error opening db; %v", err)
+			log.Fatal(jerr.Get("error getting db", err))
 		}
-		client := tweets.Connect()
-		twitterNames, err := GetAllTwitterNames(levelDb)
+		err = migrateDB(levelDb)
 		if err != nil {
-			log.Fatalf("error getting twitter names; %v", err)
-		}
-		for _, twittername := range twitterNames {
-			println("migrating", twittername)
-			userShowParams := &twitter.UserShowParams{ScreenName: twittername}
-			user, _, err := client.Users.Show(userShowParams)
-			if err != nil {
-				log.Fatalf("error getting user; %v", err)
-			}
-			userId := user.IDStr
-			if err := migrateDB(twittername, userId, levelDb); err != nil {
-				log.Fatalf("error migrating db; %v", err)
-			}
+			log.Fatal(jerr.Get("error migrating db", err))
 		}
 	},
 }
 
-func migrateDB(twittername string, userId string, levelDb *leveldb.DB) error {
-	if err := migratePrefix(db.PrefixAddressKey, twittername, userId, levelDb); err != nil {
-		return jerr.Get("error migrating address key", err)
+func migrateDB(levelDb *leveldb.DB) error {
+	err := MigrateAddressLinkedKey(levelDb)
+	if err != nil {
+		return jerr.Get("error migrating address linked key", err)
 	}
-	if err := migratePrefix(db.PrefixFlag, twittername, userId, levelDb); err != nil {
-		return jerr.Get("error migrating flag", err)
+	err = MigrateFlag(levelDb)
+	if err != nil {
+		return jerr.Get("error migrating address seen tx", err)
 	}
-	if err := migratePrefix(db.PrefixProfile, twittername, userId, levelDb); err != nil {
-		return jerr.Get("error migrating profile", err)
-	}
-	if err := migratePrefix(db.PrefixSavedAddressTweet, twittername, userId, levelDb); err != nil {
-		return jerr.Get("error migrating saved address tweet", err)
-	}
-	if err := migratePrefix(db.PrefixTweetTx, twittername, userId, levelDb); err != nil {
-		return jerr.Get("error migrating tweet tx", err)
+	//err = MigrateTxInput(levelDb)
+	//if err != nil {
+	//	return jerr.Get("error migrating tx input", err)
+	//}
+	err = MigrateTxOutput(levelDb)
+	if err != nil {
+		return jerr.Get("error migrating tx output", err)
 	}
 	return nil
 }
 
-func migratePrefix(prefix string, twittername string, userId string, levelDb *leveldb.DB) error {
-	iter := levelDb.NewIterator(util.BytesPrefix([]byte(prefix)), nil)
-	defer iter.Release()
+func MigrateTxOutput(levelDb *leveldb.DB) error {
+	//old: output-<address>-<txHash>-<index>
+	//new: output-<address><txHash><index>
+	iter := levelDb.NewIterator(util.BytesPrefix([]byte(db.PrefixTxOutput)), nil)
 	for iter.Next() {
-		key := string(iter.Key())
-		if !strings.Contains(key, twittername) {
+		key := iter.Key()
+		println(string(key))
+		parts := strings.Split(string(key), string([]byte{db.Spacer}))
+		if len(parts) != 4 {
 			continue
 		}
-		newKey := strings.Replace(key, twittername, userId, 1)
-		err := levelDb.Put([]byte(newKey), iter.Value(), nil)
-		if err != nil {
-			return err
+		address := parts[1]
+		//if address contains "unknown" then skip
+		//FIND OUT WHY WE ARE SAVING THESE
+		if strings.Contains(address, "unknown") {
+			continue
 		}
-		err = levelDb.Delete(iter.Key(), nil)
+		addr, err := wallet.GetAddrFromString(address)
 		if err != nil {
-			return err
+			return jerr.Get("error parsing address", err)
+		}
+		txHash := parts[2]
+		bytesHash, err := chainhash.NewHashFromStr(txHash)
+		if err != nil {
+			return jerr.Get("error parsing tx hash", err)
+		}
+		index := parts[3]
+		indexInt, err := strconv.Atoi(index)
+		if err != nil {
+			return jerr.Get("error parsing index", err)
+		}
+		indexBytes := jutil.GetIntData(indexInt)
+		uid := jutil.CombineBytes([]byte(db.PrefixTxOutput), []byte{db.Spacer}, addr[:], bytesHash[:], indexBytes)
+		err = levelDb.Put(uid, iter.Value(), nil)
+		if err != nil {
+			return jerr.Get("error putting new key", err)
+		}
+		err = levelDb.Delete(key, nil)
+		if err != nil {
+			return jerr.Get("error deleting old key", err)
 		}
 	}
 	return nil
 }
 
-func GetAllTwitterNames(levelDb *leveldb.DB) ([]string, error) {
-	iter := levelDb.NewIterator(util.BytesPrefix([]byte(db.PrefixProfile)), nil)
-	defer iter.Release()
-	var twitterNames []string
+func MigrateTxInput(levelDb *leveldb.DB) error {
+	//old: input-<prevHash>-<PrevIndex>
+	//new: input-<prevHash><PrevIndex>
+	iter := levelDb.NewIterator(util.BytesPrefix([]byte(db.PrefixTxInput)), nil)
 	for iter.Next() {
-		//twittername is the last part of the key, separated by a dash
-		key := string(iter.Key())
-		parts := strings.Split(key, "-")
-		twitterNames = append(twitterNames, parts[len(parts)-1])
+		key := iter.Key()
+		parts := strings.Split(string(key), string([]byte{db.Spacer}))
+		if len(parts) != 3 {
+			continue
+		}
+		prevHash := parts[1]
+		bytesHash, err := chainhash.NewHashFromStr(prevHash)
+		if err != nil {
+			return jerr.Get("error parsing prev hash", err)
+		}
+		prevIndex := parts[2]
+		prevIndexInt, err := strconv.Atoi(prevIndex)
+		if err != nil {
+			return jerr.Get("error parsing prev index", err)
+		}
+		prevIndexBytes := jutil.GetIntData(prevIndexInt)
+		uid := jutil.CombineBytes([]byte(db.PrefixTxInput), []byte{db.Spacer}, bytesHash[:], prevIndexBytes)
+		err = levelDb.Put(uid, iter.Value(), nil)
+		if err != nil {
+			return jerr.Get("error putting new key", err)
+		}
+		err = levelDb.Delete(key, nil)
+		if err != nil {
+			return jerr.Get("error deleting old key", err)
+		}
 	}
-	return twitterNames, nil
+	return nil
+}
+
+func MigrateFlag(levelDb *leveldb.DB) error {
+	//old flag: flags-<address>-<userId>
+	//new flag: flags-<address><userId>
+	iter := levelDb.NewIterator(util.BytesPrefix([]byte(db.PrefixFlag)), nil)
+	for iter.Next() {
+		key := iter.Key()
+		parts := strings.Split(string(key), string([]byte{db.Spacer}))
+		if len(parts) != 3 {
+			continue
+		}
+		strAddr := parts[1]
+		strUserId := parts[2]
+		addr, err := wallet.GetAddrFromString(strAddr)
+		if err != nil {
+			return jerr.Get("error getting address from string", err)
+		}
+		userId, err := strconv.ParseInt(strUserId, 10, 64)
+		if err != nil {
+			return jerr.Get("error parsing user id", err)
+		}
+		userIdBytes := jutil.GetInt64DataBig(userId)
+		uid := jutil.CombineBytes([]byte(db.PrefixFlag), []byte{db.Spacer}, addr[:], userIdBytes)
+		err = levelDb.Put(uid, iter.Value(), nil)
+		if err != nil {
+			return jerr.Get("error putting new flag", err)
+		}
+		err = levelDb.Delete(key, nil)
+		if err != nil {
+			return jerr.Get("error deleting old flag", err)
+		}
+	}
+	return nil
+}
+
+func MigrateAddressLinkedKey(levelDb *leveldb.DB) error {
+	//old: linked-<address>-userId
+	//new: linked-<address><userId>
+	iter := levelDb.NewIterator(util.BytesPrefix([]byte(db.PrefixAddressKey)), nil)
+	for iter.Next() {
+		key := iter.Key()
+		parts := strings.Split(string(key), string([]byte{db.Spacer}))
+		if len(parts) != 3 {
+			continue
+		}
+		strAddr := parts[1]
+		strUserId := parts[2]
+		addr, err := wallet.GetAddrFromString(strAddr)
+		if err != nil {
+			return jerr.Get("error getting address from string", err)
+		}
+		userId, err := strconv.ParseInt(strUserId, 10, 64)
+		if err != nil {
+			return jerr.Get("error parsing user id", err)
+		}
+		userIdBytes := jutil.GetInt64DataBig(userId)
+		uid := jutil.CombineBytes([]byte(db.PrefixAddressKey), []byte{db.Spacer}, addr[:], userIdBytes)
+		err = levelDb.Put(uid, iter.Value(), nil)
+		if err != nil {
+			return jerr.Get("error putting new key", err)
+		}
+		err = levelDb.Delete(key, nil)
+		if err != nil {
+			return jerr.Get("error deleting old key", err)
+		}
+	}
+	return nil
 }
