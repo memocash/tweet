@@ -119,7 +119,7 @@ func (d *Database) SaveTxs(txs []graph.Tx) error {
 				TxHash:    *txByteHash,
 				BlockHash: *blockByteHash,
 			}, &db.Block{
-				BlockHash: block.Hash,
+				BlockHash: *blockByteHash,
 				Block:     blockJson,
 			})
 		}
