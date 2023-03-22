@@ -1,6 +1,7 @@
 package maint
 
 import (
+	"fmt"
 	"github.com/jchavannes/btcd/chaincfg/chainhash"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jutil"
@@ -75,7 +76,6 @@ func MigrateTxBlock(levelDb *leveldb.DB) error {
 	iter := levelDb.NewIterator(util.BytesPrefix([]byte(db.PrefixTxBlock)), nil)
 	for iter.Next() {
 		key := iter.Key()
-		println(string(key))
 		parts := strings.Split(string(key), string([]byte{db.Spacer}))
 		if len(parts) != 3 {
 			continue
@@ -148,7 +148,12 @@ func MigrateProfile(levelDb *leveldb.DB) error {
 		}
 		address, err := wallet.GetAddrFromString(parts[1])
 		if err != nil {
-			return jerr.Get("error decoding address", err)
+			fmt.Printf("error getting address from string, deleting: %s", parts[1])
+			err = levelDb.Delete(key, nil)
+			if err != nil {
+				return jerr.Get("error deleting old key", err)
+			}
+			continue
 		}
 		userId, err := strconv.ParseInt(parts[2], 10, 64)
 		if err != nil {
@@ -207,7 +212,12 @@ func MigrateSavedAddressTweet(levelDb *leveldb.DB) error {
 		}
 		address, err := wallet.GetAddrFromString(parts[1])
 		if err != nil {
-			return jerr.Get("error getting address", err)
+			fmt.Printf("error getting address from string, deleting: %s", parts[1])
+			err = levelDb.Delete(key, nil)
+			if err != nil {
+				return jerr.Get("error deleting old key", err)
+			}
+			continue
 		}
 		userId, err := strconv.ParseInt(parts[2], 10, 64)
 		if err != nil {
@@ -242,23 +252,28 @@ func MigrateTxOutput(levelDb *leveldb.DB) error {
 		if len(parts) != 4 {
 			continue
 		}
-		address := parts[1]
-		//if address contains "unknown" then skip
-		//FIND OUT WHY WE ARE SAVING THESE
-		if strings.Contains(address, "unknown") {
+		if strings.Contains(parts[1], "unknown") {
+			fmt.Printf("error getting address from string, deleting: %s", parts[1])
+			err := levelDb.Delete(key, nil)
+			if err != nil {
+				return jerr.Get("error deleting old key", err)
+			}
 			continue
 		}
-		addr, err := wallet.GetAddrFromString(address)
+		addr, err := wallet.GetAddrFromString(parts[1])
 		if err != nil {
-			return jerr.Get("error parsing address", err)
+			fmt.Printf("error getting address from string, deleting: %s", parts[1])
+			err = levelDb.Delete(key, nil)
+			if err != nil {
+				return jerr.Get("error deleting old key", err)
+			}
+			continue
 		}
-		txHash := parts[2]
-		bytesHash, err := chainhash.NewHashFromStr(txHash)
+		bytesHash, err := chainhash.NewHashFromStr(parts[2])
 		if err != nil {
 			return jerr.Get("error parsing tx hash", err)
 		}
-		index := parts[3]
-		indexInt, err := strconv.Atoi(index)
+		indexInt, err := strconv.Atoi(parts[3])
 		if err != nil {
 			return jerr.Get("error parsing index", err)
 		}
@@ -322,7 +337,12 @@ func MigrateFlag(levelDb *leveldb.DB) error {
 		}
 		addr, err := wallet.GetAddrFromString(parts[1])
 		if err != nil {
-			return jerr.Get("error getting address from string", err)
+			fmt.Printf("error getting address from string, deleting: %s", parts[1])
+			err = levelDb.Delete(key, nil)
+			if err != nil {
+				return jerr.Get("error deleting old key", err)
+			}
+			continue
 		}
 		userId, err := strconv.ParseInt(parts[2], 10, 64)
 		if err != nil {
@@ -352,13 +372,16 @@ func MigrateAddressLinkedKey(levelDb *leveldb.DB) error {
 		if len(parts) != 3 {
 			continue
 		}
-		strAddr := parts[1]
-		strUserId := parts[2]
-		addr, err := wallet.GetAddrFromString(strAddr)
+		addr, err := wallet.GetAddrFromString(parts[1])
 		if err != nil {
-			return jerr.Get("error getting address from string", err)
+			fmt.Printf("error getting address from string, deleting: %s", parts[1])
+			err = levelDb.Delete(key, nil)
+			if err != nil {
+				return jerr.Get("error deleting old key", err)
+			}
+			continue
 		}
-		userId, err := strconv.ParseInt(strUserId, 10, 64)
+		userId, err := strconv.ParseInt(parts[2], 10, 64)
 		if err != nil {
 			return jerr.Get("error parsing user id", err)
 		}
