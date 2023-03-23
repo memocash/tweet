@@ -29,7 +29,7 @@ func Broadcast(raw []byte) error {
 	if err != nil {
 		return jerr.Get("error the HTTP request failed complete transaction", err)
 	}
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return jerr.New("error the HTTP request failed complete transaction, status code: " + resp.Status)
 	}
 	return nil
