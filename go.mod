@@ -13,8 +13,8 @@ require (
 	github.com/fallenstedt/twitter-stream v0.4.3-0.20221105030943-d555374f2c1a
 	github.com/hasura/go-graphql-client v0.9.0
 	github.com/jchavannes/btcd v1.1.5-0.20230112162803-412def37b600
-	github.com/jchavannes/jgo v0.0.0-20230207194100-08de035df971
-	github.com/memocash/index v0.1.1-0.20230213204657-118e8583b03e
+	github.com/jchavannes/jgo v0.0.0-20230222214331-95b230651774
+	github.com/memocash/index v0.2.0-alpha.0.0.20230323182811-fd9337017bac
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/viper v1.14.0
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
