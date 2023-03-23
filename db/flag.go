@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/jchavannes/jgo/jutil"
-	"strings"
 )
 
 type Flags struct {
@@ -22,7 +21,7 @@ func GetDefaultFlags() Flags {
 }
 
 type Flag struct {
-	Address string
+	Address [25]byte
 	UserID  int64
 	Flags   Flags
 }
@@ -32,16 +31,18 @@ func (f *Flag) GetPrefix() string {
 }
 
 func (f *Flag) GetUid() []byte {
-	return []byte(fmt.Sprintf("%s-%d", f.Address, f.UserID))
+	return jutil.CombineBytes(
+		f.Address[:],
+		jutil.GetInt64DataBig(f.UserID),
+	)
 }
 
 func (f *Flag) SetUid(b []byte) {
-	parts := strings.Split(string(b), "-")
-	if len(parts) != 2 {
+	if len(b) != 33 {
 		return
 	}
-	f.Address = parts[0]
-	f.UserID = jutil.GetInt64FromString(strings.TrimLeft(parts[1], "0"))
+	copy(f.Address[:], b[:25])
+	f.UserID = jutil.GetInt64Big(b[25:])
 }
 
 func (f *Flag) Serialize() []byte {
@@ -53,7 +54,7 @@ func (f *Flag) Deserialize(d []byte) {
 	json.Unmarshal(d, &f.Flags)
 }
 
-func GetFlag(address string, userId int64) (*Flag, error) {
+func GetFlag(address [25]byte, userId int64) (*Flag, error) {
 	var flag = &Flag{
 		Address: address,
 		UserID:  userId,

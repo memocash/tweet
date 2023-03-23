@@ -74,7 +74,7 @@ func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, numTweets i
 	if err != nil {
 		return nil, jerr.Get("error getting new tweets from twitter", err)
 	}
-	recentSavedTweetTx, err := db.GetRecentSavedAddressTweet(accountKey.Address.GetEncoded(), accountKey.UserID)
+	recentSavedTweetTx, err := db.GetRecentSavedAddressTweet(accountKey.Address.GetAddr(), accountKey.UserID)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		return nil, jerr.Get("error getting recent saved address tweet", err)
 	}
@@ -167,7 +167,7 @@ func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, client *twi
 		}
 	}
 	for {
-		savedAddressTweet, err := db.GetSavedAddressTweet(accountKey.Address.GetEncoded(), accountKey.UserID, tweetID)
+		savedAddressTweet, err := db.GetSavedAddressTweet(accountKey.Address.GetAddr(), accountKey.UserID, tweetID)
 		if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 			return jerr.Get("error getting saved address tweet for get skipped", err)
 		}

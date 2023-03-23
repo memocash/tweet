@@ -54,7 +54,7 @@ func GetAllAddressSeenTx() ([]*AddressSeenTx, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting database handler for get all address seen txs; %w", err)
 	}
-	iter := db.NewIterator(util.BytesPrefix([]byte(fmt.Sprintf("%s-", PrefixAddressSeenTx))), nil)
+	iter := db.NewIterator(util.BytesPrefix([]byte(fmt.Sprintf("%s", PrefixAddressSeenTx))), nil)
 	defer iter.Release()
 	var addressSeenTxs []*AddressSeenTx
 	for iter.Next() {

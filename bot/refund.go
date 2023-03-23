@@ -44,7 +44,7 @@ func refund(tx graph.Tx, b *Bot, coinIndex uint32, senderAddress string, errMsg 
 		Value:        tx.Outputs[coinIndex].Amount,
 		PrevOutHash:  hs.GetTxHash(tx.Hash),
 		PrevOutIndex: coinIndex,
-		PkHash:       wallet.GetAddressFromString(b.Addr.String()).GetPkHash(),
+		PkHash:       b.Addr.GetPkHash(),
 		PkScript:     pkScript,
 	}}, b.Key, wallet.GetAddressFromString(senderAddress), errMsg); err != nil {
 		return jerr.Get("error sending money back", err)

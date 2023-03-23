@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"github.com/jchavannes/jgo/jutil"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"strings"
 )
 
 type AddressLinkedKey struct {
-	Address string
+	Address [25]byte
 	UserID  int64
 	Key     []byte
 }
@@ -18,16 +17,18 @@ func (k *AddressLinkedKey) GetPrefix() string {
 }
 
 func (k *AddressLinkedKey) GetUid() []byte {
-	return []byte(fmt.Sprintf("%s-%d", k.Address, k.UserID))
+	return jutil.CombineBytes(
+		k.Address[:],
+		jutil.GetInt64DataBig(k.UserID),
+	)
 }
 
 func (k *AddressLinkedKey) SetUid(b []byte) {
-	parts := strings.Split(string(b), "-")
-	if len(parts) != 2 {
+	if len(b) != 33 {
 		return
 	}
-	k.Address = parts[0]
-	k.UserID = jutil.GetInt64FromString(strings.TrimLeft(parts[1], "0"))
+	copy(k.Address[:], b[:25])
+	k.UserID = jutil.GetInt64Big(b[25:])
 }
 
 func (k *AddressLinkedKey) Serialize() []byte {
@@ -38,7 +39,7 @@ func (k *AddressLinkedKey) Deserialize(d []byte) {
 	k.Key = d
 }
 
-func GetAddressKey(address string, userId int64) (*AddressLinkedKey, error) {
+func GetAddressKey(address [25]byte, userId int64) (*AddressLinkedKey, error) {
 	var addressKey = &AddressLinkedKey{
 		Address: address,
 		UserID:  userId,
@@ -54,7 +55,7 @@ func GetAllAddressKey() ([]*AddressLinkedKey, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting database handler for get all address keys; %w", err)
 	}
-	iter := db.NewIterator(util.BytesPrefix([]byte(fmt.Sprintf("%s-", PrefixAddressKey))), nil)
+	iter := db.NewIterator(util.BytesPrefix([]byte(fmt.Sprintf("%s", PrefixAddressKey))), nil)
 	defer iter.Release()
 	var addressKeys []*AddressLinkedKey
 	for iter.Next() {

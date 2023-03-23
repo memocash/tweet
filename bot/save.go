@@ -163,7 +163,7 @@ func (s *SaveTx) HandleRequestSubBot() error {
 	if matchedStream == nil {
 		return nil
 	}
-	flag, err := db.GetFlag(matchedStream.Sender, matchedStream.UserID)
+	flag, err := db.GetFlag(wallet.GetAddressFromString(matchedStream.Sender).GetAddr(), matchedStream.UserID)
 	if err != nil || flag == nil {
 		return jerr.Get("error getting flag", err)
 	}
@@ -250,7 +250,7 @@ func (s *SaveTx) HandleCreate() error {
 		return nil
 	}
 	if err := db.Save([]db.ObjectI{&db.Flag{
-		Address: s.SenderAddress,
+		Address: wallet.GetAddressFromString(s.SenderAddress).GetAddr(),
 		UserID:  twitterAccount.ID,
 		Flags:   flags,
 	}}); err != nil {
@@ -300,7 +300,7 @@ func (s *SaveTx) HandleWithdraw() error {
 		}
 		return nil
 	}
-	addressKey, err := db.GetAddressKey(s.SenderAddress, twitterAccount.ID)
+	addressKey, err := db.GetAddressKey(wallet.GetAddressFromString(s.SenderAddress).GetAddr(), twitterAccount.ID)
 	if err != nil {
 		if !errors.Is(err, leveldb.ErrNotFound) {
 			return jerr.Get("error getting linked-"+s.SenderAddress+"-"+twitterAccount.IDStr, err)

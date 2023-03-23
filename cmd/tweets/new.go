@@ -26,7 +26,7 @@ var getNewCmd = &cobra.Command{
 		for _, streamConfig := range streamConfigs {
 			accountKey := obj.GetAccountKeyFromArgs([]string{streamConfig.Key, strconv.FormatInt(streamConfig.UserID, 10)})
 			//check if there are any transferred tweets with the prefix containing this address and this screenName
-			savedAddressTweet, err := db.GetRecentSavedAddressTweet(accountKey.Address.GetEncoded(), accountKey.UserID)
+			savedAddressTweet, err := db.GetRecentSavedAddressTweet(accountKey.Address.GetAddr(), accountKey.UserID)
 			if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 				jerr.Get("error getting recent saved address tweet", err).Fatal()
 			}

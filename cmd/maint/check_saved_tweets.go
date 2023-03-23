@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/jchavannes/jgo/jutil"
+	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/spf13/cobra"
@@ -74,7 +75,7 @@ var checkSavedTweetCmd = &cobra.Command{
 				log.Printf("userId: %s, tweetId: %d\n", dbTweetTx.UserID, tweetTx.Tweet.ID)
 			}
 		}
-		savedTweets, err := db.GetAllSavedAddressTweet([]byte(fmt.Sprintf("%s-%s", address, strconv.FormatInt(userId, 10))))
+		savedTweets, err := db.GetAllSavedAddressTweet([]byte(fmt.Sprintf("%s%s", address, strconv.FormatInt(userId, 10))))
 		if err != nil {
 			log.Fatalf("fatal error getting address userId saved address tweets; %v", err)
 		}
@@ -112,7 +113,7 @@ var fixSavedTweetCmd = &cobra.Command{
 				if err := db.Delete([]db.ObjectI{savedTweet}); err != nil {
 					log.Fatalf("fatal error deleting bad saved tweet; %v", err)
 				}
-				savedTweet.Address = address
+				savedTweet.Address = wallet.GetAddressFromString(address).GetAddr()
 				if err := db.Save([]db.ObjectI{savedTweet}); err != nil {
 					log.Fatalf("fatal error saving fixed saved tweet; %v", err)
 				}

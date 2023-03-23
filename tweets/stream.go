@@ -10,6 +10,7 @@ import (
 	"github.com/fallenstedt/twitter-stream/token_generator"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jlog"
+	wallet2 "github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets/obj"
@@ -198,7 +199,7 @@ func (s *Stream) ListenForNewTweets(streamConfigs []config.Stream) error {
 			if conf.UserID == tweetObject.User.ID {
 				jlog.Logf("sending tweet to key: %s\n", conf.Key)
 				twitterAccountWallet := obj.GetAccountKeyFromArgs([]string{conf.Key, strconv.FormatInt(conf.UserID, 10)})
-				flag, err := db.GetFlag(conf.Sender, conf.UserID)
+				flag, err := db.GetFlag(wallet2.GetAddressFromString(conf.Sender).GetAddr(), conf.UserID)
 				if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 					return jerr.Get("error getting flags from db", err)
 				} else if errors.Is(err, leveldb.ErrNotFound) {

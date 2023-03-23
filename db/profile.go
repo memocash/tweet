@@ -3,11 +3,10 @@ package db
 import (
 	"fmt"
 	"github.com/jchavannes/jgo/jutil"
-	"strings"
 )
 
 type Profile struct {
-	Address string
+	Address [25]byte
 	UserID  int64
 	Profile []byte
 }
@@ -17,16 +16,18 @@ func (o *Profile) GetPrefix() string {
 }
 
 func (o *Profile) GetUid() []byte {
-	return []byte(fmt.Sprintf("%s-%d", o.Address, o.UserID))
+	return jutil.CombineBytes(
+		o.Address[:],
+		jutil.GetInt64DataBig(o.UserID),
+	)
 }
 
 func (o *Profile) SetUid(b []byte) {
-	parts := strings.Split(string(b), "-")
-	if len(parts) != 2 {
+	if len(b) != 33 {
 		return
 	}
-	o.Address = parts[0]
-	o.UserID = jutil.GetInt64FromString(strings.TrimLeft(parts[1], "0"))
+	copy(o.Address[:], b[:25])
+	o.UserID = jutil.GetInt64Big(b[25:])
 }
 
 func (o *Profile) Serialize() []byte {
@@ -37,7 +38,7 @@ func (o *Profile) Deserialize(d []byte) {
 	o.Profile = d
 }
 
-func GetProfile(address string, userId int64) (*Profile, error) {
+func GetProfile(address [25]byte, userId int64) (*Profile, error) {
 	var profile = &Profile{
 		Address: address,
 		UserID:  userId,

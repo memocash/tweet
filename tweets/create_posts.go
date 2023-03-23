@@ -14,7 +14,7 @@ import (
 )
 
 func CreateMemoPostsFromDb(accountKey obj.AccountKey, flags db.Flags, wlt wallet.Wallet) (int, error) {
-	savedAddressTweet, err := db.GetRecentSavedAddressTweet(accountKey.GetAddress(), accountKey.UserID)
+	savedAddressTweet, err := db.GetRecentSavedAddressTweet(accountKey.Address.GetAddr(), accountKey.UserID)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		jerr.Get("error getting recent saved address tweet", err).Fatal()
 	}

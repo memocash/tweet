@@ -3,6 +3,7 @@ package wallet
 import (
 	"encoding/json"
 	"errors"
+	"github.com/jchavannes/btcd/chaincfg/chainhash"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/index/client/lib/graph"
 	"github.com/memocash/index/ref/bitcoin/wallet"
@@ -27,7 +28,7 @@ func (d *Database) GetAddressBalance(address wallet.Addr) (int64, error) {
 
 func (d *Database) SetAddressLastUpdate(address wallet.Addr, updateTime time.Time) error {
 	if err := db.Save([]db.ObjectI{&db.AddressWalletTime{
-		Address: address.String(),
+		Address: address,
 		Time:    updateTime,
 	}}); err != nil {
 		return jerr.Get("error saving address wallet last update time to db", err)
@@ -36,7 +37,7 @@ func (d *Database) SetAddressLastUpdate(address wallet.Addr, updateTime time.Tim
 }
 
 func (d *Database) GetAddressLastUpdate(address wallet.Addr) (time.Time, error) {
-	addressTime, err := db.GetAddressTime(address.String())
+	addressTime, err := db.GetAddressTime(address)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		return time.Time{}, jerr.Get("error getting address wallet last update from db", err)
 	}
@@ -48,7 +49,7 @@ func (d *Database) GetAddressLastUpdate(address wallet.Addr) (time.Time, error) 
 
 func (d *Database) GetUtxos(address wallet.Addr) ([]graph.Output, error) {
 	var utxos []graph.Output
-	dbTxOutputs, err := db.GetTxOutputs(address.String())
+	dbTxOutputs, err := db.GetTxOutputs(address)
 	if err != nil {
 		return nil, jerr.Get("error getting tx outputs from db for get utxos", err)
 	}
@@ -71,8 +72,12 @@ func (d *Database) SaveTxs(txs []graph.Tx) error {
 	var objectsToSave []db.ObjectI
 	for _, tx := range txs {
 		for _, input := range tx.Inputs {
+			byteHash, err := chainhash.NewHashFromStr(input.PrevHash)
+			if err != nil {
+				return jerr.Get("error getting hash from string", err)
+			}
 			objectsToSave = append(objectsToSave, &db.TxInput{
-				PrevHash:  input.PrevHash,
+				PrevHash:  *byteHash,
 				PrevIndex: input.PrevIndex,
 			})
 		}
@@ -82,9 +87,17 @@ func (d *Database) SaveTxs(txs []graph.Tx) error {
 			if err != nil {
 				return jerr.Get("error marshalling tx output for tx save to db", err)
 			}
+			_, err = wallet.GetAddrFromString(output.Lock.Address)
+			if err != nil {
+				continue
+			}
+			byteHash, err := chainhash.NewHashFromStr(tx.Hash)
+			if err != nil {
+				return jerr.Get("error getting hash from string", err)
+			}
 			objectsToSave = append(objectsToSave, &db.TxOutput{
-				Address: output.Lock.Address,
-				TxHash:  tx.Hash,
+				Address: wallet.GetAddressFromString(output.Lock.Address).GetAddr(),
+				TxHash:  *byteHash,
 				Index:   output.Index,
 				Output:  outputJson,
 			})
@@ -94,11 +107,19 @@ func (d *Database) SaveTxs(txs []graph.Tx) error {
 			if err != nil {
 				return jerr.Get("error saving tx", err)
 			}
+			txByteHash, err := chainhash.NewHashFromStr(tx.Hash)
+			if err != nil {
+				return jerr.Get("error saving tx", err)
+			}
+			blockByteHash, err := chainhash.NewHashFromStr(block.Hash)
+			if err != nil {
+				return jerr.Get("error saving tx", err)
+			}
 			objectsToSave = append(objectsToSave, &db.TxBlock{
-				TxHash:    tx.Hash,
-				BlockHash: block.Hash,
+				TxHash:    *txByteHash,
+				BlockHash: *blockByteHash,
 			}, &db.Block{
-				BlockHash: block.Hash,
+				BlockHash: *blockByteHash,
 				Block:     blockJson,
 			})
 		}

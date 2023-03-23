@@ -4,12 +4,11 @@ import (
 	"fmt"
 	"github.com/jchavannes/jgo/jutil"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"strings"
 )
 
 type TxOutput struct {
-	Address string
-	TxHash  string
+	Address [25]byte
+	TxHash  [32]byte
 	Index   int
 	Output  []byte
 }
@@ -19,17 +18,20 @@ func (o *TxOutput) GetPrefix() string {
 }
 
 func (o *TxOutput) GetUid() []byte {
-	return []byte(fmt.Sprintf("%s-%s-%d", o.Address, o.TxHash, o.Index))
+	return jutil.CombineBytes(
+		o.Address[:],
+		o.TxHash[:],
+		jutil.GetIntData(o.Index),
+	)
 }
 
 func (o *TxOutput) SetUid(b []byte) {
-	parts := strings.Split(string(b), "-")
-	if len(parts) != 3 {
+	if len(b) != 61 {
 		return
 	}
-	o.Address = parts[0]
-	o.TxHash = parts[1]
-	o.Index = jutil.GetIntFromString(parts[2])
+	copy(o.Address[:], b[:25])
+	copy(o.TxHash[:], b[25:57])
+	o.Index = jutil.GetInt(b[57:])
 }
 
 func (o *TxOutput) Serialize() []byte {
@@ -40,12 +42,13 @@ func (o *TxOutput) Deserialize(d []byte) {
 	o.Output = d
 }
 
-func GetTxOutputs(address string) ([]*TxOutput, error) {
+func GetTxOutputs(address [25]byte) ([]*TxOutput, error) {
 	db, err := GetDb()
 	if err != nil {
 		return nil, fmt.Errorf("error getting database handler for get tx outputs; %w", err)
 	}
-	iter := db.NewIterator(util.BytesPrefix([]byte(fmt.Sprintf("%s-%s-", PrefixTxOutput, address))), nil)
+	iterKey := jutil.CombineBytes([]byte(PrefixTxOutput), []byte{Spacer}, address[:])
+	iter := db.NewIterator(util.BytesPrefix(iterKey), nil)
 	defer iter.Release()
 	var txOutputs []*TxOutput
 	for iter.Next() {
