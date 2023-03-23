@@ -26,6 +26,7 @@ func GetCommand() *cobra.Command {
 		checkSavedTweetCmd,
 		fixSavedTweetCmd,
 		migrateCmd,
+		rebroadcastCmd,
 	)
 	return maintCmd
 }
