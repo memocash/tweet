@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/dghubble/go-twitter/twitter"
 	"github.com/jchavannes/btcd/chaincfg/chainhash"
 	"github.com/jchavannes/btcd/txscript"
 	"github.com/jchavannes/jgo/jerr"
@@ -68,11 +69,16 @@ func (s *SaveTx) HandleRequestMainBot() error {
 			return jerr.Get("error handling withdraw save tx", err)
 		}
 	default:
-		fmt.Printf("Invalid command: %s\n.", s.Message)
-		errMsg := "Invalid command. Please use the following format: CREATE <twitterName> or WITHDRAW <twitterName>"
-		if err := refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, errMsg); err != nil {
-			return jerr.Get("error refunding", err)
+		if s.Message != "" {
+			fmt.Printf("Invalid command: %s\n.", s.Message)
+			errMsg := "Invalid command. Please use the following format: CREATE <twitterName> or WITHDRAW <twitterName>"
+			if err := refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, errMsg); err != nil {
+				return jerr.Get("error refunding", err)
+			}
 		}
+	}
+	if err := s.Bot.SafeUpdate(); err != nil {
+		return jerr.Get("error updating bot", err)
 	}
 	return nil
 }
@@ -146,7 +152,7 @@ func (s *SaveTx) HandleRequestSubBot() error {
 		if botStream.Wallet.Address.GetEncoded() == address {
 			stream := config.Stream{
 				Key:    botStream.Key,
-				Name:   botStream.Name,
+				UserID: botStream.UserID,
 				Sender: botStream.Sender,
 				Wallet: botStream.Wallet,
 			}
@@ -157,14 +163,13 @@ func (s *SaveTx) HandleRequestSubBot() error {
 	if matchedStream == nil {
 		return nil
 	}
-
-	flag, err := db.GetFlag(matchedStream.Sender, matchedStream.Name)
+	flag, err := db.GetFlag(wallet.GetAddressFromString(matchedStream.Sender).GetAddr(), matchedStream.UserID)
 	if err != nil || flag == nil {
 		return jerr.Get("error getting flag", err)
 	}
 	if flag.Flags.CatchUp {
 		accountKey := obj.AccountKey{
-			Account: matchedStream.Name,
+			UserID:  matchedStream.UserID,
 			Key:     matchedStream.Wallet.Key,
 			Address: matchedStream.Wallet.Address,
 		}
@@ -174,10 +179,9 @@ func (s *SaveTx) HandleRequestSubBot() error {
 		if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 			return jerr.Get("error getting skipped tweets", err)
 		}
-		err = s.Bot.SafeUpdate()
-		if err != nil {
-			return jerr.Get("error updating stream", err)
-		}
+	}
+	if err := s.Bot.SafeUpdate(); err != nil {
+		return jerr.Get("error updating bot", err)
 	}
 	return nil
 }
@@ -200,6 +204,19 @@ func (s *SaveTx) HandleCreate() error {
 	twitterName := splitMessage[1]
 	if twitterName[0] == '@' {
 		twitterName = twitterName[1:]
+	}
+	//check if the twitter account exists, if so get the user id
+	twitterExists := false
+	twitterAccount, _, err := s.Bot.TweetClient.Users.Show(&twitter.UserShowParams{ScreenName: twitterName})
+	if err == nil {
+		twitterExists = true
+	}
+	if !twitterExists {
+		err := refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, "Twitter account does not exist")
+		if err != nil {
+			return jerr.Get("error refunding", err)
+		}
+		return nil
 	}
 	//check if --history is in the message
 	history := false
@@ -233,13 +250,13 @@ func (s *SaveTx) HandleCreate() error {
 		return nil
 	}
 	if err := db.Save([]db.ObjectI{&db.Flag{
-		Address:     s.SenderAddress,
-		TwitterName: twitterName,
-		Flags:       flags,
+		Address: wallet.GetAddressFromString(s.SenderAddress).GetAddr(),
+		UserID:  twitterAccount.ID,
+		Flags:   flags,
 	}}); err != nil {
 		return jerr.Get("error saving flags to db", err)
 	}
-	accountKeyPointer, wlt, err := createBotStream(s.Bot, twitterName, s.SenderAddress, s.Tx, s.CoinIndex)
+	accountKeyPointer, wlt, err := createBotStream(s.Bot, twitterAccount, s.SenderAddress, s.Tx, s.CoinIndex)
 	if err != nil {
 		return jerr.Get("error creating bot", err)
 	}
@@ -251,10 +268,11 @@ func (s *SaveTx) HandleCreate() error {
 			if err = tweets.GetSkippedTweets(accountKey, wlt, client, flags, historyNum, true); err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 				return jerr.Get("error getting skipped tweets on bot save tx", err)
 			}
-
-		}
-		if err = s.Bot.SafeUpdate(); err != nil {
-			return jerr.Get("error updating stream", err)
+		} else if flags.CatchUp {
+			client := tweets.Connect()
+			if err = tweets.GetSkippedTweets(accountKey, wlt, client, flags, 100, false); err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
+				return jerr.Get("error getting skipped tweets on bot save tx", err)
+			}
 		}
 	} else {
 		if s.Bot.Verbose {
@@ -270,12 +288,24 @@ func (s *SaveTx) HandleWithdraw() error {
 	if twitterName[0] == '@' {
 		twitterName = twitterName[1:]
 	}
-	addressKey, err := db.GetAddressKey(s.SenderAddress, twitterName)
+	twitterExists := false
+	twitterAccount, _, err := s.Bot.TweetClient.Users.Show(&twitter.UserShowParams{ScreenName: twitterName})
+	if err == nil {
+		twitterExists = true
+	}
+	if !twitterExists {
+		err := refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, "Twitter account does not exist")
+		if err != nil {
+			return jerr.Get("error refunding", err)
+		}
+		return nil
+	}
+	addressKey, err := db.GetAddressKey(wallet.GetAddressFromString(s.SenderAddress).GetAddr(), twitterAccount.ID)
 	if err != nil {
 		if !errors.Is(err, leveldb.ErrNotFound) {
-			return jerr.Get("error getting linked-"+s.SenderAddress+"-"+twitterName, err)
+			return jerr.Get("error getting linked-"+s.SenderAddress+"-"+twitterAccount.IDStr, err)
 		}
-		errMsg := "No linked address found for " + s.SenderAddress + "-" + twitterName
+		errMsg := "No linked address found for " + s.SenderAddress + "-" + twitterAccount.IDStr
 		err = refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, errMsg)
 		if err != nil {
 			return jerr.Get("error refunding no linked address key found", err)

@@ -15,12 +15,13 @@ import (
 	"golang.org/x/oauth2/clientcredentials"
 	"log"
 	"os"
+	"strconv"
 )
 
-func GetAllTweets(screenName string, client *twitter.Client) (int, error) {
+func GetAllTweets(userId int64, client *twitter.Client) (int, error) {
 	var numTweets = 0
 	for {
-		tweets, err := getOldTweets(screenName, client)
+		tweets, err := getOldTweets(userId, client)
 		if err != nil {
 			return numTweets, jerr.Get("error getting old tweets", err)
 		}
@@ -31,14 +32,14 @@ func GetAllTweets(screenName string, client *twitter.Client) (int, error) {
 	}
 }
 
-func getOldTweets(screenName string, client *twitter.Client) ([]obj.TweetTx, error) {
+func getOldTweets(userId int64, client *twitter.Client) ([]obj.TweetTx, error) {
 	excludeReplies := false
 	var userTimelineParams = &twitter.UserTimelineParams{
-		ScreenName:     screenName,
+		UserID:         userId,
 		ExcludeReplies: &excludeReplies,
 		Count:          100,
 	}
-	recentTweetTx, err := db.GetOldestTweetTx(screenName)
+	recentTweetTx, err := db.GetOldestTweetTx(userId)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		return nil, jerr.Get("error getting oldest tweet tx", err)
 	}
@@ -55,11 +56,11 @@ func getOldTweets(screenName string, client *twitter.Client) ([]obj.TweetTx, err
 func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, numTweets int, newBot bool) ([]*db.TweetTx, error) {
 	excludeReplies := false
 	var userTimelineParams = &twitter.UserTimelineParams{
-		ScreenName:     accountKey.Account,
+		UserID:         accountKey.UserID,
 		ExcludeReplies: &excludeReplies,
 		Count:          numTweets,
 	}
-	recentTweetTx, err := db.GetRecentTweetTx(accountKey.Account)
+	recentTweetTx, err := db.GetRecentTweetTx(accountKey.UserID)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		return nil, jerr.Get("error getting recent tweet tx", err)
 	}
@@ -73,7 +74,7 @@ func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, numTweets i
 	if err != nil {
 		return nil, jerr.Get("error getting new tweets from twitter", err)
 	}
-	recentSavedTweetTx, err := db.GetRecentSavedAddressTweet(accountKey.Address.GetEncoded(), accountKey.Account)
+	recentSavedTweetTx, err := db.GetRecentSavedAddressTweet(accountKey.Address.GetAddr(), accountKey.UserID)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		return nil, jerr.Get("error getting recent saved address tweet", err)
 	}
@@ -83,7 +84,7 @@ func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, numTweets i
 	} else {
 		recentTweetId = recentSavedTweetTx.TweetId
 	}
-	tweetTxs, err := db.GetTweetTxs(accountKey.Account, recentTweetId, numTweets)
+	tweetTxs, err := db.GetTweetTxs(accountKey.UserID, recentTweetId, numTweets)
 	if err != nil {
 		return nil, jerr.Get("error getting tweet txs", err)
 	}
@@ -91,8 +92,8 @@ func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, numTweets i
 }
 
 func GetAndSaveTwitterTweets(client *twitter.Client, params *twitter.UserTimelineParams) ([]obj.TweetTx, error) {
-	if params.ScreenName == "" {
-		return nil, jerr.New("screen name is required")
+	if params.UserID == 0 {
+		return nil, jerr.New("userID is required")
 	}
 	tweets, _, err := client.Timelines.UserTimeline(params)
 	if err != nil {
@@ -106,9 +107,9 @@ func GetAndSaveTwitterTweets(client *twitter.Client, params *twitter.UserTimelin
 			return nil, jerr.Get("error marshaling tweet tx for saving twitter tweets", err)
 		}
 		dbTweetTxs[i] = &db.TweetTx{
-			ScreenName: params.ScreenName,
-			TweetId:    tweets[i].ID,
-			Tx:         tweetTxJson,
+			UserID:  params.UserID,
+			TweetId: tweets[i].ID,
+			Tx:      tweetTxJson,
 		}
 	}
 	if err := db.Save(dbTweetTxs); err != nil {
@@ -118,7 +119,7 @@ func GetAndSaveTwitterTweets(client *twitter.Client, params *twitter.UserTimelin
 }
 
 func getNewTweetsLocal(accountKey obj.AccountKey, numTweets int) ([]obj.TweetTx, error) {
-	file := fmt.Sprintf("tweets-%s.json", accountKey.Account)
+	file := fmt.Sprintf("tweets-%s.json", strconv.FormatInt(accountKey.UserID, 10))
 	f, err := os.Open(file)
 	if err != nil {
 		return nil, jerr.Get("error opening file for local storage of tweets", err)
@@ -138,9 +139,9 @@ func getNewTweetsLocal(accountKey obj.AccountKey, numTweets int) ([]obj.TweetTx,
 			return nil, jerr.Get("error marshaling tweet tx for saving twitter tweets local", err)
 		}
 		dbTweetTxs[i] = &db.TweetTx{
-			ScreenName: accountKey.Account,
-			TweetId:    tweetTxs[i].Tweet.ID,
-			Tx:         tweetTxJson,
+			UserID:  accountKey.UserID,
+			TweetId: tweetTxs[i].Tweet.ID,
+			Tx:      tweetTxJson,
 		}
 	}
 	if err := db.Save(dbTweetTxs); err != nil {
@@ -165,12 +166,8 @@ func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, client *twi
 			tweetID = tweetTx.TweetId
 		}
 	}
-	totalSaved := 0
 	for {
-		if totalSaved >= numTweets {
-			break
-		}
-		savedAddressTweet, err := db.GetSavedAddressTweet(accountKey.Address.GetEncoded(), accountKey.Account, tweetID)
+		savedAddressTweet, err := db.GetSavedAddressTweet(accountKey.Address.GetAddr(), accountKey.UserID, tweetID)
 		if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 			return jerr.Get("error getting saved address tweet for get skipped", err)
 		}
@@ -184,7 +181,6 @@ func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, client *twi
 		if numSaved == 0 {
 			break
 		}
-		totalSaved += numSaved
 	}
 	return nil
 }

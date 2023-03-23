@@ -22,11 +22,14 @@ func (g *InputGetter) SetPkHashesToUse([][]byte) {
 }
 
 func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
-	if g.reset && len(g.UTXOs) > 0 {
-		jlog.Logf("Using existing UTXOS: %d\n", len(g.UTXOs))
+	if g.reset {
 		g.reset = false
-		return g.UTXOs, nil
+		if len(g.UTXOs) > 0 {
+			jlog.Logf("Using existing UTXOS: %d\n", len(g.UTXOs))
+			return g.UTXOs, nil
+		}
 	}
+	println("Getting utxos from database...")
 	client := lib.NewClient(graph.ServerUrlHttp, &Database{})
 	address := g.Address.GetAddr()
 	outputs, err := client.GetUtxos(address)

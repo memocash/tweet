@@ -10,10 +10,12 @@ import (
 	"github.com/fallenstedt/twitter-stream/token_generator"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jlog"
+	wallet2 "github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/memocash/tweet/tweets/save"
+	"github.com/memocash/tweet/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
 	"regexp"
 	"strconv"
@@ -60,12 +62,12 @@ func (s *Stream) FilterAccount(streamConfigs []config.Stream) error {
 	var res *rules.TwitterRuleResponse
 	var err error
 	//remove duplicate names from stream configs
-	uniqueNames := make(map[string]bool)
+	uniqueIds := make(map[string]bool)
 	for _, streamConfig := range streamConfigs {
-		uniqueNames[streamConfig.Name] = true
+		uniqueIds[strconv.FormatInt(streamConfig.UserID, 10)] = true
 	}
-	for name := range uniqueNames {
-		streamRules := twitterstream.NewRuleBuilder().AddRule("from:"+name, "get tweets from this account").Build()
+	for userId := range uniqueIds {
+		streamRules := twitterstream.NewRuleBuilder().AddRule("from:"+userId, "get tweets from this account").Build()
 		res, err = s.Api.Rules.Create(streamRules, false) // dryRun is set to false.
 		if err != nil {
 			return jerr.Get("error creating twitter API rules", err)
@@ -107,7 +109,7 @@ func (s *Stream) ListenForNewTweets(streamConfigs []config.Stream) error {
 		return jerr.Get("error twitter stream reset rules", err)
 	}
 	for _, streamConfig := range streamConfigs {
-		jlog.Logf("Adding stream config: %s %s\n", streamConfig.Sender, streamConfig.Name)
+		jlog.Logf("Adding stream config: %s %s\n", streamConfig.Sender, streamConfig.UserID)
 	}
 	if err := s.FilterAccount(streamConfigs); err != nil {
 		return jerr.Get("error twitter stream filter account", err)
@@ -194,15 +196,16 @@ func (s *Stream) ListenForNewTweets(streamConfigs []config.Stream) error {
 		//call streamtweet
 		//based on the stream config, get the right address to send the tweet to
 		for _, conf := range streamConfigs {
-			if conf.Name == tweetObject.User.ScreenName {
+			if conf.UserID == tweetObject.User.ID {
 				jlog.Logf("sending tweet to key: %s\n", conf.Key)
-				twitterAccountWallet := obj.GetAccountKeyFromArgs([]string{conf.Key, conf.Name})
-				flag, err := db.GetFlag(conf.Sender, conf.Name)
+				twitterAccountWallet := obj.GetAccountKeyFromArgs([]string{conf.Key, strconv.FormatInt(conf.UserID, 10)})
+				flag, err := db.GetFlag(wallet2.GetAddressFromString(conf.Sender).GetAddr(), conf.UserID)
 				if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 					return jerr.Get("error getting flags from db", err)
 				} else if errors.Is(err, leveldb.ErrNotFound) {
 					continue
 				}
+				conf.Wallet = wallet.NewWallet(conf.Wallet.Address, conf.Wallet.Key)
 				if err := save.Tweet(conf.Wallet, twitterAccountWallet.GetAddress(), tweetTx, flag.Flags); err != nil {
 					return jerr.Get("error streaming tweet in stream", err)
 				}

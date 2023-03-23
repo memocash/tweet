@@ -1,7 +1,7 @@
 package db
 
 type Block struct {
-	BlockHash string
+	BlockHash [32]byte
 	Block     []byte
 }
 
@@ -10,11 +10,11 @@ func (b *Block) GetPrefix() string {
 }
 
 func (b *Block) GetUid() []byte {
-	return []byte(b.BlockHash)
+	return b.BlockHash[:]
 }
 
 func (b *Block) SetUid(u []byte) {
-	b.BlockHash = string(u)
+	copy(b.BlockHash[:], u[:32])
 }
 
 func (b *Block) Serialize() []byte {

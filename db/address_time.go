@@ -7,7 +7,7 @@ import (
 )
 
 type AddressWalletTime struct {
-	Address string
+	Address [25]byte
 	Time    time.Time
 }
 
@@ -16,11 +16,14 @@ func (t *AddressWalletTime) GetPrefix() string {
 }
 
 func (t *AddressWalletTime) GetUid() []byte {
-	return []byte(t.Address)
+	return t.Address[:]
 }
 
 func (t *AddressWalletTime) SetUid(b []byte) {
-	t.Address = string(b)
+	if len(b) != 25 {
+		return
+	}
+	copy(t.Address[:], b[:25])
 }
 
 func (t *AddressWalletTime) Serialize() []byte {
@@ -31,7 +34,7 @@ func (t *AddressWalletTime) Deserialize(d []byte) {
 	t.Time = jutil.GetByteTime(d)
 }
 
-func GetAddressTime(address string) (*AddressWalletTime, error) {
+func GetAddressTime(address [25]byte) (*AddressWalletTime, error) {
 	var addressTime = &AddressWalletTime{Address: address}
 	if err := GetSpecificItem(addressTime); err != nil {
 		return nil, fmt.Errorf("error getting address wallet time; %w", err)

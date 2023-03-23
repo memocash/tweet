@@ -5,6 +5,7 @@ import (
 	"github.com/memocash/tweet/bot/info"
 	"github.com/spf13/cobra"
 	"log"
+	"strconv"
 )
 
 var infoCmd = &cobra.Command{
@@ -34,8 +35,11 @@ var infoCmd = &cobra.Command{
 			if err != nil {
 				log.Fatalf("error getting address; %v", err)
 			}
-			twittername := args[2]
-			if err := info.Profile(*senderAdder, twittername); err != nil {
+			userId, err := strconv.ParseInt(args[2], 10, 64)
+			if err != nil {
+				log.Fatalf("error parsing userId; %v", err)
+			}
+			if err := info.Profile(*senderAdder, userId); err != nil {
 				log.Fatalf("error info profile; %v", err)
 			}
 		default:

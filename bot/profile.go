@@ -22,18 +22,18 @@ func updateProfiles(botStreams []config.Stream, b *Bot) error {
 		}
 		streamAddress := streamKey.GetAddress()
 		newWallet := tweetWallet.NewWallet(streamAddress, streamKey)
-		err = updateProfile(b, newWallet, stream.Name, stream.Sender)
+		err = updateProfile(b, newWallet, stream.UserID, stream.Sender)
 		time.Sleep(1 * time.Second)
 	}
 	return nil
 }
 
-func updateProfile(b *Bot, newWallet tweetWallet.Wallet, twitterName string, senderAddress string) error {
-	profile, err := tweets.GetProfile(twitterName, b.TweetClient)
+func updateProfile(b *Bot, newWallet tweetWallet.Wallet, userId int64, senderAddress string) error {
+	profile, err := tweets.GetProfile(userId, b.TweetClient)
 	if err != nil {
 		return jerr.Get("fatal error getting profile", err)
 	}
-	existingDbProfile, err := db.GetProfile(senderAddress, twitterName)
+	existingDbProfile, err := db.GetProfile(wallet.GetAddressFromString(senderAddress).GetAddr(), userId)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		return jerr.Get("error getting profile from database", err)
 	}
@@ -82,14 +82,14 @@ func updateProfile(b *Bot, newWallet tweetWallet.Wallet, twitterName string, sen
 		return jerr.Get("error marshalling profile", err)
 	}
 	if err := db.Save([]db.ObjectI{&db.Profile{
-		Address:     senderAddress,
-		TwitterName: twitterName,
-		Profile:     profileBytes,
+		Address: wallet.GetAddressFromString(senderAddress).GetAddr(),
+		UserID:  userId,
+		Profile: profileBytes,
 	}}); err != nil {
 		return jerr.Get("error saving profile to database", err)
 	}
 	if b.Verbose {
-		jlog.Logf("checked for profile updates: %s (%s)", twitterName, senderAddress)
+		jlog.Logf("checked for profile updates: %s (%s)", profile.Name, senderAddress)
 	}
 	return nil
 }

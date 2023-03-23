@@ -4,13 +4,12 @@ import (
 	"fmt"
 	"github.com/jchavannes/jgo/jutil"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"strings"
 )
 
 type TweetTx struct {
-	ScreenName string
-	TweetId    int64
-	Tx         []byte
+	UserID  int64
+	TweetId int64
+	Tx      []byte
 }
 
 func (t *TweetTx) GetPrefix() string {
@@ -18,16 +17,18 @@ func (t *TweetTx) GetPrefix() string {
 }
 
 func (t *TweetTx) GetUid() []byte {
-	return []byte(fmt.Sprintf("%s-%019d", t.ScreenName, t.TweetId))
+	return jutil.CombineBytes(
+		jutil.GetInt64DataBig(t.UserID),
+		jutil.GetInt64DataBig(t.TweetId),
+	)
 }
 
 func (t *TweetTx) SetUid(b []byte) {
-	parts := strings.Split(string(b), "-")
-	if len(parts) != 2 {
+	if len(b) != 16 {
 		return
 	}
-	t.ScreenName = parts[0]
-	t.TweetId = jutil.GetInt64FromString(strings.TrimLeft(parts[1], "0"))
+	t.UserID = jutil.GetInt64Big(b[:8])
+	t.TweetId = jutil.GetInt64Big(b[8:])
 }
 
 func (t *TweetTx) Serialize() []byte {
@@ -38,14 +39,15 @@ func (t *TweetTx) Deserialize(d []byte) {
 	t.Tx = d
 }
 
-func GetTweetTxs(screenName string, startTweetId int64, max int) ([]*TweetTx, error) {
+func GetTweetTxs(userId int64, startTweetId int64, max int) ([]*TweetTx, error) {
 	db, err := GetDb()
 	if err != nil {
 		return nil, fmt.Errorf("error getting database handler for get tweet txs; %w", err)
 	}
-	iter := db.NewIterator(util.BytesPrefix([]byte(fmt.Sprintf("%s-%s-", PrefixTweetTx, screenName))), nil)
+	iterKey := jutil.CombineBytes([]byte(PrefixTweetTx), []byte{Spacer}, jutil.GetInt64DataBig(userId))
+	iter := db.NewIterator(util.BytesPrefix(iterKey), nil)
 	defer iter.Release()
-	startUid := []byte(fmt.Sprintf("%s-%s-%019d", PrefixTweetTx, screenName, startTweetId))
+	startUid := jutil.CombineBytes(iterKey, jutil.GetInt64DataBig(startTweetId))
 	var tweetTxs []*TweetTx
 	for firstAndOk := iter.Seek(startUid); firstAndOk || iter.Next(); firstAndOk = false {
 		var tweetTx = new(TweetTx)
@@ -61,17 +63,17 @@ func GetTweetTxs(screenName string, startTweetId int64, max int) ([]*TweetTx, er
 	return tweetTxs, nil
 }
 
-func GetRecentTweetTx(screenName string) (*TweetTx, error) {
+func GetRecentTweetTx(userId int64) (*TweetTx, error) {
 	var tweetTx = new(TweetTx)
-	if err := GetLastItem(tweetTx, []byte(screenName)); err != nil {
+	if err := GetLastItem(tweetTx, jutil.GetInt64DataBig(userId)); err != nil {
 		return nil, fmt.Errorf("error getting recent tweet tx item; %w", err)
 	}
 	return tweetTx, nil
 }
 
-func GetOldestTweetTx(screenName string) (*TweetTx, error) {
+func GetOldestTweetTx(userId int64) (*TweetTx, error) {
 	var tweetTx = new(TweetTx)
-	if err := GetFirstItem(tweetTx, []byte(screenName)); err != nil {
+	if err := GetFirstItem(tweetTx, jutil.GetInt64DataBig(userId)); err != nil {
 		return nil, fmt.Errorf("error getting oldest tweet tx item; %w", err)
 	}
 	return tweetTx, nil
@@ -82,7 +84,7 @@ func GetAllTweetTx() ([]*TweetTx, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting database handler for get all tweet txs; %w", err)
 	}
-	iter := db.NewIterator(util.BytesPrefix([]byte(fmt.Sprintf("%s-", PrefixTweetTx))), nil)
+	iter := db.NewIterator(util.BytesPrefix([]byte(fmt.Sprintf("%s", PrefixTweetTx))), nil)
 	defer iter.Release()
 	var tweetTxs []*TweetTx
 	for iter.Next() {

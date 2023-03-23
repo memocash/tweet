@@ -8,6 +8,7 @@ import (
 	"github.com/memocash/tweet/tweets"
 	tweetWallet "github.com/memocash/tweet/wallet"
 	"net/http"
+	"strconv"
 )
 
 type Handler struct {
@@ -47,9 +48,10 @@ var handlerProfile = Handler{
 			return
 		}
 		sender := request.FormValue("sender")
-		twittername := request.FormValue("twittername")
-		writer.Write([]byte(fmt.Sprintf("Searching for profile-%s-%s\n", sender, twittername)))
-		dbProfile, err := db.GetProfile(sender, twittername)
+		userIdstr := request.FormValue("userId")
+		writer.Write([]byte(fmt.Sprintf("Searching for profile-%s-%s\n", sender, userIdstr)))
+		userId, err := strconv.ParseInt(userIdstr, 10, 64)
+		dbProfile, err := db.GetProfile(wallet.GetAddressFromString(sender).GetAddr(), userId)
 		if err != nil {
 			writer.Write([]byte(fmt.Sprintf("error getting profile; %v", err)))
 			return

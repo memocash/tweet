@@ -4,14 +4,13 @@ import (
 	"fmt"
 	"github.com/jchavannes/jgo/jutil"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"strings"
 )
 
 type SavedAddressTweet struct {
-	Address    string
-	ScreenName string
-	TweetId    int64
-	TxHash     []byte
+	Address [25]byte
+	UserID  int64
+	TweetId int64
+	TxHash  []byte
 }
 
 func (t *SavedAddressTweet) GetPrefix() string {
@@ -19,17 +18,21 @@ func (t *SavedAddressTweet) GetPrefix() string {
 }
 
 func (t *SavedAddressTweet) GetUid() []byte {
-	return []byte(fmt.Sprintf("%s-%s-%019d", t.Address, t.ScreenName, t.TweetId))
+	return jutil.CombineBytes(
+		t.Address[:],
+		jutil.GetInt64DataBig(t.UserID),
+		jutil.GetInt64DataBig(t.TweetId),
+	)
 }
 
 func (t *SavedAddressTweet) SetUid(b []byte) {
-	parts := strings.Split(string(b), "-")
-	if len(parts) != 3 {
+	if len(b) != 41 {
 		return
 	}
-	t.Address = parts[0]
-	t.ScreenName = parts[1]
-	t.TweetId = jutil.GetInt64FromString(strings.TrimLeft(parts[2], "0"))
+	copy(t.Address[:], b[:25])
+	t.UserID = jutil.GetInt64Big(b[25:33])
+	t.TweetId = jutil.GetInt64Big(b[33:])
+
 }
 
 func (t *SavedAddressTweet) Serialize() []byte {
@@ -40,27 +43,20 @@ func (t *SavedAddressTweet) Deserialize(d []byte) {
 	t.TxHash = d
 }
 
-func GetRecentSavedAddressTweet(address, screenName string) (*SavedAddressTweet, error) {
+func GetRecentSavedAddressTweet(address [25]byte, userId int64) (*SavedAddressTweet, error) {
 	var savedAddressTweet = new(SavedAddressTweet)
-	if err := GetLastItem(savedAddressTweet, []byte(fmt.Sprintf("%s-%s", address, screenName))); err != nil {
+	uid := jutil.CombineBytes(address[:], jutil.GetInt64DataBig(userId))
+	if err := GetLastItem(savedAddressTweet, uid); err != nil {
 		return nil, fmt.Errorf("error getting recent saved address item; %w", err)
 	}
 	return savedAddressTweet, nil
 }
 
-func GetNumSavedAddressTweet(address, screenName string) (int, error) {
-	count, err := GetNum([]byte(fmt.Sprintf("%s-%s-%s-", PrefixSavedAddressTweet, address, screenName)))
-	if err != nil {
-		return 0, fmt.Errorf("error getting num saved address tweets; %w", err)
-	}
-	return count, nil
-}
-
-func GetSavedAddressTweet(address, screenName string, tweetId int64) (*SavedAddressTweet, error) {
+func GetSavedAddressTweet(address [25]byte, userId int64, tweetId int64) (*SavedAddressTweet, error) {
 	var savedAddressTweet = &SavedAddressTweet{
-		Address:    address,
-		ScreenName: screenName,
-		TweetId:    tweetId,
+		Address: address,
+		UserID:  userId,
+		TweetId: tweetId,
 	}
 	if err := GetSpecificItem(savedAddressTweet); err != nil {
 		return nil, fmt.Errorf("error getting saved address tweet; %w", err)
@@ -73,7 +69,7 @@ func GetAllSavedAddressTweet(prefix []byte) ([]*SavedAddressTweet, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting database handler for get all saved address tweets; %w", err)
 	}
-	iterPrefix := []byte(fmt.Sprintf("%s-", PrefixSavedAddressTweet))
+	iterPrefix := []byte(fmt.Sprintf("%s", PrefixSavedAddressTweet))
 	if len(prefix) > 0 {
 		iterPrefix = append(iterPrefix, prefix...)
 	}

@@ -3,10 +3,14 @@ package maint
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/jchavannes/jgo/jutil"
+	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/spf13/cobra"
 	"log"
+	"strconv"
+	"strings"
 )
 
 var checkSavedTweetsCmd = &cobra.Command{
@@ -26,7 +30,7 @@ var checkSavedTweetsCmd = &cobra.Command{
 				log.Fatalf("fatal error unmarshalling tweet tx; %v", err)
 			}
 			if verbose {
-				log.Printf("screen name: %s, tweetId: %d\n", dbTweetTx.ScreenName, tweetTx.Tweet.ID)
+				log.Printf("userId: %s, tweetId: %d\n", dbTweetTx.UserID, tweetTx.Tweet.ID)
 			}
 		}
 		savedTweets, err := db.GetAllSavedAddressTweet(nil)
@@ -36,8 +40,8 @@ var checkSavedTweetsCmd = &cobra.Command{
 		log.Printf("count all saved address tweets: %d\n", len(savedTweets))
 		if verbose {
 			for _, savedTweet := range savedTweets {
-				log.Printf("address: %s, screen name: %s, tweetId: %d\n",
-					savedTweet.Address, savedTweet.ScreenName, savedTweet.TweetId)
+				log.Printf("address: %s, userId: %s, tweetId: %d\n",
+					savedTweet.Address, savedTweet.UserID, savedTweet.TweetId)
 			}
 		}
 	},
@@ -48,35 +52,38 @@ var checkSavedTweetCmd = &cobra.Command{
 	Short: "check-saved-tweet",
 	Run: func(c *cobra.Command, args []string) {
 		if len(args) < 2 {
-			log.Fatalf("need address and screen name")
+			log.Fatalf("need address and userId")
 		}
 		verbose, _ := c.Flags().GetBool(FlagVerbose)
 		address := args[0]
-		screenName := args[1]
-		screenNameTweetTxs, err := db.GetTweetTxs(screenName, 0, 0)
+		userId, err := strconv.ParseInt(args[1], 10, 64)
 		if err != nil {
-			log.Fatalf("fatal error getting address screen name saved address tweets; %v", err)
+			log.Fatalf("fatal error parsing userId; %v", err)
 		}
-		log.Printf("count screen name tweet txs: %d\n", len(screenNameTweetTxs))
-		for _, dbTweetTx := range screenNameTweetTxs {
+		userIdTweetTxs, err := db.GetTweetTxs(userId, 0, 0)
+		if err != nil {
+			log.Fatalf("fatal error getting address userId saved address tweets; %v", err)
+		}
+		log.Printf("count userId tweet txs: %d\n", len(userIdTweetTxs))
+		for _, dbTweetTx := range userIdTweetTxs {
 			tweetTx := obj.TweetTx{}
 			err := json.Unmarshal(dbTweetTx.Tx, &tweetTx)
 			if err != nil {
 				log.Fatalf("fatal error unmarshalling tweet tx; %v", err)
 			}
 			if verbose {
-				log.Printf("screen name: %s, tweetId: %d\n", dbTweetTx.ScreenName, tweetTx.Tweet.ID)
+				log.Printf("userId: %s, tweetId: %d\n", dbTweetTx.UserID, tweetTx.Tweet.ID)
 			}
 		}
-		savedTweets, err := db.GetAllSavedAddressTweet([]byte(fmt.Sprintf("%s-%s", address, screenName)))
+		savedTweets, err := db.GetAllSavedAddressTweet([]byte(fmt.Sprintf("%s%s", address, strconv.FormatInt(userId, 10))))
 		if err != nil {
-			log.Fatalf("fatal error getting address screen name saved address tweets; %v", err)
+			log.Fatalf("fatal error getting address userId saved address tweets; %v", err)
 		}
-		log.Printf("count address screen name saved address tweets: %d\n", len(savedTweets))
+		log.Printf("count address userId saved address tweets: %d\n", len(savedTweets))
 		if verbose {
 			for _, savedTweet := range savedTweets {
-				log.Printf("address: %s, screen name: %s, tweetId: %d\n",
-					savedTweet.Address, savedTweet.ScreenName, savedTweet.TweetId)
+				log.Printf("address: %s, userId: %s, tweetId: %d\n",
+					savedTweet.Address, savedTweet.UserID, savedTweet.TweetId)
 			}
 		}
 	},
@@ -87,26 +94,26 @@ var fixSavedTweetCmd = &cobra.Command{
 	Short: "fix-saved-tweet",
 	Run: func(c *cobra.Command, args []string) {
 		if len(args) < 2 {
-			log.Fatalf("need address and screen name")
+			log.Fatalf("need address and userId")
 		}
 		noDryRun, _ := c.Flags().GetBool(FlagNoDryRun)
 		address := args[0]
-		screenName := args[1]
+		userId := jutil.GetInt64FromString(strings.TrimLeft(args[1], "0"))
 		savedTweets, err := db.GetAllSavedAddressTweet(nil)
 		if err != nil {
 			log.Fatalf("fatal error getting all saved address tweets; %v", err)
 		}
 		for _, savedTweet := range savedTweets {
-			if len(savedTweet.Address) == len(address) || savedTweet.ScreenName != screenName {
+			if len(savedTweet.Address) == len(address) || savedTweet.UserID != userId {
 				continue
 			}
-			log.Printf("found bad saved tweet address: %s, screen name: %s, tweetId: %d\n",
-				savedTweet.Address, savedTweet.ScreenName, savedTweet.TweetId)
+			log.Printf("found bad saved tweet address: %s, userId: %s, tweetId: %d\n",
+				savedTweet.Address, savedTweet.UserID, savedTweet.TweetId)
 			if noDryRun {
 				if err := db.Delete([]db.ObjectI{savedTweet}); err != nil {
 					log.Fatalf("fatal error deleting bad saved tweet; %v", err)
 				}
-				savedTweet.Address = address
+				savedTweet.Address = wallet.GetAddressFromString(address).GetAddr()
 				if err := db.Save([]db.ObjectI{savedTweet}); err != nil {
 					log.Fatalf("fatal error saving fixed saved tweet; %v", err)
 				}

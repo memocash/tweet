@@ -13,10 +13,10 @@ type Profile struct {
 	ID          string
 }
 
-func GetProfile(screenName string, client *twitter.Client) (*Profile, error) {
+func GetProfile(userId int64, client *twitter.Client) (*Profile, error) {
 	// Query to Twitter API for profile info
 	// user show
-	userShowParams := &twitter.UserShowParams{ScreenName: screenName}
+	userShowParams := &twitter.UserShowParams{UserID: userId}
 	user, _, err := client.Users.Show(userShowParams)
 	if err != nil {
 		return nil, jerr.Get("error getting profile from twitter api", err)

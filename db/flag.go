@@ -3,7 +3,7 @@ package db
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
+	"github.com/jchavannes/jgo/jutil"
 )
 
 type Flags struct {
@@ -21,9 +21,9 @@ func GetDefaultFlags() Flags {
 }
 
 type Flag struct {
-	Address     string
-	TwitterName string
-	Flags       Flags
+	Address [25]byte
+	UserID  int64
+	Flags   Flags
 }
 
 func (f *Flag) GetPrefix() string {
@@ -31,16 +31,18 @@ func (f *Flag) GetPrefix() string {
 }
 
 func (f *Flag) GetUid() []byte {
-	return []byte(fmt.Sprintf("%s-%s", f.Address, f.TwitterName))
+	return jutil.CombineBytes(
+		f.Address[:],
+		jutil.GetInt64DataBig(f.UserID),
+	)
 }
 
 func (f *Flag) SetUid(b []byte) {
-	parts := strings.Split(string(b), "-")
-	if len(parts) != 2 {
+	if len(b) != 33 {
 		return
 	}
-	f.Address = parts[0]
-	f.TwitterName = parts[1]
+	copy(f.Address[:], b[:25])
+	f.UserID = jutil.GetInt64Big(b[25:])
 }
 
 func (f *Flag) Serialize() []byte {
@@ -52,10 +54,10 @@ func (f *Flag) Deserialize(d []byte) {
 	json.Unmarshal(d, &f.Flags)
 }
 
-func GetFlag(address, twitterName string) (*Flag, error) {
+func GetFlag(address [25]byte, userId int64) (*Flag, error) {
 	var flag = &Flag{
-		Address:     address,
-		TwitterName: twitterName,
+		Address: address,
+		UserID:  userId,
 	}
 	if err := GetSpecificItem(flag); err != nil {
 		return nil, fmt.Errorf("error getting flag from db; %w", err)
