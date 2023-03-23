@@ -25,9 +25,12 @@ func Broadcast(raw []byte) error {
 	}
 	request.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: time.Second * 10}
-	_, err = client.Do(request)
+	resp, err := client.Do(request)
 	if err != nil {
 		return jerr.Get("error the HTTP request failed complete transaction", err)
+	}
+	if resp.StatusCode != 200 {
+		return jerr.New("error the HTTP request failed complete transaction, status code: " + resp.Status)
 	}
 	return nil
 }
