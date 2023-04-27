@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/dghubble/go-twitter/twitter"
 	"github.com/fallenstedt/twitter-stream"
 	"github.com/fallenstedt/twitter-stream/rules"
 	"github.com/fallenstedt/twitter-stream/token_generator"
@@ -16,6 +15,7 @@ import (
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/memocash/tweet/tweets/save"
 	"github.com/memocash/tweet/wallet"
+	"github.com/michimani/gotwi/resources"
 	"github.com/syndtr/goleveldb/leveldb"
 	"regexp"
 	"strconv"
@@ -133,7 +133,7 @@ func (s *Stream) ListenForNewTweets(streamConfigs []config.Stream) error {
 	if err := s.Api.Stream.StartStream(streamExpansions); err != nil {
 		return jerr.Get("error starting twitter stream", err)
 	}
-	tweetObject := twitter.Tweet{}
+	tweetObject := resources.Tweet{}
 	for tweet := range s.Api.Stream.GetMessages() {
 		if tweet.Err != nil {
 			if jerr.HasErrorPart(tweet.Err, "response body closed") {
@@ -177,16 +177,12 @@ func (s *Stream) ListenForNewTweets(streamConfigs []config.Stream) error {
 				tweetText += "\n" + media.URL
 			}
 		}
-		tweetObject = twitter.Tweet{
-			ID:        tweetID,
-			CreatedAt: result.Data.CreatedAt,
-			Text:      tweetText,
-			User: &twitter.User{
-				ID:         userID,
-				Name:       result.Includes.Users[0].Name,
-				ScreenName: result.Includes.Users[0].Username,
-			},
-			InReplyToStatusID: InReplyToStatusID,
+		tweetObject = resources.Tweet{
+			ID:             strconv.FormatInt(tweetID, 10),
+			CreatedAt:      result.Data.CreatedAt,
+			Text:           tweetText,
+			AuthorID:       userID,
+			ConversationID: InReplyToStatusID,
 		}
 		jlog.Logf("tweetText: %s\n", tweetText)
 		tweetTx := obj.TweetTx{

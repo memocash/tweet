@@ -2,8 +2,8 @@ package obj
 
 import (
 	"fmt"
-	"github.com/dghubble/go-twitter/twitter"
 	"github.com/jchavannes/jgo/jerr"
+	"github.com/michimani/gotwi/resources"
 )
 
 type TweetStreamData struct {
@@ -60,7 +60,7 @@ func CombineTweetStreamErrors(errs []TweetStreamError) error {
 }
 
 type TweetTx struct {
-	Tweet  *twitter.Tweet
+	Tweet  *resources.Tweet
 	TxHash []byte
 }
 
