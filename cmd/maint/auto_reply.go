@@ -35,6 +35,9 @@ var autoReplyCmd = &cobra.Command{
 			jerr.Get("fatal error generating encryption key", err).Fatal()
 		}
 		memoBot.Crypt = cryptBytes
+		if err := memoBot.ProcessMissedTxs(); err != nil {
+			jerr.Get("fatal error updating bot", err).Fatal()
+		}
 		var errorChan = make(chan error)
 		go func() {
 			err = memoBot.MaintenanceListen()
