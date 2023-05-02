@@ -30,9 +30,10 @@ type Bot struct {
 	Crypt       []byte
 	Timer       *time.Timer
 	Verbose     bool
+	Down        bool
 }
 
-func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey, tweetClient *twitter.Client, verbose bool) (*Bot, error) {
+func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey, tweetClient *twitter.Client, verbose bool, down bool) (*Bot, error) {
 	if len(addresses) == 0 {
 		return nil, jerr.New("error new bot, no addresses")
 	}
@@ -53,6 +54,7 @@ func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey
 		TweetClient: tweetClient,
 		ErrorChan:   make(chan error),
 		Verbose:     verbose,
+		Down:        down,
 	}, nil
 }
 
@@ -83,7 +85,12 @@ func (b *Bot) ProcessMissedTxs() error {
 	}
 	return nil
 }
-
+func (b *Bot) MaintenanceListen() error {
+	if err := graph.AddressListen([]string{b.Addr.String()}, b.SaveTx, b.ErrorChan); err != nil {
+		return jerr.Get("error listening to address on graphql", err)
+	}
+	return jerr.Get("error in listen", <-b.ErrorChan)
+}
 func (b *Bot) Listen() error {
 	jlog.Logf("Bot listening to address: %s\n", b.Addr.String())
 	err := b.SetAddresses()

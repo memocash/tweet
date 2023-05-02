@@ -1,4 +1,4 @@
-package bot
+package maint
 
 import (
 	"github.com/jchavannes/jgo/jerr"
@@ -6,15 +6,13 @@ import (
 	"github.com/memocash/tweet/bot"
 	"github.com/memocash/tweet/bot/info"
 	"github.com/memocash/tweet/config"
-	"github.com/memocash/tweet/tweets"
 	tweetWallet "github.com/memocash/tweet/wallet"
 	"github.com/spf13/cobra"
 )
 
-var runCmd = &cobra.Command{
-	Use:   "run",
-	Short: "run",
-	Long:  "Listens for new transactions on a memo account. Prints out each new transaction as it comes in. ",
+var autoReplyCmd = &cobra.Command{
+	Use:   "auto-reply",
+	Short: "auto-reply",
 	Run: func(c *cobra.Command, args []string) {
 		verbose, _ := c.Flags().GetBool(FlagVerbose)
 		botSeed := config.GetConfig().BotSeed
@@ -28,7 +26,7 @@ var runCmd = &cobra.Command{
 			jerr.Get("fatal error getting path", err).Fatal()
 		}
 		botAddress := botKey.GetPublicKey().GetAddress().GetEncoded()
-		memoBot, err := bot.NewBot(mnemonic, []string{botAddress}, *botKey, tweets.Connect(), verbose, false)
+		memoBot, err := bot.NewBot(mnemonic, []string{botAddress}, *botKey, nil, verbose, true)
 		if err != nil {
 			jerr.Get("fatal error creating new bot", err).Fatal()
 		}
@@ -37,13 +35,10 @@ var runCmd = &cobra.Command{
 			jerr.Get("fatal error generating encryption key", err).Fatal()
 		}
 		memoBot.Crypt = cryptBytes
-		if err := memoBot.ProcessMissedTxs(); err != nil {
-			jerr.Get("fatal error updating bot", err).Fatal()
-		}
 		var errorChan = make(chan error)
 		go func() {
-			err = memoBot.Listen()
-			errorChan <- jerr.Get("error listening for transactions", err)
+			err = memoBot.MaintenanceListen()
+			errorChan <- jerr.Get("error listening for transactions while under maintenance", err)
 		}()
 		go func() {
 			infoServer := info.NewServer()

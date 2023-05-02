@@ -60,6 +60,10 @@ func (s *SaveTx) Save(tx graph.Tx) error {
 }
 func (s *SaveTx) HandleRequestMainBot() error {
 	switch {
+	case s.Bot.Down:
+		if err := s.HandleDown(); err != nil {
+			return jerr.Get("error handling down bot message", err)
+		}
 	case regexp.MustCompile("^CREATE @?([a-zA-Z0-9_]{1,15})(( --history( [0-9]+)?)?( --nolink)?( --date)?( --no-catch-up)?)*$").MatchString(s.Message):
 		if err := s.HandleCreate(); err != nil {
 			return jerr.Get("error handling create save tx", err)
@@ -76,6 +80,9 @@ func (s *SaveTx) HandleRequestMainBot() error {
 				return jerr.Get("error refunding", err)
 			}
 		}
+	}
+	if s.Bot.Down {
+		return nil
 	}
 	if err := s.Bot.SafeUpdate(); err != nil {
 		return jerr.Get("error updating bot", err)
@@ -186,6 +193,14 @@ func (s *SaveTx) HandleRequestSubBot() error {
 	return nil
 }
 
+func (s *SaveTx) HandleDown() error {
+	err := refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, "Sorry, the bot is currently down for maintenance. Please try again later.")
+	if err != nil {
+		return jerr.Get("error refunding", err)
+	}
+	return nil
+
+}
 func (s *SaveTx) HandleCreate() error {
 	botRunningCount, err := db.GetBotRunningCount()
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
