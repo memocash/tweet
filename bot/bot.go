@@ -86,6 +86,7 @@ func (b *Bot) ProcessMissedTxs() error {
 	return nil
 }
 func (b *Bot) MaintenanceListen() error {
+	jlog.Logf("Bot listening to address: %s\n", b.Addr.String())
 	if err := graph.AddressListen([]string{b.Addr.String()}, b.SaveTx, b.ErrorChan); err != nil {
 		return jerr.Get("error listening to address on graphql", err)
 	}
