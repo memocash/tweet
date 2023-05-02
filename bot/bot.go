@@ -2,7 +2,6 @@ package bot
 
 import (
 	"errors"
-	"github.com/dghubble/go-twitter/twitter"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jlog"
 	"github.com/memocash/index/ref/bitcoin/tx/gen"
@@ -12,6 +11,7 @@ import (
 	"github.com/memocash/tweet/graph"
 	"github.com/memocash/tweet/tweets"
 	"github.com/memocash/tweet/tweets/obj"
+	"github.com/michimani/gotwi"
 	"github.com/syndtr/goleveldb/leveldb"
 	"sync"
 	"time"
@@ -22,7 +22,7 @@ type Bot struct {
 	Addresses   []string
 	Addr        wallet.Addr
 	Key         wallet.PrivateKey
-	TweetClient *twitter.Client
+	TweetClient *gotwi.Client
 	Stream      *tweets.Stream
 	ErrorChan   chan error
 	TxMutex     sync.Mutex
@@ -32,7 +32,7 @@ type Bot struct {
 	Verbose     bool
 }
 
-func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey, tweetClient *twitter.Client, verbose bool) (*Bot, error) {
+func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey, tweetClient *gotwi.Client, verbose bool) (*Bot, error) {
 	if len(addresses) == 0 {
 		return nil, jerr.New("error new bot, no addresses")
 	}

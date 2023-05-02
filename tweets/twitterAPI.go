@@ -1,6 +1,7 @@
 package tweets
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,15 +11,18 @@ import (
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/memocash/tweet/wallet"
+	"github.com/michimani/gotwi"
+	"github.com/michimani/gotwi/resources"
+	"github.com/michimani/gotwi/tweet/timeline"
+	"github.com/michimani/gotwi/tweet/timeline/types"
 	"github.com/syndtr/goleveldb/leveldb"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/clientcredentials"
 	"log"
 	"os"
 	"strconv"
+	"time"
 )
 
-func GetAllTweets(userId int64, client *twitter.Client) (int, error) {
+func GetAllTweets(userId int64, client *gotwi.Client) (int, error) {
 	var numTweets = 0
 	for {
 		tweets, err := getOldTweets(userId, client)
@@ -32,33 +36,29 @@ func GetAllTweets(userId int64, client *twitter.Client) (int, error) {
 	}
 }
 
-func getOldTweets(userId int64, client *twitter.Client) ([]obj.TweetTx, error) {
-	excludeReplies := false
-	var userTimelineParams = &twitter.UserTimelineParams{
-		UserID:         userId,
-		ExcludeReplies: &excludeReplies,
-		Count:          100,
+func getOldTweets(userId int64, client *gotwi.Client) ([]obj.TweetTx, error) {
+	var inputParams = &types.ListTweetsInput{
+		ID:         strconv.FormatInt(userId, 10),
+		MaxResults: types.ListMaxResults(100),
 	}
 	recentTweetTx, err := db.GetOldestTweetTx(userId)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		return nil, jerr.Get("error getting oldest tweet tx", err)
 	}
 	if recentTweetTx != nil {
-		userTimelineParams.MaxID = recentTweetTx.TweetId
+		inputParams.UntilID = strconv.FormatInt(recentTweetTx.TweetId, 10)
 	}
-	tweetTxs, err := GetAndSaveTwitterTweets(client, userTimelineParams)
+	tweetTxs, err := GetAndSaveTwitterTweets(client, inputParams)
 	if err != nil {
 		return nil, jerr.Get("error getting new tweets from twitter", err)
 	}
 	return tweetTxs, nil
 }
 
-func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, numTweets int, newBot bool) ([]*db.TweetTx, error) {
-	excludeReplies := false
-	var userTimelineParams = &twitter.UserTimelineParams{
-		UserID:         accountKey.UserID,
-		ExcludeReplies: &excludeReplies,
-		Count:          numTweets,
+func getNewTweets(accountKey obj.AccountKey, client *gotwi.Client, numTweets int, newBot bool) ([]*db.TweetTx, error) {
+	var inputParams = &types.ListTweetsInput{
+		ID:         strconv.FormatInt(accountKey.UserID, 10),
+		MaxResults: types.ListMaxResults(numTweets),
 	}
 	recentTweetTx, err := db.GetRecentTweetTx(accountKey.UserID)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
@@ -68,9 +68,9 @@ func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, numTweets i
 		return nil, nil
 	}
 	if recentTweetTx != nil {
-		userTimelineParams.SinceID = recentTweetTx.TweetId
+		inputParams.SinceID = strconv.FormatInt(recentTweetTx.TweetId, 10)
 	}
-	_, err = GetAndSaveTwitterTweets(client, userTimelineParams)
+	_, err = GetAndSaveTwitterTweets(client, inputParams)
 	if err != nil {
 		return nil, jerr.Get("error getting new tweets from twitter", err)
 	}
@@ -91,24 +91,25 @@ func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, numTweets i
 	return tweetTxs, nil
 }
 
-func GetAndSaveTwitterTweets(client *twitter.Client, params *twitter.UserTimelineParams) ([]obj.TweetTx, error) {
-	if params.UserID == 0 {
+func GetAndSaveTwitterTweets(client *gotwi.Client, params *types.ListTweetsInput) ([]obj.TweetTx, error) {
+	if params.ID == "" {
 		return nil, jerr.New("userID is required")
 	}
-	tweets, _, err := client.Timelines.UserTimeline(params)
+	tweets, err := timeline.ListTweets(context.Background(), client, params)
 	if err != nil {
 		return nil, jerr.Get("error getting old tweets from user timeline", err)
 	}
-	var tweetTxs = make([]obj.TweetTx, len(tweets))
-	var dbTweetTxs = make([]db.ObjectI, len(tweets))
-	for i := range tweets {
-		tweetTxJson, err := json.Marshal(obj.TweetTx{Tweet: &tweets[i], TxHash: nil})
+	var tweetTxs = make([]obj.TweetTx, len(tweets.Data))
+	var dbTweetTxs = make([]db.ObjectI, len(tweets.Data))
+	for i := range tweets.Data {
+		convertedTweet := convertToV1Tweet(tweets.Data[i])
+		tweetTxJson, err := json.Marshal(obj.TweetTx{Tweet: convertedTweet, TxHash: nil})
 		if err != nil {
 			return nil, jerr.Get("error marshaling tweet tx for saving twitter tweets", err)
 		}
 		dbTweetTxs[i] = &db.TweetTx{
-			UserID:  params.UserID,
-			TweetId: tweets[i].ID,
+			UserID:  convertedTweet.User.ID,
+			TweetId: convertedTweet.ID,
 			Tx:      tweetTxJson,
 		}
 	}
@@ -116,6 +117,45 @@ func GetAndSaveTwitterTweets(client *twitter.Client, params *twitter.UserTimelin
 		return nil, jerr.Get("error saving db tweet from twitter tweet", err)
 	}
 	return tweetTxs, nil
+}
+func convertToV1Tweet(tweet resources.Tweet) *twitter.Tweet {
+	tweetID, err := strconv.ParseInt(*tweet.ID, 10, 64)
+	if err != nil {
+		log.Fatalf("error converting tweet id to int: %s", err)
+	}
+	userID, err := strconv.ParseInt(*tweet.AuthorID, 10, 64)
+	if err != nil {
+		log.Fatalf("error converting user id to int: %s", err)
+	}
+	inReplyToStatusID, err := strconv.ParseInt(*tweet.ConversationID, 10, 64)
+	if err != nil {
+		log.Fatalf("error converting in reply to status id to int: %s", err)
+	}
+	var entities *twitter.Entities
+	var extendedEntity *twitter.ExtendedEntity
+	if tweet.Entities != nil {
+		//for each url in tweet.Entities.Urls, convert to twitter.MediaEntity
+		for _, url := range tweet.Entities.URLs {
+			mediaEntity := twitter.MediaEntity{
+				//might have to use different URL
+				MediaURL: *url.URL,
+			}
+			entities.Media = append(entities.Media, mediaEntity)
+			extendedEntity.Media = append(extendedEntity.Media, mediaEntity)
+		}
+	}
+	v1Tweet := &twitter.Tweet{
+		ID:                tweetID,
+		InReplyToStatusID: inReplyToStatusID,
+		Text:              *tweet.Text,
+		CreatedAt:         tweet.CreatedAt.Format(time.RubyDate),
+		User: &twitter.User{
+			ID: userID,
+		},
+		Entities:         entities,
+		ExtendedEntities: extendedEntity,
+	}
+	return v1Tweet
 }
 
 func getNewTweetsLocal(accountKey obj.AccountKey, numTweets int) ([]obj.TweetTx, error) {
@@ -150,7 +190,7 @@ func getNewTweetsLocal(accountKey obj.AccountKey, numTweets int) ([]obj.TweetTx,
 	return tweetTxs, nil
 }
 
-func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, client *twitter.Client, flags db.Flags, numTweets int, newBot bool) error {
+func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, client *gotwi.Client, flags db.Flags, numTweets int, newBot bool) error {
 	txList, err := getNewTweets(accountKey, client, numTweets, newBot)
 	//txList, err := getNewTweetsLocal(accountKey, db, numTweets)
 	if err != nil {
@@ -184,21 +224,18 @@ func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, client *twi
 	}
 	return nil
 }
-func Connect() *twitter.Client {
+func Connect() *gotwi.Client {
 	conf := config2.GetTwitterAPIConfig()
 	if !conf.IsSet() {
 		log.Fatal("Application Access Token required")
 	}
-	// oauth2 configures a client that uses app credentials to keep a fresh token
-	config := &clientcredentials.Config{
-		ClientID:     conf.ConsumerKey,
-		ClientSecret: conf.ConsumerSecret,
-		TokenURL:     "https://api.twitter.com/oauth2/token",
+	client, err := gotwi.NewClient(&gotwi.NewClientInput{
+		AuthenticationMethod: gotwi.AuthenMethodOAuth2BearerToken,
+		OAuthToken:           conf.ConsumerKey,
+		OAuthTokenSecret:     conf.ConsumerSecret,
+	})
+	if err != nil {
+		jerr.Get("error creating twitter client", err).Fatal()
 	}
-	// http.Client will automatically authorize Requests
-	httpClient := config.Client(oauth2.NoContext)
-
-	// Twitter client
-	client := twitter.NewClient(httpClient)
 	return client
 }

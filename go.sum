@@ -569,6 +569,8 @@ github.com/memocash/index v0.1.1-0.20230213204657-118e8583b03e h1:wBeG1wB7oehWWs
 github.com/memocash/index v0.1.1-0.20230213204657-118e8583b03e/go.mod h1:fiBRJDbYt6/UcxH4EtA5r9Ag3T024m6Fxoto+AknV0k=
 github.com/memocash/index v0.2.0-alpha.0.0.20230323182811-fd9337017bac h1:vXVMyNA/JN9MIARYvMUQAWDRSftRBlRnQsLyjYkZG20=
 github.com/memocash/index v0.2.0-alpha.0.0.20230323182811-fd9337017bac/go.mod h1:0Airl+6PpDtEj8bpJr5+LnkqQLsItYVPYZ+jxni9Rx4=
+github.com/michimani/gotwi v0.13.0 h1:zVVkibHLpP6Q3pg1/3rzuVcb+95p4TZchViW/ZE53/4=
+github.com/michimani/gotwi v0.13.0/go.mod h1:2W7Xp7vgg7ZZFdwXYHwbr9gUCMaZc+ql+T8RpccbeQ4=
 github.com/miekg/dns v1.0.14/go.mod h1:W1PPwlIAgtquWBMBEV9nkV9Cazfe8ScdGz/Lj7v3Nrg=
 github.com/miekg/dns v1.1.26/go.mod h1:bPDLeHnStXmXAq1m/Ch/hvfNHr14JKNPMBo3VZKjuso=
 github.com/miekg/dns v1.1.41/go.mod h1:p6aan82bvRIyn+zDIv9xYNUpwa73JcSh9BKwknJysuI=
