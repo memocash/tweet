@@ -1,27 +1,26 @@
 package tweets
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/dghubble/go-twitter/twitter"
 	"github.com/jchavannes/jgo/jerr"
-	config2 "github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/memocash/tweet/wallet"
+	twitterscraper "github.com/n0madic/twitter-scraper"
 	"github.com/syndtr/goleveldb/leveldb"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/clientcredentials"
-	"log"
 	"os"
 	"strconv"
+	"time"
 )
 
-func GetAllTweets(userId int64, client *twitter.Client) (int, error) {
+func GetAllTweets(userId int64, scraper *twitterscraper.Scraper) (int, error) {
 	var numTweets = 0
 	for {
-		tweets, err := getOldTweets(userId, client)
+		tweets, err := getOldTweets(userId, scraper)
 		if err != nil {
 			return numTweets, jerr.Get("error getting old tweets", err)
 		}
@@ -32,12 +31,10 @@ func GetAllTweets(userId int64, client *twitter.Client) (int, error) {
 	}
 }
 
-func getOldTweets(userId int64, client *twitter.Client) ([]obj.TweetTx, error) {
-	excludeReplies := false
+func getOldTweets(userId int64, scraper *twitterscraper.Scraper) ([]obj.TweetTx, error) {
 	var userTimelineParams = &twitter.UserTimelineParams{
-		UserID:         userId,
-		ExcludeReplies: &excludeReplies,
-		Count:          100,
+		UserID: userId,
+		Count:  100,
 	}
 	recentTweetTx, err := db.GetOldestTweetTx(userId)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
@@ -46,19 +43,17 @@ func getOldTweets(userId int64, client *twitter.Client) ([]obj.TweetTx, error) {
 	if recentTweetTx != nil {
 		userTimelineParams.MaxID = recentTweetTx.TweetId
 	}
-	tweetTxs, err := GetAndSaveTwitterTweets(client, userTimelineParams)
+	tweetTxs, err := GetAndSaveTwitterTweets(userTimelineParams, scraper)
 	if err != nil {
 		return nil, jerr.Get("error getting new tweets from twitter", err)
 	}
 	return tweetTxs, nil
 }
 
-func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, numTweets int, newBot bool) ([]*db.TweetTx, error) {
-	excludeReplies := false
+func getNewTweets(accountKey obj.AccountKey, numTweets int, newBot bool, scraper *twitterscraper.Scraper) ([]*db.TweetTx, error) {
 	var userTimelineParams = &twitter.UserTimelineParams{
-		UserID:         accountKey.UserID,
-		ExcludeReplies: &excludeReplies,
-		Count:          numTweets,
+		UserID: accountKey.UserID,
+		Count:  numTweets,
 	}
 	recentTweetTx, err := db.GetRecentTweetTx(accountKey.UserID)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
@@ -70,7 +65,7 @@ func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, numTweets i
 	if recentTweetTx != nil {
 		userTimelineParams.SinceID = recentTweetTx.TweetId
 	}
-	_, err = GetAndSaveTwitterTweets(client, userTimelineParams)
+	_, err = GetAndSaveTwitterTweets(userTimelineParams, scraper)
 	if err != nil {
 		return nil, jerr.Get("error getting new tweets from twitter", err)
 	}
@@ -91,13 +86,55 @@ func getNewTweets(accountKey obj.AccountKey, client *twitter.Client, numTweets i
 	return tweetTxs, nil
 }
 
-func GetAndSaveTwitterTweets(client *twitter.Client, params *twitter.UserTimelineParams) ([]obj.TweetTx, error) {
+func GetAndSaveTwitterTweets(params *twitter.UserTimelineParams, scraper *twitterscraper.Scraper) ([]obj.TweetTx, error) {
 	if params.UserID == 0 {
 		return nil, jerr.New("userID is required")
 	}
-	tweets, _, err := client.Timelines.UserTimeline(params)
-	if err != nil {
-		return nil, jerr.Get("error getting old tweets from user timeline", err)
+	query := fmt.Sprintf("from:%s", params.ScreenName)
+	if params.SinceID != 0 {
+		query += fmt.Sprintf(" since_id:%d", params.SinceID)
+	}
+	if params.MaxID != 0 {
+		query += fmt.Sprintf(" max_id:%d", params.MaxID)
+	}
+	var tweets []twitter.Tweet
+	for scrapedTweet := range scraper.SearchTweets(context.Background(), query, params.Count) {
+		if scrapedTweet.Error != nil {
+			return nil, jerr.Get("error getting tweets", scrapedTweet.Error)
+		}
+		tweetID, err := strconv.ParseInt(scrapedTweet.ID, 10, 64)
+		var inReplyToStatusID int64
+		if scrapedTweet.IsReply {
+			inReplyToStatusID, err = strconv.ParseInt(scrapedTweet.InReplyToStatus.ID, 10, 64)
+			if err != nil {
+				return nil, jerr.Get("error parsing in reply to status id", err)
+			}
+		} else {
+			inReplyToStatusID = 0
+		}
+		var entities twitter.Entities
+		var extendedEntity twitter.ExtendedEntity
+		for _, media := range scrapedTweet.URLs {
+			entities.Media = append(entities.Media, twitter.MediaEntity{
+				MediaURL: media,
+			})
+			extendedEntity.Media = append(extendedEntity.Media, twitter.MediaEntity{
+				MediaURL: media,
+			})
+		}
+		tweet := twitter.Tweet{
+			ID:                tweetID,
+			InReplyToStatusID: inReplyToStatusID,
+			Text:              scrapedTweet.Text,
+			CreatedAt:         scrapedTweet.TimeParsed.Format(time.RubyDate),
+			User: &twitter.User{
+				ID:         params.UserID,
+				ScreenName: params.ScreenName,
+			},
+			Entities:         &entities,
+			ExtendedEntities: &extendedEntity,
+		}
+		tweets = append(tweets, tweet)
 	}
 	var tweetTxs = make([]obj.TweetTx, len(tweets))
 	var dbTweetTxs = make([]db.ObjectI, len(tweets))
@@ -150,8 +187,8 @@ func getNewTweetsLocal(accountKey obj.AccountKey, numTweets int) ([]obj.TweetTx,
 	return tweetTxs, nil
 }
 
-func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, client *twitter.Client, flags db.Flags, numTweets int, newBot bool) error {
-	txList, err := getNewTweets(accountKey, client, numTweets, newBot)
+func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, scraper *twitterscraper.Scraper, flags db.Flags, numTweets int, newBot bool) error {
+	txList, err := getNewTweets(accountKey, numTweets, newBot, scraper)
 	//txList, err := getNewTweetsLocal(accountKey, db, numTweets)
 	if err != nil {
 		return jerr.Get("error getting tweets since the bot was last run", err)
@@ -183,22 +220,4 @@ func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, client *twi
 		}
 	}
 	return nil
-}
-func Connect() *twitter.Client {
-	conf := config2.GetTwitterAPIConfig()
-	if !conf.IsSet() {
-		log.Fatal("Application Access Token required")
-	}
-	// oauth2 configures a client that uses app credentials to keep a fresh token
-	config := &clientcredentials.Config{
-		ClientID:     conf.ConsumerKey,
-		ClientSecret: conf.ConsumerSecret,
-		TokenURL:     "https://api.twitter.com/oauth2/token",
-	}
-	// http.Client will automatically authorize Requests
-	httpClient := config.Client(oauth2.NoContext)
-
-	// Twitter client
-	client := twitter.NewClient(httpClient)
-	return client
 }

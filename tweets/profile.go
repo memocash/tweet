@@ -1,8 +1,10 @@
 package tweets
 
 import (
-	"github.com/dghubble/go-twitter/twitter"
+	"context"
+	"fmt"
 	"github.com/jchavannes/jgo/jerr"
+	twitterscraper "github.com/n0madic/twitter-scraper"
 	"strings"
 )
 
@@ -13,27 +15,20 @@ type Profile struct {
 	ID          string
 }
 
-func GetProfile(userId int64, client *twitter.Client) (*Profile, error) {
-	// Query to Twitter API for profile info
-	// user show
-	userShowParams := &twitter.UserShowParams{UserID: userId}
-	user, _, err := client.Users.Show(userShowParams)
-	if err != nil {
-		return nil, jerr.Get("error getting profile from twitter api", err)
+func GetProfile(userId int64, scraper *twitterscraper.Scraper) (*Profile, error) {
+	query := fmt.Sprintf("user_id:%d", userId)
+	for profile := range scraper.SearchProfiles(context.Background(), query, 1) {
+		if profile.Error != nil {
+			return nil, jerr.Get("error getting profile", profile.Error)
+		}
+		profilePic := strings.Replace(profile.Avatar, "_normal", "", 1)
+		profilePic = strings.Replace(profilePic, "http:", "https:", 1)
+		return &Profile{
+			Name:        profile.Name,
+			Description: profile.Biography,
+			ProfilePic:  profilePic,
+			ID:          profile.UserID,
+		}, nil
 	}
-	desc := user.Description
-	name := user.Name
-	profilePic := user.ProfileImageURL
-	ID := user.IDStr
-	//resize the profile pic to full size
-	profilePic = strings.Replace(profilePic, "_normal", "", 1)
-	profilePic = strings.Replace(profilePic, "http:", "https:", 1)
-	//println(profilePic)
-	//fmt.Printf("USERS SHOW:\n%+v\n%+v\n%+v\n", name, desc, profilePic)
-	return &Profile{
-		Name:        name,
-		Description: desc,
-		ProfilePic:  profilePic,
-		ID:          ID,
-	}, nil
+	return nil, nil
 }

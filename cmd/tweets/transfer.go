@@ -6,6 +6,7 @@ import (
 	"github.com/memocash/tweet/tweets"
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/memocash/tweet/wallet"
+	twitterscraper "github.com/n0madic/twitter-scraper"
 	"github.com/spf13/cobra"
 )
 
@@ -20,8 +21,9 @@ var transferCmd = &cobra.Command{
 		link, _ := c.Flags().GetBool(FlagLink)
 		date, _ := c.Flags().GetBool(FlagDate)
 		accountKey := obj.GetAccountKeyFromArgs(args)
-		client := tweets.Connect()
-		if _, err := tweets.GetAllTweets(accountKey.UserID, client); err != nil {
+		scraper := twitterscraper.New()
+		scraper.SetSearchMode(twitterscraper.SearchLatest)
+		if _, err := tweets.GetAllTweets(accountKey.UserID, scraper); err != nil {
 			jerr.Get("error getting all tweets", err).Fatal()
 		}
 		wlt := wallet.NewWallet(accountKey.Address, accountKey.Key)

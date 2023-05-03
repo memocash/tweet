@@ -9,6 +9,7 @@ import (
 	"github.com/memocash/tweet/tweets"
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/memocash/tweet/wallet"
+	twitterscraper "github.com/n0madic/twitter-scraper"
 	"github.com/spf13/cobra"
 	"github.com/syndtr/goleveldb/leveldb"
 	"strconv"
@@ -22,6 +23,8 @@ var getNewCmd = &cobra.Command{
 		link, _ := c.Flags().GetBool(FlagLink)
 		date, _ := c.Flags().GetBool(FlagDate)
 		streamConfigs := config.GetConfig().Streams
+		scraper := twitterscraper.New()
+		scraper.SetSearchMode(twitterscraper.SearchLatest)
 		//before starting the stream, ge the latest tweets newer than the last tweet in the db
 		for _, streamConfig := range streamConfigs {
 			accountKey := obj.GetAccountKeyFromArgs([]string{streamConfig.Key, strconv.FormatInt(streamConfig.UserID, 10)})
@@ -32,7 +35,7 @@ var getNewCmd = &cobra.Command{
 			}
 			if savedAddressTweet != nil {
 				wlt := wallet.NewWallet(accountKey.Address, accountKey.Key)
-				err := tweets.GetSkippedTweets(accountKey, &wlt, tweets.Connect(), db.Flags{Link: link, Date: date}, 100, true)
+				err := tweets.GetSkippedTweets(accountKey, &wlt, scraper, db.Flags{Link: link, Date: date}, 100, true)
 				if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 					jerr.Get("error getting skipped tweets for get new tweets", err).Fatal()
 				}

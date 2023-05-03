@@ -178,8 +178,7 @@ func (s *SaveTx) HandleRequestSubBot() error {
 			Address: matchedStream.Wallet.Address,
 		}
 		wlt := matchedStream.Wallet
-		client := tweets.Connect()
-		err = tweets.GetSkippedTweets(accountKey, &wlt, client, flag.Flags, 100, false)
+		err = tweets.GetSkippedTweets(accountKey, &wlt, s.Bot.TweetScraper, flag.Flags, 100, false)
 		if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 			return jerr.Get("error getting skipped tweets", err)
 		}
@@ -276,13 +275,11 @@ func (s *SaveTx) HandleCreate() error {
 	if accountKeyPointer != nil {
 		accountKey := *accountKeyPointer
 		if history {
-			client := tweets.Connect()
-			if err = tweets.GetSkippedTweets(accountKey, wlt, client, flags, historyNum, true); err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
+			if err = tweets.GetSkippedTweets(accountKey, wlt, s.Bot.TweetScraper, flags, historyNum, true); err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 				return jerr.Get("error getting skipped tweets on bot save tx", err)
 			}
 		} else if flags.CatchUp {
-			client := tweets.Connect()
-			if err = tweets.GetSkippedTweets(accountKey, wlt, client, flags, 100, false); err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
+			if err = tweets.GetSkippedTweets(accountKey, wlt, s.Bot.TweetScraper, flags, 100, false); err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 				return jerr.Get("error getting skipped tweets on bot save tx", err)
 			}
 		}

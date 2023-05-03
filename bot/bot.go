@@ -12,25 +12,27 @@ import (
 	"github.com/memocash/tweet/graph"
 	"github.com/memocash/tweet/tweets"
 	"github.com/memocash/tweet/tweets/obj"
+	twitterscraper "github.com/n0madic/twitter-scraper"
 	"github.com/syndtr/goleveldb/leveldb"
 	"sync"
 	"time"
 )
 
 type Bot struct {
-	Mnemonic    *wallet.Mnemonic
-	Addresses   []string
-	Addr        wallet.Addr
-	Key         wallet.PrivateKey
-	TweetClient *twitter.Client
-	Stream      *tweets.Stream
-	ErrorChan   chan error
-	TxMutex     sync.Mutex
-	UpdateMutex sync.Mutex
-	Crypt       []byte
-	Timer       *time.Timer
-	Verbose     bool
-	Down        bool
+	Mnemonic     *wallet.Mnemonic
+	Addresses    []string
+	Addr         wallet.Addr
+	Key          wallet.PrivateKey
+	TweetClient  *twitter.Client
+	TweetScraper *twitterscraper.Scraper
+	Stream       *tweets.Stream
+	ErrorChan    chan error
+	TxMutex      sync.Mutex
+	UpdateMutex  sync.Mutex
+	Crypt        []byte
+	Timer        *time.Timer
+	Verbose      bool
+	Down         bool
 }
 
 func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey, tweetClient *twitter.Client, verbose bool, down bool) (*Bot, error) {
@@ -48,19 +50,22 @@ func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey
 			return nil, jerr.Get("error getting new tweet stream", err)
 		}
 	}
+	scraper := twitterscraper.New()
+	scraper.SetSearchMode(twitterscraper.SearchLatest)
 	if err != nil {
 		return nil, jerr.Get("error getting new tweet stream", err)
 	}
 	return &Bot{
-		Mnemonic:    mnemonic,
-		Addresses:   addresses,
-		Addr:        *addr,
-		Key:         key,
-		Stream:      stream,
-		TweetClient: tweetClient,
-		ErrorChan:   make(chan error),
-		Verbose:     verbose,
-		Down:        down,
+		Mnemonic:     mnemonic,
+		Addresses:    addresses,
+		Addr:         *addr,
+		Key:          key,
+		Stream:       stream,
+		TweetClient:  tweetClient,
+		TweetScraper: scraper,
+		ErrorChan:    make(chan error),
+		Verbose:      verbose,
+		Down:         down,
 	}, nil
 }
 
@@ -140,7 +145,7 @@ func (b *Bot) Listen() error {
 				UserID:  stream.UserID,
 				Key:     stream.Wallet.Key,
 				Address: stream.Wallet.Address,
-			}, &stream.Wallet, b.TweetClient, flag.Flags, 100, false)
+			}, &stream.Wallet, b.TweetScraper, flag.Flags, 100, false)
 			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 				return jerr.Get("error getting skipped tweets on bot listen", err)
 			}

@@ -29,7 +29,7 @@ func updateProfiles(botStreams []config.Stream, b *Bot) error {
 }
 
 func updateProfile(b *Bot, newWallet tweetWallet.Wallet, userId int64, senderAddress string) error {
-	profile, err := tweets.GetProfile(userId, b.TweetClient)
+	profile, err := tweets.GetProfile(userId, b.TweetScraper)
 	if err != nil {
 		return jerr.Get("fatal error getting profile", err)
 	}
