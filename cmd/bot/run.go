@@ -6,7 +6,6 @@ import (
 	"github.com/memocash/tweet/bot"
 	"github.com/memocash/tweet/bot/info"
 	"github.com/memocash/tweet/config"
-	"github.com/memocash/tweet/tweets"
 	tweetWallet "github.com/memocash/tweet/wallet"
 	"github.com/spf13/cobra"
 )
@@ -28,7 +27,7 @@ var runCmd = &cobra.Command{
 			jerr.Get("fatal error getting path", err).Fatal()
 		}
 		botAddress := botKey.GetPublicKey().GetAddress().GetEncoded()
-		memoBot, err := bot.NewBot(mnemonic, []string{botAddress}, *botKey, tweets.Connect(), verbose, false)
+		memoBot, err := bot.NewBot(mnemonic, []string{botAddress}, *botKey, verbose, false)
 		if err != nil {
 			jerr.Get("fatal error creating new bot", err).Fatal()
 		}

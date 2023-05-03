@@ -2,7 +2,6 @@ package bot
 
 import (
 	"errors"
-	"github.com/dghubble/go-twitter/twitter"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jlog"
 	"github.com/memocash/index/ref/bitcoin/tx/gen"
@@ -14,6 +13,7 @@ import (
 	"github.com/memocash/tweet/tweets/obj"
 	twitterscraper "github.com/n0madic/twitter-scraper"
 	"github.com/syndtr/goleveldb/leveldb"
+	"log"
 	"sync"
 	"time"
 )
@@ -23,9 +23,7 @@ type Bot struct {
 	Addresses    []string
 	Addr         wallet.Addr
 	Key          wallet.PrivateKey
-	TweetClient  *twitter.Client
 	TweetScraper *twitterscraper.Scraper
-	Stream       *tweets.Stream
 	ErrorChan    chan error
 	TxMutex      sync.Mutex
 	UpdateMutex  sync.Mutex
@@ -35,7 +33,7 @@ type Bot struct {
 	Down         bool
 }
 
-func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey, tweetClient *twitter.Client, verbose bool, down bool) (*Bot, error) {
+func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey, verbose bool, down bool) (*Bot, error) {
 	if len(addresses) == 0 {
 		return nil, jerr.New("error new bot, no addresses")
 	}
@@ -43,15 +41,14 @@ func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey
 	if err != nil {
 		return nil, jerr.Get("error getting address from string for new bot", err)
 	}
-	var stream *tweets.Stream
+	var scraper *twitterscraper.Scraper
 	if !down {
-		stream, err = tweets.NewStream()
+		scraper = twitterscraper.New()
+		scraper.SetSearchMode(twitterscraper.SearchLatest)
 		if err != nil {
-			return nil, jerr.Get("error getting new tweet stream", err)
+			return nil, jerr.Get("error logging in to twitter", err)
 		}
 	}
-	scraper := twitterscraper.New()
-	scraper.SetSearchMode(twitterscraper.SearchLatest)
 	if err != nil {
 		return nil, jerr.Get("error getting new tweet stream", err)
 	}
@@ -60,8 +57,6 @@ func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey
 		Addresses:    addresses,
 		Addr:         *addr,
 		Key:          key,
-		Stream:       stream,
-		TweetClient:  tweetClient,
 		TweetScraper: scraper,
 		ErrorChan:    make(chan error),
 		Verbose:      verbose,
@@ -129,6 +124,9 @@ func (b *Bot) Listen() error {
 			if err = updateProfiles(botStreams, b); err != nil {
 				b.ErrorChan <- jerr.Get("error updating profiles for bot listen", err)
 			}
+			if err = b.CheckForNewTweets(); err != nil {
+				b.ErrorChan <- jerr.Get("error checking for new tweets for bot listen", err)
+			}
 		}
 	}()
 	botStreams, err := getBotStreams(b.Crypt)
@@ -151,10 +149,39 @@ func (b *Bot) Listen() error {
 			}
 		}
 	}
-	if err = b.SafeUpdate(); err != nil {
+	if err = b.CheckForNewTweets(); err != nil {
 		return jerr.Get("error updating stream 2nd time", err)
 	}
 	return jerr.Get("error in listen", <-b.ErrorChan)
+}
+
+func (b *Bot) CheckForNewTweets() error {
+	log.Println("Checking for new tweets")
+	botStreams, err := getBotStreams(b.Crypt)
+	if err != nil {
+		return jerr.Get("error getting bot streams for listen skipped", err)
+	}
+	for _, stream := range botStreams {
+		flag, err := db.GetFlag(wallet.GetAddressFromString(stream.Sender).GetAddr(), stream.UserID)
+		if err != nil {
+			return jerr.Get("error getting flag for listen skipped", err)
+		}
+		if flag.Flags.CatchUp {
+			err = tweets.GetSkippedTweets(obj.AccountKey{
+				UserID:  stream.UserID,
+				Key:     stream.Wallet.Key,
+				Address: stream.Wallet.Address,
+			}, &stream.Wallet, b.TweetScraper, flag.Flags, 100, false)
+			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
+				return jerr.Get("error getting skipped tweets on bot listen", err)
+			}
+		}
+	}
+	err = b.SafeUpdate()
+	if err != nil {
+		return jerr.Get("error updating streams after getting new tweets", err)
+	}
+	return nil
 }
 
 func (b *Bot) SaveTx(tx graph.Tx) error {
@@ -228,23 +255,5 @@ func (b *Bot) UpdateStream() error {
 	if err := graph.AddressListen(b.Addresses, b.SaveTx, b.ErrorChan); err != nil {
 		return jerr.Get("error listening to address on graphql", err)
 	}
-	go func() {
-		if len(botStreams) == 0 {
-			return
-		}
-		err := b.Stream.ListenForNewTweets(botStreams)
-		if err != nil {
-			if jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
-				err := b.UpdateStream()
-				if err != nil {
-					b.ErrorChan <- jerr.Get("error updating stream", err)
-				}
-			} else {
-				//otherwise, it's a different error, so we should send it to the error channel
-				b.ErrorChan <- jerr.Get("error twitter initiate stream in update", err)
-
-			}
-		}
-	}()
 	return nil
 }

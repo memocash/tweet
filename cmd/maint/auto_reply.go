@@ -26,7 +26,7 @@ var autoReplyCmd = &cobra.Command{
 			jerr.Get("fatal error getting path", err).Fatal()
 		}
 		botAddress := botKey.GetPublicKey().GetAddress().GetEncoded()
-		memoBot, err := bot.NewBot(mnemonic, []string{botAddress}, *botKey, nil, verbose, true)
+		memoBot, err := bot.NewBot(mnemonic, []string{botAddress}, *botKey, verbose, true)
 		if err != nil {
 			jerr.Get("fatal error creating new bot", err).Fatal()
 		}

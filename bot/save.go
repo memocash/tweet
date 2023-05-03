@@ -218,7 +218,7 @@ func (s *SaveTx) HandleCreate() error {
 	}
 	//check if the twitter account exists, if so get the user id
 	twitterExists := false
-	twitterAccount, _, err := s.Bot.TweetClient.Users.Show(&twitter.UserShowParams{ScreenName: twitterName})
+	twitterProfile, err := s.Bot.TweetScraper.GetProfile(twitterName)
 	if err == nil {
 		twitterExists = true
 	}
@@ -228,6 +228,15 @@ func (s *SaveTx) HandleCreate() error {
 			return jerr.Get("error refunding", err)
 		}
 		return nil
+	}
+	userId, err := strconv.ParseInt(twitterProfile.UserID, 10, 64)
+	if err != nil {
+		return jerr.Get("error parsing user id", err)
+	}
+	twitterAccount := twitter.User{
+		ID:         userId,
+		ScreenName: twitterProfile.Name,
+		IDStr:      twitterProfile.UserID,
 	}
 	//check if --history is in the message
 	history := false
@@ -267,7 +276,7 @@ func (s *SaveTx) HandleCreate() error {
 	}}); err != nil {
 		return jerr.Get("error saving flags to db", err)
 	}
-	accountKeyPointer, wlt, err := createBotStream(s.Bot, twitterAccount, s.SenderAddress, s.Tx, s.CoinIndex)
+	accountKeyPointer, wlt, err := createBotStream(s.Bot, &twitterAccount, s.SenderAddress, s.Tx, s.CoinIndex)
 	if err != nil {
 		return jerr.Get("error creating bot", err)
 	}
@@ -298,7 +307,7 @@ func (s *SaveTx) HandleWithdraw() error {
 		twitterName = twitterName[1:]
 	}
 	twitterExists := false
-	twitterAccount, _, err := s.Bot.TweetClient.Users.Show(&twitter.UserShowParams{ScreenName: twitterName})
+	twitterProfile, err := s.Bot.TweetScraper.GetProfile(twitterName)
 	if err == nil {
 		twitterExists = true
 	}
@@ -308,6 +317,15 @@ func (s *SaveTx) HandleWithdraw() error {
 			return jerr.Get("error refunding", err)
 		}
 		return nil
+	}
+	userID, err := strconv.ParseInt(twitterProfile.UserID, 10, 64)
+	if err != nil {
+		return jerr.Get("error parsing user id", err)
+	}
+	twitterAccount := twitter.User{
+		ID:         userID,
+		ScreenName: twitterProfile.Name,
+		IDStr:      twitterProfile.UserID,
 	}
 	addressKey, err := db.GetAddressKey(wallet.GetAddressFromString(s.SenderAddress).GetAddr(), twitterAccount.ID)
 	if err != nil {

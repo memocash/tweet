@@ -5,6 +5,7 @@ import (
 	"github.com/memocash/tweet/tweets"
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/memocash/tweet/wallet"
+	twitterscraper "github.com/n0madic/twitter-scraper"
 	"github.com/spf13/cobra"
 )
 
@@ -14,7 +15,9 @@ var profilePicCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(2),
 	Run: func(c *cobra.Command, args []string) {
 		accountKey := obj.GetAccountKeyFromArgs(args)
-		profile, err := tweets.GetProfile(accountKey.UserID, tweets.Connect())
+		scraper := twitterscraper.New()
+		scraper.SetSearchMode(twitterscraper.SearchLatest)
+		profile, err := tweets.GetProfile(accountKey.UserID, scraper)
 		if err != nil {
 			jerr.Get("fatal error getting profile", err).Fatal()
 		}
