@@ -41,7 +41,13 @@ func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey
 	if err != nil {
 		return nil, jerr.Get("error getting address from string for new bot", err)
 	}
-	stream, err := tweets.NewStream()
+	var stream *tweets.Stream
+	if !down {
+		stream, err = tweets.NewStream()
+		if err != nil {
+			return nil, jerr.Get("error getting new tweet stream", err)
+		}
+	}
 	if err != nil {
 		return nil, jerr.Get("error getting new tweet stream", err)
 	}
@@ -169,6 +175,9 @@ func (b *Bot) SetAddresses() error {
 }
 
 func (b *Bot) SafeUpdate() error {
+	if b.Down {
+		return nil
+	}
 	b.UpdateMutex.Lock()
 	defer b.UpdateMutex.Unlock()
 	var waitCount = 1

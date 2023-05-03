@@ -12,10 +12,8 @@ import (
 )
 
 func refund(tx graph.Tx, b *Bot, coinIndex uint32, senderAddress string, errMsg string) error {
-	if !b.Down {
-		if err := b.SafeUpdate(); err != nil {
-			return jerr.Get("error updating stream", err)
-		}
+	if err := b.SafeUpdate(); err != nil {
+		return jerr.Get("error updating stream", err)
 	}
 	jlog.Logf("Sending refund error message to %s for %s: %s\n", senderAddress, tx.Hash, errMsg)
 	sentToMainBot := false

@@ -81,9 +81,6 @@ func (s *SaveTx) HandleRequestMainBot() error {
 			}
 		}
 	}
-	if s.Bot.Down {
-		return nil
-	}
 	if err := s.Bot.SafeUpdate(); err != nil {
 		return jerr.Get("error updating bot", err)
 	}
