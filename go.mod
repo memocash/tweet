@@ -15,10 +15,11 @@ require (
 	github.com/jchavannes/btcd v1.1.5-0.20230112162803-412def37b600
 	github.com/jchavannes/jgo v0.0.0-20230222214331-95b230651774
 	github.com/memocash/index v0.2.0-alpha.0.0.20230323182811-fd9337017bac
-	github.com/n0madic/twitter-scraper v0.0.0-20230429212535-64a2f495ca7c // indirect
+	github.com/n0madic/twitter-scraper v0.0.0-20230429212535-64a2f495ca7c
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/viper v1.14.0
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	golang.org/x/crypto v0.6.0
+	golang.org/x/net v0.9.0
 	golang.org/x/oauth2 v0.5.0
 )
