@@ -33,21 +33,13 @@ type Bot struct {
 	Down         bool
 }
 
-func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey, verbose bool, down bool) (*Bot, error) {
+func NewBot(mnemonic *wallet.Mnemonic, scraper *twitterscraper.Scraper, addresses []string, key wallet.PrivateKey, verbose bool, down bool) (*Bot, error) {
 	if len(addresses) == 0 {
 		return nil, jerr.New("error new bot, no addresses")
 	}
 	addr, err := wallet.GetAddrFromString(addresses[0])
 	if err != nil {
 		return nil, jerr.Get("error getting address from string for new bot", err)
-	}
-	var scraper *twitterscraper.Scraper
-	if !down {
-		scraper = twitterscraper.New()
-		scraper.SetSearchMode(twitterscraper.SearchLatest)
-		if err != nil {
-			return nil, jerr.Get("error logging in to twitter", err)
-		}
 	}
 	if err != nil {
 		return nil, jerr.Get("error getting new tweet stream", err)

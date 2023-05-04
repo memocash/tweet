@@ -16,6 +16,7 @@ import (
 	"github.com/memocash/tweet/tweets/obj"
 	tweetWallet "github.com/memocash/tweet/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
+	"log"
 )
 
 func getBotStreams(cryptKey []byte) ([]config.Stream, error) {
@@ -131,15 +132,18 @@ func createBotStream(b *Bot, twitterAccount *twitter.User, senderAddress string,
 	}
 	newWallet := tweetWallet.NewWallet(newAddr, newKey)
 	if !botExists {
+		log.Println("updating profile")
 		err = updateProfile(b, newWallet, twitterAccount.ID, senderAddress)
 		if err != nil {
 			return nil, nil, jerr.Get("error updating profile", err)
 		}
+		log.Println("updated profile")
 	}
 	if b.Verbose {
 		jlog.Logf("Create bot stream Address: " + newAddr.GetEncoded())
 	}
 	if !botExists {
+		log.Println("saving bot stream")
 		if err := db.Save([]db.ObjectI{&db.BotStreamsCount{Count: int(numStreamUint + 1)}}); err != nil {
 			return nil, nil, jerr.Get("error saving bot streams count", err)
 		}
@@ -155,6 +159,7 @@ func createBotStream(b *Bot, twitterAccount *twitter.User, senderAddress string,
 			return nil, nil, jerr.Get("error updating linked-"+senderAddress+"-"+twitterAccount.IDStr, err)
 		}
 	}
+	println("saved bot stream")
 	accountKey := obj.GetAccountKeyFromArgs([]string{newKey.GetBase58Compressed(), twitterAccount.IDStr})
 	return &accountKey, &newWallet, nil
 }

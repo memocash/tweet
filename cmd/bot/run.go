@@ -7,6 +7,7 @@ import (
 	"github.com/memocash/tweet/bot/info"
 	"github.com/memocash/tweet/config"
 	tweetWallet "github.com/memocash/tweet/wallet"
+	twitterscraper "github.com/n0madic/twitter-scraper"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +28,13 @@ var runCmd = &cobra.Command{
 			jerr.Get("fatal error getting path", err).Fatal()
 		}
 		botAddress := botKey.GetPublicKey().GetAddress().GetEncoded()
-		memoBot, err := bot.NewBot(mnemonic, []string{botAddress}, *botKey, verbose, false)
+		scraper := twitterscraper.New()
+		scraper.SetSearchMode(twitterscraper.SearchLatest)
+		err = scraper.Login(config.GetTwitterAPIConfig().UserName, config.GetTwitterAPIConfig().Password)
+		if err != nil {
+			jerr.Get("fatal error logging in to twitter", err).Fatal()
+		}
+		memoBot, err := bot.NewBot(mnemonic, scraper, []string{botAddress}, *botKey, verbose, false)
 		if err != nil {
 			jerr.Get("fatal error creating new bot", err).Fatal()
 		}
@@ -42,6 +49,7 @@ var runCmd = &cobra.Command{
 		var errorChan = make(chan error)
 		go func() {
 			err = memoBot.Listen()
+			memoBot.TweetScraper.Logout()
 			errorChan <- jerr.Get("error listening for transactions", err)
 		}()
 		go func() {
