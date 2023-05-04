@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/jchavannes/jgo/jerr"
 	twitterscraper "github.com/n0madic/twitter-scraper"
-	"log"
 	"strings"
 )
 
@@ -17,20 +16,18 @@ type Profile struct {
 }
 
 func GetProfile(userId int64, scraper *twitterscraper.Scraper) (*Profile, error) {
+	scraper.SetSearchMode(twitterscraper.SearchUsers)
 	query := fmt.Sprintf("user_id:%d", userId)
-	println("query: " + query)
 	for profile := range scraper.SearchProfiles(context.Background(), query, 1) {
-		println("got a profile")
 		if profile == nil {
-			println("nil profile")
 			return nil, jerr.New("nil profile")
 		}
 		if profile.Error != nil {
 			return nil, jerr.Get("error getting profile", profile.Error)
 		}
-		log.Printf("profile error: %s\n", profile.Error)
 		profilePic := strings.Replace(profile.Avatar, "_normal", "", 1)
 		profilePic = strings.Replace(profilePic, "http:", "https:", 1)
+		scraper.SetSearchMode(twitterscraper.SearchLatest)
 		return &Profile{
 			Name:        profile.Name,
 			Description: profile.Biography,
@@ -38,5 +35,6 @@ func GetProfile(userId int64, scraper *twitterscraper.Scraper) (*Profile, error)
 			ID:          profile.UserID,
 		}, nil
 	}
+	scraper.SetSearchMode(twitterscraper.SearchLatest)
 	return nil, jerr.Get("no profile found", nil)
 }

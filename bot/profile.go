@@ -11,6 +11,7 @@ import (
 	"github.com/memocash/tweet/tweets"
 	tweetWallet "github.com/memocash/tweet/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
+	"log"
 	"time"
 )
 
@@ -33,6 +34,9 @@ func updateProfile(b *Bot, newWallet tweetWallet.Wallet, userId int64, senderAdd
 	if err != nil {
 		return jerr.Get("fatal error getting profile", err)
 	}
+	log.Println("Name", profile.Name)
+	log.Println("Description", profile.Description)
+	log.Println("ProfilePic", profile.ProfilePic)
 	existingDbProfile, err := db.GetProfile(wallet.GetAddressFromString(senderAddress).GetAddr(), userId)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		return jerr.Get("error getting profile from database", err)
