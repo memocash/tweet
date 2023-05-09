@@ -6,6 +6,7 @@ import (
 	"github.com/memocash/tweet/tweets"
 	twitterscraper "github.com/n0madic/twitter-scraper"
 	"github.com/spf13/cobra"
+	"log"
 )
 
 const (
@@ -21,9 +22,10 @@ var getProfileCmd = &cobra.Command{
 		if err != nil {
 			jerr.Get("error logging in", err).Fatal()
 		}
-		_, err = tweets.GetProfile(USER_ID, scraper)
+		profile, err := tweets.GetProfile(USER_ID, scraper)
 		if err != nil {
 			jerr.Get("error getting profile", err).Fatal()
 		}
+		log.Printf("Name: %s\n Description: %s\n Profile Image: %s\n", profile.Name, profile.Description, profile.ProfilePic)
 	},
 }
