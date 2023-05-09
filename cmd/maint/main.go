@@ -28,6 +28,7 @@ func GetCommand() *cobra.Command {
 		migrateCmd,
 		rebroadcastCmd,
 		autoReplyCmd,
-		getProfileCmd)
+		getProfileCmd,
+		getTweetsCmd)
 	return maintCmd
 }
