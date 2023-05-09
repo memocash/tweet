@@ -2,6 +2,7 @@ package bot
 
 import (
 	"errors"
+	twitterscraper "github.com/AbdelSallam/twitter-scraper"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jlog"
 	"github.com/memocash/index/ref/bitcoin/tx/gen"
@@ -11,7 +12,6 @@ import (
 	"github.com/memocash/tweet/graph"
 	"github.com/memocash/tweet/tweets"
 	"github.com/memocash/tweet/tweets/obj"
-	twitterscraper "github.com/n0madic/twitter-scraper"
 	"github.com/syndtr/goleveldb/leveldb"
 	"log"
 	"sync"

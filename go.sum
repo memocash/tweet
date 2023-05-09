@@ -184,6 +184,10 @@ cloud.google.com/go/workflows v1.6.0/go.mod h1:6t9F5h/unJz41YqfBmqSASJSXccBLtD1V
 cloud.google.com/go/workflows v1.7.0/go.mod h1:JhSrZuVZWuiDfKEFxU0/F1PQjmpnpcoISEXH2bcHC3M=
 dmitri.shuralyov.com/gpu/mtl v0.0.0-20190408044501-666a987793e9/go.mod h1:H6x//7gZCb22OMCxBHrMx7a5I7Hp++hsVxbQ4BYO7hU=
 github.com/99designs/gqlgen v0.17.20/go.mod h1:Mja2HI23kWT1VRH09hvWshFgOzKswpO20o4ScpJIES4=
+github.com/AbdelSallam/twitter-scraper v0.0.0-20230509185032-326bd3bbfd3c h1:0AbJX3dXP6EfQ8Owbnesp2qpNd4GoB8blSQX6+f1NW4=
+github.com/AbdelSallam/twitter-scraper v0.0.0-20230509185032-326bd3bbfd3c/go.mod h1:5IgCkH/2ImtSDddWRTtdXroxQfhdItsit3dc9AAehUg=
+github.com/AbdelSallam/twitter-scraper v0.0.0-20230509190153-1e7faf7521b0 h1:bMaooDCTTDNaqCh4BdKaVF42BHzokX2RyeGwbxuBCUk=
+github.com/AbdelSallam/twitter-scraper v0.0.0-20230509190153-1e7faf7521b0/go.mod h1:5IgCkH/2ImtSDddWRTtdXroxQfhdItsit3dc9AAehUg=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/BurntSushi/toml v1.1.0/go.mod h1:CxXYINrC8qIiEnFrOxCa7Jy5BFHlXnUU2pbicEuybxQ=
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
@@ -597,6 +601,8 @@ github.com/mwitkow/go-conntrack v0.0.0-20161129095857-cc309e4a2223/go.mod h1:qRW
 github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f/go.mod h1:qRWi+5nqEBWmkhHvq77mSJWrCKwh8bxhgT7d/eI7P4U=
 github.com/n0madic/twitter-scraper v0.0.0-20230429212535-64a2f495ca7c h1:gPi2G+2ZjyXYcXh4xhvhbtkfe7DZa/X46fTARXWQZdM=
 github.com/n0madic/twitter-scraper v0.0.0-20230429212535-64a2f495ca7c/go.mod h1:ojY32DnRD4duQuvyreLPHBXBeQZuLjzJqGb33JMZUJ8=
+github.com/n0madic/twitter-scraper v0.0.0-20230508101308-2b607217fd11 h1:SNhcA85OrGAweJ2QSSNC7GWMV8tQwjIFRLs7n/jWhBo=
+github.com/n0madic/twitter-scraper v0.0.0-20230508101308-2b607217fd11/go.mod h1:ojY32DnRD4duQuvyreLPHBXBeQZuLjzJqGb33JMZUJ8=
 github.com/nxadm/tail v1.4.4 h1:DQuhQpB1tVlglWS2hLQ5OV6B5r8aGxSrPc5Qo6uTN78=
 github.com/nxadm/tail v1.4.4/go.mod h1:kenIhsEOeOJmVchQTgglprH7qJGnHDVpk1VPCcaMI8A=
 github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=

@@ -2,6 +2,7 @@ package tweets
 
 import (
 	"errors"
+	twitterscraper "github.com/AbdelSallam/twitter-scraper"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/index/ref/bitcoin/tx/gen"
 	"github.com/memocash/tweet/config"
@@ -9,7 +10,6 @@ import (
 	"github.com/memocash/tweet/tweets"
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/memocash/tweet/wallet"
-	twitterscraper "github.com/n0madic/twitter-scraper"
 	"github.com/spf13/cobra"
 	"github.com/syndtr/goleveldb/leveldb"
 	"strconv"

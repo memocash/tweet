@@ -1,13 +1,13 @@
 package bot
 
 import (
+	twitterscraper "github.com/AbdelSallam/twitter-scraper"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/bot"
 	"github.com/memocash/tweet/bot/info"
 	"github.com/memocash/tweet/config"
 	tweetWallet "github.com/memocash/tweet/wallet"
-	twitterscraper "github.com/n0madic/twitter-scraper"
 	"github.com/spf13/cobra"
 )
 
