@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"encoding/json"
 	"errors"
 	twitterscraper "github.com/AbdelSallam/twitter-scraper"
 	"github.com/jchavannes/jgo/jerr"
@@ -14,8 +15,14 @@ import (
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/syndtr/goleveldb/leveldb"
 	"log"
+	"net/http"
+	"os"
 	"sync"
 	"time"
+)
+
+const (
+	COOKJAR_FILE = "cookies.json"
 )
 
 type Bot struct {
@@ -57,6 +64,10 @@ func NewBot(mnemonic *wallet.Mnemonic, scraper *twitterscraper.Scraper, addresse
 }
 
 func (b *Bot) ProcessMissedTxs() error {
+	err := b.SetExistingCookies()
+	if err != nil {
+		return jerr.Get("error setting existing cookies", err)
+	}
 	recentAddressSeenTx, err := db.GetRecentAddressSeenTx(b.Addr)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		return jerr.Get("error getting recent address seen tx for addr", err)
@@ -92,7 +103,11 @@ func (b *Bot) MaintenanceListen() error {
 }
 func (b *Bot) Listen() error {
 	jlog.Logf("Bot listening to address: %s\n", b.Addr.String())
-	err := b.SetAddresses()
+	err := b.SetExistingCookies()
+	if err != nil {
+		return jerr.Get("error setting existing cookies", err)
+	}
+	err = b.SetAddresses()
 	if err != nil {
 		return jerr.Get("error setting addresses", err)
 	}
@@ -246,6 +261,22 @@ func (b *Bot) UpdateStream() error {
 	}
 	if err := graph.AddressListen(b.Addresses, b.SaveTx, b.ErrorChan); err != nil {
 		return jerr.Get("error listening to address on graphql", err)
+	}
+	return nil
+}
+
+func (b *Bot) SetExistingCookies() error {
+	cookies, err := os.ReadFile(COOKJAR_FILE)
+	if err != nil && !os.IsNotExist(err) {
+		return jerr.Get("error reading cookies", err)
+	}
+	if !os.IsNotExist(err) {
+		var cookieList []*http.Cookie
+		err := json.Unmarshal(cookies, &cookieList)
+		if err != nil {
+			return jerr.Get("error unmarshalling cookies", err)
+		}
+		b.TweetScraper.SetCookies(cookieList)
 	}
 	return nil
 }

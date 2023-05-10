@@ -32,9 +32,14 @@ func GetAllTweets(userId int64, scraper *twitterscraper.Scraper) (int, error) {
 }
 
 func getOldTweets(userId int64, scraper *twitterscraper.Scraper) ([]obj.TweetTx, error) {
+	profile, err := GetProfile(userId, scraper)
+	if err != nil {
+		return nil, jerr.Get("error getting profile", err)
+	}
 	var userTimelineParams = &twitter.UserTimelineParams{
-		UserID: userId,
-		Count:  100,
+		UserID:     userId,
+		Count:      100,
+		ScreenName: profile.Name,
 	}
 	recentTweetTx, err := db.GetOldestTweetTx(userId)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
@@ -51,9 +56,14 @@ func getOldTweets(userId int64, scraper *twitterscraper.Scraper) ([]obj.TweetTx,
 }
 
 func getNewTweets(accountKey obj.AccountKey, numTweets int, newBot bool, scraper *twitterscraper.Scraper) ([]*db.TweetTx, error) {
+	profile, err := GetProfile(accountKey.UserID, scraper)
+	if err != nil {
+		return nil, jerr.Get("error getting profile", err)
+	}
 	var userTimelineParams = &twitter.UserTimelineParams{
-		UserID: accountKey.UserID,
-		Count:  numTweets,
+		UserID:     accountKey.UserID,
+		Count:      numTweets,
+		ScreenName: profile.Name,
 	}
 	recentTweetTx, err := db.GetRecentTweetTx(accountKey.UserID)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
@@ -104,7 +114,7 @@ func GetAndSaveTwitterTweets(params *twitter.UserTimelineParams, scraper *twitte
 		}
 		tweetID, err := strconv.ParseInt(scrapedTweet.ID, 10, 64)
 		var inReplyToStatusID int64
-		if scrapedTweet.IsReply {
+		if scrapedTweet.InReplyToStatus != nil {
 			inReplyToStatusID, err = strconv.ParseInt(scrapedTweet.InReplyToStatus.ID, 10, 64)
 			if err != nil {
 				return nil, jerr.Get("error parsing in reply to status id", err)
@@ -112,15 +122,17 @@ func GetAndSaveTwitterTweets(params *twitter.UserTimelineParams, scraper *twitte
 		} else {
 			inReplyToStatusID = 0
 		}
-		var entities twitter.Entities
-		var extendedEntity twitter.ExtendedEntity
-		for _, media := range scrapedTweet.URLs {
-			entities.Media = append(entities.Media, twitter.MediaEntity{
-				MediaURL: media,
-			})
-			extendedEntity.Media = append(extendedEntity.Media, twitter.MediaEntity{
-				MediaURL: media,
-			})
+		var entities = twitter.Entities{}
+		var extendedEntity = twitter.ExtendedEntity{}
+		if scrapedTweet.URLs != nil {
+			for _, media := range scrapedTweet.URLs {
+				entities.Media = append(entities.Media, twitter.MediaEntity{
+					MediaURL: media,
+				})
+				extendedEntity.Media = append(extendedEntity.Media, twitter.MediaEntity{
+					MediaURL: media,
+				})
+			}
 		}
 		tweet := twitter.Tweet{
 			ID:                tweetID,
