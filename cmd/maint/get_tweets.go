@@ -31,12 +31,12 @@ var getTweetsCmd = &cobra.Command{
 			jerr.Get("error reading cookies", err).Fatal()
 		}
 		if !os.IsNotExist(err) {
-			client := http.DefaultClient
-			err := json.Unmarshal(cookies, client.Jar)
+			var cookieList []*http.Cookie
+			err := json.Unmarshal(cookies, &cookieList)
 			if err != nil {
 				jerr.Get("error unmarshalling cookies", err).Fatal()
 			}
-			scraper.SetCookies(&client.Jar)
+			scraper.SetCookies(cookieList)
 		}
 		scraper.SetSearchMode(twitterscraper.SearchLatest)
 		err = scraper.Login(config.GetTwitterAPIConfig().UserName, config.GetTwitterAPIConfig().Password)
@@ -67,12 +67,12 @@ var getTweetsCmd = &cobra.Command{
 	},
 }
 
-func SaveCookies(cookieJar *http.CookieJar) error {
-	cookies, err := json.Marshal(cookieJar)
+func SaveCookies(cookies []*http.Cookie) error {
+	marshaledCookies, err := json.Marshal(cookies)
 	if err != nil {
 		return jerr.Get("error marshalling cookies", err)
 	}
-	err = os.WriteFile(COOKJAR_FILE, cookies, 0644)
+	err = os.WriteFile(COOKJAR_FILE, marshaledCookies, 0644)
 	if err != nil {
 		return jerr.Get("error writing cookies", err)
 	}
