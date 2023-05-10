@@ -1,7 +1,6 @@
 package maint
 
 import (
-	"fmt"
 	"github.com/jchavannes/btcd/chaincfg/chainhash"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jutil"
@@ -148,7 +147,7 @@ func MigrateProfile(levelDb *leveldb.DB) error {
 		}
 		address, err := wallet.GetAddrFromString(parts[1])
 		if err != nil {
-			fmt.Printf("error getting address from string, deleting: %s", parts[1])
+			log.Printf("error getting address from string, deleting: %s", parts[1])
 			err = levelDb.Delete(key, nil)
 			if err != nil {
 				return jerr.Get("error deleting old key", err)
@@ -212,7 +211,7 @@ func MigrateSavedAddressTweet(levelDb *leveldb.DB) error {
 		}
 		address, err := wallet.GetAddrFromString(parts[1])
 		if err != nil {
-			fmt.Printf("error getting address from string, deleting: %s", parts[1])
+			log.Printf("error getting address from string, deleting: %s", parts[1])
 			err = levelDb.Delete(key, nil)
 			if err != nil {
 				return jerr.Get("error deleting old key", err)
@@ -253,7 +252,7 @@ func MigrateTxOutput(levelDb *leveldb.DB) error {
 			continue
 		}
 		if strings.Contains(parts[1], "unknown") {
-			fmt.Printf("error getting address from string, deleting: %s", parts[1])
+			log.Printf("error getting address from string, deleting: %s", parts[1])
 			err := levelDb.Delete(key, nil)
 			if err != nil {
 				return jerr.Get("error deleting old key", err)
@@ -262,7 +261,7 @@ func MigrateTxOutput(levelDb *leveldb.DB) error {
 		}
 		addr, err := wallet.GetAddrFromString(parts[1])
 		if err != nil {
-			fmt.Printf("error getting address from string, deleting: %s", parts[1])
+			log.Printf("error getting address from string, deleting: %s", parts[1])
 			err = levelDb.Delete(key, nil)
 			if err != nil {
 				return jerr.Get("error deleting old key", err)
@@ -337,7 +336,7 @@ func MigrateFlag(levelDb *leveldb.DB) error {
 		}
 		addr, err := wallet.GetAddrFromString(parts[1])
 		if err != nil {
-			fmt.Printf("error getting address from string, deleting: %s", parts[1])
+			log.Printf("error getting address from string, deleting: %s", parts[1])
 			err = levelDb.Delete(key, nil)
 			if err != nil {
 				return jerr.Get("error deleting old key", err)
@@ -374,7 +373,7 @@ func MigrateAddressLinkedKey(levelDb *leveldb.DB) error {
 		}
 		addr, err := wallet.GetAddrFromString(parts[1])
 		if err != nil {
-			fmt.Printf("error getting address from string, deleting: %s", parts[1])
+			log.Printf("error getting address from string, deleting: %s", parts[1])
 			err = levelDb.Delete(key, nil)
 			if err != nil {
 				return jerr.Get("error deleting old key", err)

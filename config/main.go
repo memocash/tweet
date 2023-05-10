@@ -16,14 +16,8 @@ type Config struct {
 }
 
 type TwitterAPI struct {
-	ConsumerKey    string `mapstructure:"CONSUMER_KEY"`
-	ConsumerSecret string `mapstructure:"CONSUMER_SECRET"`
-	UserName       string `mapstructure:"USER_NAME"`
-	Password       string `mapstructure:"PASSWORD"`
-}
-
-func (t TwitterAPI) IsSet() bool {
-	return t.ConsumerKey != "" && t.ConsumerSecret != ""
+	UserName string `mapstructure:"USER_NAME"`
+	Password string `mapstructure:"PASSWORD"`
 }
 
 type Stream struct {

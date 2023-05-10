@@ -7,6 +7,7 @@ import (
 	"github.com/memocash/tweet/bot"
 	"github.com/memocash/tweet/bot/info"
 	"github.com/memocash/tweet/config"
+	"github.com/memocash/tweet/tweets"
 	tweetWallet "github.com/memocash/tweet/wallet"
 	"github.com/spf13/cobra"
 )
@@ -50,6 +51,10 @@ var runCmd = &cobra.Command{
 		go func() {
 			err = memoBot.Listen()
 			memoBot.TweetScraper.Logout()
+			err := tweets.SaveCookies(memoBot.TweetScraper.GetCookies())
+			if err != nil {
+				jerr.Get("error saving cookies", err).Print()
+			}
 			errorChan <- jerr.Get("error listening for transactions", err)
 		}()
 		go func() {

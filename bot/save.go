@@ -20,6 +20,7 @@ import (
 	"github.com/memocash/tweet/tweets/obj"
 	tweetWallet "github.com/memocash/tweet/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
+	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -74,7 +75,7 @@ func (s *SaveTx) HandleRequestMainBot() error {
 		}
 	default:
 		if s.Message != "" {
-			fmt.Printf("Invalid command: %s\n.", s.Message)
+			log.Printf("Invalid command: %s\n.", s.Message)
 			errMsg := "Invalid command. Please use the following format: CREATE <twitterName> or WITHDRAW <twitterName>"
 			if err := refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, errMsg); err != nil {
 				return jerr.Get("error refunding", err)

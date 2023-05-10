@@ -12,48 +12,16 @@ import (
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/memocash/tweet/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
+	"log"
+	"net/http"
 	"os"
 	"strconv"
 	"time"
 )
 
-func GetAllTweets(userId int64, scraper *twitterscraper.Scraper) (int, error) {
-	var numTweets = 0
-	for {
-		tweets, err := getOldTweets(userId, scraper)
-		if err != nil {
-			return numTweets, jerr.Get("error getting old tweets", err)
-		}
-		if len(tweets) == 1 {
-			return numTweets, nil
-		}
-		numTweets += len(tweets)
-	}
-}
-
-func getOldTweets(userId int64, scraper *twitterscraper.Scraper) ([]obj.TweetTx, error) {
-	profile, err := GetProfile(userId, scraper)
-	if err != nil {
-		return nil, jerr.Get("error getting profile", err)
-	}
-	var userTimelineParams = &twitter.UserTimelineParams{
-		UserID:     userId,
-		Count:      100,
-		ScreenName: profile.Name,
-	}
-	recentTweetTx, err := db.GetOldestTweetTx(userId)
-	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
-		return nil, jerr.Get("error getting oldest tweet tx", err)
-	}
-	if recentTweetTx != nil {
-		userTimelineParams.MaxID = recentTweetTx.TweetId
-	}
-	tweetTxs, err := GetAndSaveTwitterTweets(userTimelineParams, scraper)
-	if err != nil {
-		return nil, jerr.Get("error getting new tweets from twitter", err)
-	}
-	return tweetTxs, nil
-}
+const (
+	COOKJAR_FILE = "cookies.json"
+)
 
 func getNewTweets(accountKey obj.AccountKey, numTweets int, newBot bool, scraper *twitterscraper.Scraper) ([]*db.TweetTx, error) {
 	profile, err := GetProfile(accountKey.UserID, scraper)
@@ -167,38 +135,6 @@ func GetAndSaveTwitterTweets(params *twitter.UserTimelineParams, scraper *twitte
 	return tweetTxs, nil
 }
 
-func getNewTweetsLocal(accountKey obj.AccountKey, numTweets int) ([]obj.TweetTx, error) {
-	file := fmt.Sprintf("tweets-%s.json", strconv.FormatInt(accountKey.UserID, 10))
-	f, err := os.Open(file)
-	if err != nil {
-		return nil, jerr.Get("error opening file for local storage of tweets", err)
-	}
-	defer f.Close()
-	var tweetTxs []obj.TweetTx
-	if err := json.NewDecoder(f).Decode(&tweetTxs); err != nil {
-		return nil, jerr.Get("error decoding tweets for local storage", err)
-	}
-	var dbTweetTxs = make([]db.ObjectI, len(tweetTxs))
-	for i, tweetTx := range tweetTxs {
-		if i >= numTweets {
-			break
-		}
-		tweetTxJson, err := json.Marshal(tweetTx)
-		if err != nil {
-			return nil, jerr.Get("error marshaling tweet tx for saving twitter tweets local", err)
-		}
-		dbTweetTxs[i] = &db.TweetTx{
-			UserID:  accountKey.UserID,
-			TweetId: tweetTxs[i].Tweet.ID,
-			Tx:      tweetTxJson,
-		}
-	}
-	if err := db.Save(dbTweetTxs); err != nil {
-		return nil, jerr.Get("error saving db tweet from twitter tweet local", err)
-	}
-	return tweetTxs, nil
-}
-
 func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, scraper *twitterscraper.Scraper, flags db.Flags, numTweets int, newBot bool) error {
 	txList, err := getNewTweets(accountKey, numTweets, newBot, scraper)
 	//txList, err := getNewTweetsLocal(accountKey, db, numTweets)
@@ -230,6 +166,19 @@ func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, scraper *tw
 		if numSaved == 0 {
 			break
 		}
+	}
+	return nil
+}
+
+func SaveCookies(cookies []*http.Cookie) error {
+	log.Println("saving cookies")
+	marshaledCookies, err := json.Marshal(cookies)
+	if err != nil {
+		return jerr.Get("error marshalling cookies", err)
+	}
+	err = os.WriteFile(COOKJAR_FILE, marshaledCookies, 0644)
+	if err != nil {
+		return jerr.Get("error writing cookies", err)
 	}
 	return nil
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/memocash/index/ref/bitcoin/tx/script"
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/graph"
+	"log"
 )
 
 type InputGetter struct {
@@ -29,7 +30,7 @@ func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
 			return g.UTXOs, nil
 		}
 	}
-	println("Getting utxos from database...")
+	log.Println("Getting utxos from database...")
 	client := lib.NewClient(graph.ServerUrlHttp, &Database{})
 	address := g.Address.GetAddr()
 	outputs, err := client.GetUtxos(address)

@@ -157,7 +157,6 @@ func createBotStream(b *Bot, twitterAccount *twitter.User, senderAddress string,
 			return nil, nil, jerr.Get("error updating linked-"+senderAddress+"-"+twitterAccount.IDStr, err)
 		}
 	}
-	println("saved bot stream")
 	accountKey := obj.GetAccountKeyFromArgs([]string{newKey.GetBase58Compressed(), twitterAccount.IDStr})
 	return &accountKey, &newWallet, nil
 }

@@ -4,7 +4,6 @@ import (
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/tweet/cmd/bot"
 	"github.com/memocash/tweet/cmd/maint"
-	"github.com/memocash/tweet/cmd/tweets"
 	"github.com/memocash/tweet/cmd/update"
 	"github.com/memocash/tweet/config"
 	"github.com/spf13/cobra"
@@ -30,7 +29,6 @@ func Execute() error {
 	tweetCmd.AddCommand(
 		bot.GetCommand(),
 		maint.GetCommand(),
-		tweets.GetCommand(),
 		update.GetCommand(),
 	)
 	if err := tweetCmd.Execute(); err != nil {
