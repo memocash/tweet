@@ -199,17 +199,6 @@ func (s *SaveTx) HandleDown() error {
 
 }
 func (s *SaveTx) HandleCreate() error {
-	botRunningCount, err := db.GetBotRunningCount()
-	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
-		return jerr.Get("error getting bot running count", err)
-	}
-	if botRunningCount != nil && botRunningCount.Count >= 25 {
-		err := refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, "There are too many bots, please try again later")
-		if err != nil {
-			return jerr.Get("error refunding", err)
-		}
-		return nil
-	}
 	//split the message into an array of strings
 	splitMessage := strings.Split(s.Message, " ")
 	//get the twitter name from the message

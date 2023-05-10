@@ -256,9 +256,6 @@ func (b *Bot) UpdateStream() error {
 			jlog.Logf("streaming %s to address %s\n", stream.UserID, streamAddress.GetEncoded())
 		}
 	}
-	if err := db.Save([]db.ObjectI{&db.BotRunningCount{Count: len(botStreams)}}); err != nil {
-		return jerr.Get("error saving bot running count", err)
-	}
 	if err := graph.AddressListen(b.Addresses, b.SaveTx, b.ErrorChan); err != nil {
 		return jerr.Get("error listening to address on graphql", err)
 	}
