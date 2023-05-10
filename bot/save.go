@@ -236,7 +236,7 @@ func (s *SaveTx) HandleCreate() error {
 	}
 	twitterAccount := twitter.User{
 		ID:         userId,
-		ScreenName: twitterProfile.Name,
+		ScreenName: twitterProfile.Username,
 		IDStr:      twitterProfile.UserID,
 	}
 	//check if --history is in the message

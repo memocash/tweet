@@ -10,6 +10,10 @@ import (
 	"github.com/memocash/tweet/tweets"
 	tweetWallet "github.com/memocash/tweet/wallet"
 	"github.com/spf13/cobra"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 var runCmd = &cobra.Command{
@@ -47,12 +51,23 @@ var runCmd = &cobra.Command{
 		if err := memoBot.ProcessMissedTxs(); err != nil {
 			jerr.Get("fatal error updating bot", err).Fatal()
 		}
+		sigc := make(chan os.Signal, 1)
+		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			<-sigc
+			log.Println("Tweet Bot caught SIGINT, saving cookies and stopping...")
+			err := tweets.SaveCookies(memoBot.TweetScraper.GetCookies())
+			if err != nil {
+				jerr.Get("error saving cookies", err).Print()
+			}
+			os.Exit(0)
+		}()
 		var errorChan = make(chan error)
 		go func() {
 			err = memoBot.Listen()
 			memoBot.TweetScraper.Logout()
-			err := tweets.SaveCookies(memoBot.TweetScraper.GetCookies())
-			if err != nil {
+			cookieError := tweets.SaveCookies(memoBot.TweetScraper.GetCookies())
+			if cookieError != nil {
 				jerr.Get("error saving cookies", err).Print()
 			}
 			errorChan <- jerr.Get("error listening for transactions", err)
