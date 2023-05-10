@@ -169,6 +169,7 @@ func (b *Bot) CheckForNewTweets() error {
 		return jerr.Get("error getting bot streams for listen skipped", err)
 	}
 	for _, stream := range botStreams {
+		log.Printf("Checking for new tweets for %s : %d\n", stream.Wallet.Address, stream.UserID)
 		flag, err := db.GetFlag(wallet.GetAddressFromString(stream.Sender).GetAddr(), stream.UserID)
 		if err != nil {
 			return jerr.Get("error getting flag for listen skipped", err)
