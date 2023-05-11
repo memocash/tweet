@@ -172,18 +172,50 @@ func (s *SaveTx) HandleRequestSubBot() error {
 	if err != nil || flag == nil {
 		return jerr.Get("error getting flag", err)
 	}
-	if flag.Flags.CatchUp {
-		accountKey := obj.AccountKey{
-			UserID:  matchedStream.UserID,
-			Key:     matchedStream.Wallet.Key,
-			Address: matchedStream.Wallet.Address,
+	accountKey := obj.AccountKey{
+		UserID:  matchedStream.UserID,
+		Key:     matchedStream.Wallet.Key,
+		Address: matchedStream.Wallet.Address,
+	}
+
+	//message sent from the main bot
+	if s.SenderAddress == s.Bot.Addr.String() {
+		println("Sub bot received funds from main bot")
+		//search the database for the SubBotCommand correlating to this txHash
+		subBotCommand, err := db.GetSubBotCommand(s.TxHash)
+		if err != nil {
+			return jerr.Get("error getting sub bot command", err)
 		}
-		wlt := matchedStream.Wallet
-		err = tweets.GetSkippedTweets(accountKey, &wlt, s.Bot.TweetScraper, flag.Flags, 100, false)
-		if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
-			return jerr.Get("error getting skipped tweets", err)
+		if subBotCommand == nil {
+			return jerr.Get("sub bot command not found", errors.New("sub bot command not found"))
+		}
+		if !subBotCommand.BotExists {
+			_, err := updateProfile(s.Bot, matchedStream.Wallet.Address, matchedStream.Wallet.Key, matchedStream.UserID, matchedStream.Sender)
+			if err != nil {
+				return jerr.Get("error updating profile for sub bot", err)
+			}
+		}
+		if subBotCommand.HistoryNum > 0 {
+			err = tweets.GetSkippedTweets(accountKey, &matchedStream.Wallet, s.Bot.TweetScraper, flag.Flags, subBotCommand.HistoryNum, true)
+			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
+				return jerr.Get("error getting skipped tweets on bot save tx", err)
+			} else if flag.Flags.CatchUp {
+				err = tweets.GetSkippedTweets(accountKey, &matchedStream.Wallet, s.Bot.TweetScraper, flag.Flags, 100, false)
+				if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
+					return jerr.Get("error getting skipped tweets on bot save tx", err)
+				}
+			}
+		}
+	} else {
+		if flag.Flags.CatchUp {
+			wlt := matchedStream.Wallet
+			err = tweets.GetSkippedTweets(accountKey, &wlt, s.Bot.TweetScraper, flag.Flags, 100, false)
+			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
+				return jerr.Get("error getting skipped tweets", err)
+			}
 		}
 	}
+
 	if err := s.Bot.SafeUpdate(); err != nil {
 		return jerr.Get("error updating bot", err)
 	}
@@ -229,12 +261,11 @@ func (s *SaveTx) HandleCreate() error {
 		IDStr:      twitterProfile.UserID,
 	}
 	//check if --history is in the message
-	history := false
 	var flags = db.GetDefaultFlags()
-	var historyNum = 100
+	var historyNum = 0
 	for index, word := range splitMessage {
 		if word == "--history" {
-			history = true
+			historyNum = 100
 			if len(splitMessage) > index+1 {
 				historyNum, err = strconv.Atoi(splitMessage[index+1])
 				if err != nil {
@@ -266,27 +297,9 @@ func (s *SaveTx) HandleCreate() error {
 	}}); err != nil {
 		return jerr.Get("error saving flags to db", err)
 	}
-	accountKeyPointer, wlt, err := createBotStream(s.Bot, &twitterAccount, s.SenderAddress, s.Tx, s.CoinIndex)
+	err = createBotStream(s.Bot, &twitterAccount, s.SenderAddress, s.Tx, s.CoinIndex, historyNum)
 	if err != nil {
 		return jerr.Get("error creating bot", err)
-	}
-	//transfer all the tweets from the twitter account to the new bot
-	if accountKeyPointer != nil {
-		accountKey := *accountKeyPointer
-		if history {
-			if err = tweets.GetSkippedTweets(accountKey, wlt, s.Bot.TweetScraper, flags, historyNum, true); err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
-				return jerr.Get("error getting skipped tweets on bot save tx", err)
-			}
-		} else if flags.CatchUp {
-			if err = tweets.GetSkippedTweets(accountKey, wlt, s.Bot.TweetScraper, flags, 100, false); err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
-				return jerr.Get("error getting skipped tweets on bot save tx", err)
-			}
-		}
-	} else {
-		if s.Bot.Verbose {
-			jlog.Log("account key pointer is nil, not transferring tweets, bot not created")
-		}
-		return nil
 	}
 	return nil
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/memocash/index/ref/bitcoin/tx/parse"
 	"github.com/memocash/index/ref/bitcoin/tx/script"
 	"github.com/memocash/index/ref/bitcoin/wallet"
+	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/graph"
 	"golang.org/x/crypto/scrypt"
 	"io"
@@ -83,7 +84,7 @@ func MakeReply(wallet Wallet, parentHash []byte, message string) ([]byte, error)
 	return memoTx.GetHash(), nil
 }
 
-func FundTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Address) error {
+func FundTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Address, historyNum int, botExists bool) error {
 	memoTx, err := gen.Tx(gen.TxRequest{
 		InputsToUse: []memo.UTXO{utxo},
 		Change: wallet.Change{
@@ -102,6 +103,12 @@ func FundTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Ad
 	}
 	txInfo := parse.GetTxInfo(memoTx)
 	txInfo.Print()
+	if err := db.Save([]db.ObjectI{&db.SubBotCommand{
+		TxHash:     memoTx.MsgTx.TxHash(),
+		HistoryNum: historyNum,
+		BotExists:  botExists}}); err != nil {
+		return jerr.Get("error saving sub bot command", err)
+	}
 	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
 		return jerr.Get("error completing transaction fund twitter address", err)
 	}

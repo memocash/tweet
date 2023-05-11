@@ -23,6 +23,8 @@ const (
 	PrefixTxBlock           = "txblock"
 	PrefixTxInput           = "input"
 	PrefixTxOutput          = "output"
+
+	PrefixSubBotCommand = "sub-bot-command"
 )
 
 var _db *leveldb.DB

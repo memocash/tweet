@@ -13,10 +13,13 @@ import (
 	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/graph"
-	"github.com/memocash/tweet/tweets/obj"
 	tweetWallet "github.com/memocash/tweet/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
 	"log"
+)
+
+const (
+	NEW_BOT_STRING = "newBot"
 )
 
 func getBotStreams(cryptKey []byte) ([]config.Stream, error) {
@@ -64,31 +67,32 @@ func getBotStreams(cryptKey []byte) ([]config.Stream, error) {
 	return botStreams, nil
 }
 
-func createBotStream(b *Bot, twitterAccount *twitter.User, senderAddress string, tx graph.Tx, coinIndex uint32) (*obj.AccountKey, *tweetWallet.Wallet, error) {
+func createBotStream(b *Bot, twitterAccount *twitter.User, senderAddress string, tx graph.Tx, coinIndex uint32, historyNum int) error {
 	//check if the value of the transaction is less than 5,000 or this address already has a bot for this account in the database
 	botExists := false
 	_, err := db.GetAddressKey(wallet.GetAddressFromString(senderAddress).GetAddr(), twitterAccount.ID)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
-		return nil, nil, jerr.Get("error getting bot from database", err)
+		return jerr.Get("error getting bot from database", err)
 	} else if err == nil {
 		botExists = true
 	}
 	if tx.Outputs[coinIndex].Amount < 5000 {
+		//edit this to also send a message even if there's less than 546 satoshis
 		if tx.Outputs[coinIndex].Amount < 546 {
-			return nil, nil, nil
+			return nil
 		}
 		errMsg := fmt.Sprintf("You need to send at least 5,000 satoshis to create a bot for the account @%s", twitterAccount.ScreenName)
 		err = refund(tx, b, coinIndex, senderAddress, errMsg)
 		if err != nil {
-			return nil, nil, jerr.Get("error refunding", err)
+			return jerr.Get("error refunding", err)
 		}
-		return nil, nil, nil
+		return nil
 	}
 	var newKey wallet.PrivateKey
 	var newAddr wallet.Address
 	botStreamsCount, err := db.GetBotStreamsCount()
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
-		return nil, nil, jerr.Get("error getting bot streams count", err)
+		return jerr.Get("error getting bot streams count", err)
 	}
 	var numStreamUint uint
 	if botStreamsCount != nil {
@@ -97,15 +101,15 @@ func createBotStream(b *Bot, twitterAccount *twitter.User, senderAddress string,
 	if botExists {
 		addressKey, err := db.GetAddressKey(wallet.GetAddressFromString(senderAddress).GetAddr(), twitterAccount.ID)
 		if err != nil {
-			return nil, nil, jerr.Get("error getting key from database", err)
+			return jerr.Get("error getting key from database", err)
 		}
 		decryptedKey, err := tweetWallet.Decrypt(addressKey.Key, b.Crypt)
 		if err != nil {
-			return nil, nil, jerr.Get("error decrypting key", err)
+			return jerr.Get("error decrypting key", err)
 		}
 		newKey, err = wallet.ImportPrivateKey(string(decryptedKey))
 		if err != nil {
-			return nil, nil, jerr.Get("error importing private key", err)
+			return jerr.Get("error importing private key", err)
 		}
 		newAddr = newKey.GetAddress()
 	} else {
@@ -113,50 +117,43 @@ func createBotStream(b *Bot, twitterAccount *twitter.User, senderAddress string,
 		keyPointer, err := b.Mnemonic.GetPath(path)
 		newKey = *keyPointer
 		if err != nil {
-			return nil, nil, jerr.Get("error getting path", err)
+			return jerr.Get("error getting path", err)
 		}
 		newAddr = newKey.GetAddress()
 	}
 	pkScript, err := hex.DecodeString(tx.Outputs[coinIndex].Script)
 	if err != nil {
-		return nil, nil, jerr.Get("error decoding script pk script for create bot", err)
+		return jerr.Get("error decoding script pk script for create bot", err)
 	}
-	if err := tweetWallet.FundTwitterAddress(memo.UTXO{Input: memo.TxInput{
+	if err = tweetWallet.FundTwitterAddress(memo.UTXO{Input: memo.TxInput{
 		Value:        tx.Outputs[coinIndex].Amount,
 		PrevOutHash:  hs.GetTxHash(tx.Hash),
 		PrevOutIndex: coinIndex,
 		PkHash:       b.Key.GetAddress().GetPkHash(),
 		PkScript:     pkScript,
-	}}, b.Key, newAddr); err != nil {
-		return nil, nil, jerr.Get("error funding twitter address", err)
+	}}, b.Key, newAddr, historyNum, botExists); err != nil {
+		return jerr.Get("error funding twitter address", err)
 	}
-	newWallet := tweetWallet.NewWallet(newAddr, newKey)
-	if !botExists {
-		err = updateProfile(b, newWallet, twitterAccount.ID, senderAddress)
-		if err != nil {
-			return nil, nil, jerr.Get("error updating profile", err)
-		}
-	}
+
 	if b.Verbose {
 		jlog.Logf("Create bot stream Address: " + newAddr.GetEncoded())
 	}
 	if !botExists {
 		log.Println("saving bot stream")
 		if err := db.Save([]db.ObjectI{&db.BotStreamsCount{Count: int(numStreamUint + 1)}}); err != nil {
-			return nil, nil, jerr.Get("error saving bot streams count", err)
+			return jerr.Get("error saving bot streams count", err)
 		}
 		encryptedKey, err := tweetWallet.Encrypt([]byte(newKey.GetBase58Compressed()), b.Crypt)
 		if err != nil {
-			return nil, nil, jerr.Get("error encrypting key", err)
+			return jerr.Get("error encrypting key", err)
 		}
 		if err := db.Save([]db.ObjectI{&db.AddressLinkedKey{
 			Address: wallet.GetAddressFromString(senderAddress).GetAddr(),
 			UserID:  twitterAccount.ID,
 			Key:     encryptedKey,
 		}}); err != nil {
-			return nil, nil, jerr.Get("error updating linked-"+senderAddress+"-"+twitterAccount.IDStr, err)
+			return jerr.Get("error updating linked-"+senderAddress+"-"+twitterAccount.IDStr, err)
 		}
 	}
-	accountKey := obj.GetAccountKeyFromArgs([]string{newKey.GetBase58Compressed(), twitterAccount.IDStr})
-	return &accountKey, &newWallet, nil
+	return nil
 }
