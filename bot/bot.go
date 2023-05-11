@@ -13,6 +13,7 @@ import (
 	"github.com/memocash/tweet/graph"
 	"github.com/memocash/tweet/tweets"
 	"github.com/memocash/tweet/tweets/obj"
+	tweetWallet "github.com/memocash/tweet/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
 	"log"
 	"net/http"
@@ -124,7 +125,7 @@ func (b *Bot) Listen() error {
 			select {
 			case <-t.C:
 			}
-			botStreams, err := getBotStreams(b.Crypt)
+			botStreams, err := getBotStreams(b.Crypt, true)
 			if err != nil {
 				b.ErrorChan <- jerr.Get("error making stream array bot listen", err)
 			}
@@ -136,7 +137,7 @@ func (b *Bot) Listen() error {
 			}
 		}
 	}()
-	botStreams, err := getBotStreams(b.Crypt)
+	botStreams, err := getBotStreams(b.Crypt, true)
 	if err != nil {
 		return jerr.Get("error getting bot streams for listen skipped", err)
 	}
@@ -164,7 +165,7 @@ func (b *Bot) Listen() error {
 
 func (b *Bot) CheckForNewTweets() error {
 	log.Println("Checking for new tweets")
-	botStreams, err := getBotStreams(b.Crypt)
+	botStreams, err := getBotStreams(b.Crypt, true)
 	if err != nil {
 		return jerr.Get("error getting bot streams for listen skipped", err)
 	}
@@ -209,7 +210,15 @@ func (b *Bot) SetAddresses() error {
 		return jerr.Get("error getting all address keys", err)
 	}
 	for _, addressKey := range addressKeys {
-		b.Addresses = append(b.Addresses, wallet.Addr(addressKey.Address).String())
+		decryptedKey, err := tweetWallet.Decrypt(addressKey.Key, b.Crypt)
+		if err != nil {
+			return jerr.Get("error decrypting key", err)
+		}
+		key, err := wallet.ImportPrivateKey(string(decryptedKey))
+		if err != nil {
+			return jerr.Get("error importing private key", err)
+		}
+		b.Addresses = append(b.Addresses, key.GetAddress().GetEncoded())
 	}
 	return nil
 }
@@ -239,7 +248,7 @@ func (b *Bot) SafeUpdate() error {
 
 func (b *Bot) UpdateStream() error {
 	//create an array of {userId, newKey} objects by searching through the linked-<senderAddress>-<userId> fields
-	botStreams, err := getBotStreams(b.Crypt)
+	botStreams, err := getBotStreams(b.Crypt, false)
 	if err != nil {
 		return jerr.Get("error making stream array update", err)
 	}

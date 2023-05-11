@@ -1,5 +1,7 @@
 package db
 
+import "github.com/jchavannes/jgo/jutil"
+
 type SubBotCommand struct {
 	HistoryNum int
 	BotExists  bool
@@ -10,18 +12,28 @@ func (t *SubBotCommand) GetPrefix() string {
 	return PrefixSubBotCommand
 }
 func (t *SubBotCommand) GetUid() []byte {
-	return t.TxHash[:]
+	return jutil.ByteReverse(t.TxHash[:])
 }
 func (t *SubBotCommand) SetUid(b []byte) {
-	copy(t.TxHash[:], b[:32])
+	if len(b) != 32 {
+		return
+	}
+	copy(t.TxHash[:], jutil.ByteReverse(b))
 }
 
 func (t *SubBotCommand) Serialize() []byte {
-	return nil
+	var botExists byte
+	if t.BotExists {
+		botExists = 1
+	}
+	return jutil.CombineBytes(
+		jutil.GetIntData(t.HistoryNum),
+		[]byte{botExists})
 }
 
-func (t *SubBotCommand) Deserialize([]byte) {
-
+func (t *SubBotCommand) Deserialize(data []byte) {
+	t.HistoryNum = jutil.GetInt(data[:4])
+	t.BotExists = data[4] == 1
 }
 
 func GetSubBotCommand(txHash [32]byte) (*SubBotCommand, error) {

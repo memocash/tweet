@@ -33,6 +33,7 @@ type SaveTx struct {
 	SenderAddress string
 	CoinIndex     uint32
 	TxHash        chainhash.Hash
+	Handled       bool
 }
 
 func NewSaveTx(bot *Bot) *SaveTx {
@@ -42,6 +43,7 @@ func NewSaveTx(bot *Bot) *SaveTx {
 }
 
 func (s *SaveTx) Save(tx graph.Tx) error {
+	s.Handled = false
 	if err := s.SetVars(tx); err != nil {
 		return jerr.Get("error setting vars for save tx", err)
 	}
@@ -54,7 +56,7 @@ func (s *SaveTx) Save(tx graph.Tx) error {
 		jlog.Logf("Already completed tx: %s\n", tx.Hash)
 		return nil
 	}
-	if err := s.HandleTxType(); err != nil {
+	if err = s.HandleTxType(); err != nil {
 		return jerr.Get("error handling request main bot", err)
 	}
 	return nil
@@ -90,18 +92,15 @@ func (s *SaveTx) HandleRequestMainBot() error {
 
 func (s *SaveTx) SetVars(tx graph.Tx) error {
 	s.Tx = tx
-	for _, input := range tx.Inputs {
-		if input.Output.Lock.Address == s.Bot.Addresses[0] {
-			return nil
-		}
-	}
 	var scriptArray []string
 	for _, output := range tx.Outputs {
 		scriptArray = append(scriptArray, output.Script)
 	}
 	s.Message = getMessageFromOutputScripts(scriptArray)
 	for _, input := range tx.Inputs {
-		if input.Output.Lock.Address != s.Bot.Addresses[0] {
+		if s.SenderAddress == "" {
+			s.SenderAddress = input.Output.Lock.Address
+		} else if input.Output.Lock.Address != s.Bot.Addresses[0] {
 			s.SenderAddress = input.Output.Lock.Address
 			break
 		}
@@ -121,6 +120,9 @@ func (s *SaveTx) SetVars(tx graph.Tx) error {
 }
 
 func (s *SaveTx) FinishSave() {
+	if !s.Handled {
+		return
+	}
 	var addressSeenTx = &db.AddressSeenTx{Address: s.Bot.Addr, Seen: s.Tx.Seen.GetTime(), TxHash: s.TxHash}
 	var completed = &db.CompletedTx{TxHash: s.TxHash}
 	if err := db.Save([]db.ObjectI{addressSeenTx, completed}); err != nil {
@@ -136,38 +138,31 @@ func (s *SaveTx) HandleTxType() error {
 			if err != nil {
 				return jerr.Get("error handling request main bot for save tx", err)
 			}
+			s.Handled = true
 		} else {
-			err := s.HandleRequestSubBot()
+			botStreams, err := getBotStreams(s.Bot.Crypt, false)
 			if err != nil {
-				return jerr.Get("error handling request sub bot for save tx", err)
+				return jerr.Get("error getting bot streams", err)
+			}
+			var matchedStream *config.Stream = nil
+			for _, botStream := range botStreams {
+				if botStream.Wallet.Address.GetEncoded() == address && s.SenderAddress != botStream.Wallet.Address.GetEncoded() {
+					matchedStream = &botStream
+					err := s.HandleRequestSubBot(matchedStream)
+					if err != nil {
+						return jerr.Get("error handling request sub bot for save tx", err)
+					}
+					s.Handled = true
+					break
+				}
 			}
 		}
 	}
 	return nil
 }
-func (s *SaveTx) HandleRequestSubBot() error {
+func (s *SaveTx) HandleRequestSubBot(matchedStream *config.Stream) error {
+	log.Printf("Received tx for sub bot: %s\n", matchedStream.Wallet.Address.GetEncoded())
 	//otherwise, one of the sub-bots has just been sent some funds, so based on the value of CatchUp, decide if we try to GetSkippedTweets
-	botStreams, err := getBotStreams(s.Bot.Crypt)
-	if err != nil {
-		return jerr.Get("error getting bot streams", err)
-	}
-	var matchedStream *config.Stream = nil
-	address := s.Tx.Outputs[s.CoinIndex].Lock.Address
-	for _, botStream := range botStreams {
-		if botStream.Wallet.Address.GetEncoded() == address {
-			stream := config.Stream{
-				Key:    botStream.Key,
-				UserID: botStream.UserID,
-				Sender: botStream.Sender,
-				Wallet: botStream.Wallet,
-			}
-			matchedStream = &stream
-			break
-		}
-	}
-	if matchedStream == nil {
-		return nil
-	}
 	flag, err := db.GetFlag(wallet.GetAddressFromString(matchedStream.Sender).GetAddr(), matchedStream.UserID)
 	if err != nil || flag == nil {
 		return jerr.Get("error getting flag", err)
@@ -177,11 +172,8 @@ func (s *SaveTx) HandleRequestSubBot() error {
 		Key:     matchedStream.Wallet.Key,
 		Address: matchedStream.Wallet.Address,
 	}
-
-	//message sent from the main bot
 	if s.SenderAddress == s.Bot.Addr.String() {
-		println("Sub bot received funds from main bot")
-		//search the database for the SubBotCommand correlating to this txHash
+		log.Println("\n\nSub bot received funds from main bot\n\n")
 		subBotCommand, err := db.GetSubBotCommand(s.TxHash)
 		if err != nil {
 			return jerr.Get("error getting sub bot command", err)
@@ -189,27 +181,35 @@ func (s *SaveTx) HandleRequestSubBot() error {
 		if subBotCommand == nil {
 			return jerr.Get("sub bot command not found", errors.New("sub bot command not found"))
 		}
+		fmt.Printf("HistoryNum: %d\nBotExists: %b\n", subBotCommand.HistoryNum, subBotCommand.BotExists)
 		if !subBotCommand.BotExists {
+			log.Println("New bot, updating profile")
 			_, err := updateProfile(s.Bot, matchedStream.Wallet.Address, matchedStream.Wallet.Key, matchedStream.UserID, matchedStream.Sender)
 			if err != nil {
 				return jerr.Get("error updating profile for sub bot", err)
 			}
 		}
+
 		if subBotCommand.HistoryNum > 0 {
-			err = tweets.GetSkippedTweets(accountKey, &matchedStream.Wallet, s.Bot.TweetScraper, flag.Flags, subBotCommand.HistoryNum, true)
+			log.Printf("History number was %d, getting that many skipped tweets\n", subBotCommand.HistoryNum)
+			err = tweets.GetSkippedTweets(accountKey, &matchedStream.Wallet, s.Bot.TweetScraper, flag.Flags, subBotCommand.HistoryNum, !subBotCommand.BotExists)
 			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 				return jerr.Get("error getting skipped tweets on bot save tx", err)
-			} else if flag.Flags.CatchUp {
-				err = tweets.GetSkippedTweets(accountKey, &matchedStream.Wallet, s.Bot.TweetScraper, flag.Flags, 100, false)
-				if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
-					return jerr.Get("error getting skipped tweets on bot save tx", err)
-				}
 			}
+		} else if flag.Flags.CatchUp {
+			log.Println("No history number passed, but CatchUp is true, getting 100 skipped tweets")
+			err = tweets.GetSkippedTweets(accountKey, &matchedStream.Wallet, s.Bot.TweetScraper, flag.Flags, 100, !subBotCommand.BotExists)
+			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
+				return jerr.Get("error getting skipped tweets on bot save tx", err)
+			}
+		} else {
+			log.Printf("No history number passed, and CatchUp is false, not getting skipped tweets\n")
 		}
 	} else {
+		log.Printf("\n\nSub bot received funds from %s\n\n", s.SenderAddress)
 		if flag.Flags.CatchUp {
-			wlt := matchedStream.Wallet
-			err = tweets.GetSkippedTweets(accountKey, &wlt, s.Bot.TweetScraper, flag.Flags, 100, false)
+			log.Println("No history number passed, but CatchUp is true, getting 100 skipped tweets")
+			err = tweets.GetSkippedTweets(accountKey, &matchedStream.Wallet, s.Bot.TweetScraper, flag.Flags, 100, false)
 			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 				return jerr.Get("error getting skipped tweets", err)
 			}

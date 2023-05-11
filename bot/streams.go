@@ -18,11 +18,7 @@ import (
 	"log"
 )
 
-const (
-	NEW_BOT_STRING = "newBot"
-)
-
-func getBotStreams(cryptKey []byte) ([]config.Stream, error) {
+func getBotStreams(cryptKey []byte, onlyFunded bool) ([]config.Stream, error) {
 	botStreams := make([]config.Stream, 0)
 	addressKeys, err := db.GetAllAddressKey()
 	if err != nil {
@@ -51,7 +47,7 @@ func getBotStreams(cryptKey []byte) ([]config.Stream, error) {
 		for _, output := range outputs {
 			balance += output.Input.Value
 		}
-		if balance > 800 {
+		if balance > 800 || !onlyFunded {
 			wlt := tweetWallet.NewWallet(walletKey.GetAddress(), walletKey)
 			if err != nil {
 				return nil, jerr.Get("error parsing user id", err)
@@ -121,20 +117,6 @@ func createBotStream(b *Bot, twitterAccount *twitter.User, senderAddress string,
 		}
 		newAddr = newKey.GetAddress()
 	}
-	pkScript, err := hex.DecodeString(tx.Outputs[coinIndex].Script)
-	if err != nil {
-		return jerr.Get("error decoding script pk script for create bot", err)
-	}
-	if err = tweetWallet.FundTwitterAddress(memo.UTXO{Input: memo.TxInput{
-		Value:        tx.Outputs[coinIndex].Amount,
-		PrevOutHash:  hs.GetTxHash(tx.Hash),
-		PrevOutIndex: coinIndex,
-		PkHash:       b.Key.GetAddress().GetPkHash(),
-		PkScript:     pkScript,
-	}}, b.Key, newAddr, historyNum, botExists); err != nil {
-		return jerr.Get("error funding twitter address", err)
-	}
-
 	if b.Verbose {
 		jlog.Logf("Create bot stream Address: " + newAddr.GetEncoded())
 	}
@@ -155,5 +137,23 @@ func createBotStream(b *Bot, twitterAccount *twitter.User, senderAddress string,
 			return jerr.Get("error updating linked-"+senderAddress+"-"+twitterAccount.IDStr, err)
 		}
 	}
+	err = b.SafeUpdate()
+	if err != nil {
+		return jerr.Get("error updating bot", err)
+	}
+	pkScript, err := hex.DecodeString(tx.Outputs[coinIndex].Script)
+	if err != nil {
+		return jerr.Get("error decoding script pk script for create bot", err)
+	}
+	if err = tweetWallet.FundTwitterAddress(memo.UTXO{Input: memo.TxInput{
+		Value:        tx.Outputs[coinIndex].Amount,
+		PrevOutHash:  hs.GetTxHash(tx.Hash),
+		PrevOutIndex: coinIndex,
+		PkHash:       b.Key.GetAddress().GetPkHash(),
+		PkScript:     pkScript,
+	}}, b.Key, newAddr, historyNum, botExists); err != nil {
+		return jerr.Get("error funding twitter address", err)
+	}
+
 	return nil
 }

@@ -38,6 +38,7 @@ func getNewTweets(accountKey obj.AccountKey, numTweets int, newBot bool, scraper
 		return nil, jerr.Get("error getting recent tweet tx", err)
 	}
 	if errors.Is(err, leveldb.ErrNotFound) && !newBot {
+		log.Printf("no recent tweet tx for user %d\n", accountKey.UserID)
 		return nil, nil
 	}
 	if recentTweetTx != nil {
@@ -137,14 +138,13 @@ func GetAndSaveTwitterTweets(params *twitter.UserTimelineParams, scraper *twitte
 
 func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, scraper *twitterscraper.Scraper, flags db.Flags, numTweets int, newBot bool) error {
 	txList, err := getNewTweets(accountKey, numTweets, newBot, scraper)
-	//txList, err := getNewTweetsLocal(accountKey, db, numTweets)
 	if err != nil {
 		return jerr.Get("error getting tweets since the bot was last run", err)
 	}
 	if len(txList) == 0 {
+		log.Printf("no new tweets for user %d\n", accountKey.UserID)
 		return nil
 	}
-	//get the ID of the newest tweet in txList
 	tweetID := int64(0)
 	for _, tweetTx := range txList {
 		if tweetTx.TweetId > tweetID {
