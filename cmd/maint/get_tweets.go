@@ -9,7 +9,6 @@ import (
 	"github.com/memocash/tweet/tweets"
 	twitterscraper "github.com/n0madic/twitter-scraper"
 	"github.com/spf13/cobra"
-	"log"
 	"net/http"
 	"os"
 )
@@ -49,7 +48,6 @@ var getTweetsCmd = &cobra.Command{
 			jerr.Get("error logging in", err).Fatal()
 		}
 		query := fmt.Sprintf("from:%s", args[0])
-		log.Println("Searching for", query)
 		for scrapedTweet := range scraper.SearchTweets(context.Background(), query, MAX_TWEETS) {
 			if scrapedTweet.Error != nil {
 				err2 := tweets.SaveCookies(scraper.GetCookies())
@@ -58,7 +56,6 @@ var getTweetsCmd = &cobra.Command{
 				}
 				jerr.Get("error getting tweets", scrapedTweet.Error).Fatal()
 			}
-			log.Println("Got tweet", scrapedTweet.ID, scrapedTweet.Text)
 		}
 		//save the cookie jar
 		err = tweets.SaveCookies(scraper.GetCookies())

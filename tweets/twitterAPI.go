@@ -37,9 +37,6 @@ func getNewTweets(accountKey obj.AccountKey, numTweets int, newBot bool, scraper
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		return nil, jerr.Get("error getting recent tweet tx", err)
 	}
-	if errors.Is(err, leveldb.ErrNotFound) && !newBot {
-		log.Printf("no recent tweet tx for user %d\n", accountKey.UserID)
-	}
 	if recentTweetTx != nil {
 		userTimelineParams.SinceID = recentTweetTx.TweetId
 	}
@@ -171,7 +168,6 @@ func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, scraper *tw
 }
 
 func SaveCookies(cookies []*http.Cookie) error {
-	log.Println("saving cookies")
 	marshaledCookies, err := json.Marshal(cookies)
 	if err != nil {
 		return jerr.Get("error marshalling cookies", err)

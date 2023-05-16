@@ -25,7 +25,6 @@ var checkAddressSeenCmd = &cobra.Command{
 				chainhash.Hash(addressSeenTx.TxHash), addressSeenTx.Seen.Format(time.RFC3339))
 			cnt++
 		}
-		log.Printf("check addresse seen: %d\n", cnt)
 	},
 }
 

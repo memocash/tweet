@@ -15,7 +15,6 @@ import (
 	"github.com/memocash/tweet/graph"
 	tweetWallet "github.com/memocash/tweet/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
-	"log"
 )
 
 func getBotStreams(cryptKey []byte, onlyFunded bool) ([]config.Stream, error) {
@@ -121,7 +120,6 @@ func createBotStream(b *Bot, twitterAccount *twitter.User, senderAddress string,
 		jlog.Logf("Create bot stream Address: " + newAddr.GetEncoded())
 	}
 	if !botExists {
-		log.Println("saving bot stream")
 		if err := db.Save([]db.ObjectI{&db.BotStreamsCount{Count: int(numStreamUint + 1)}}); err != nil {
 			return jerr.Get("error saving bot streams count", err)
 		}

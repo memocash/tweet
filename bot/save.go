@@ -77,7 +77,6 @@ func (s *SaveTx) HandleRequestMainBot() error {
 		}
 	default:
 		if s.Message != "" {
-			log.Printf("Invalid command: %s\n.", s.Message)
 			errMsg := "Invalid command. Please use the following format: CREATE <twitterName> or WITHDRAW <twitterName>"
 			if err := refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, errMsg); err != nil {
 				return jerr.Get("error refunding", err)
@@ -161,7 +160,6 @@ func (s *SaveTx) HandleTxType() error {
 	return nil
 }
 func (s *SaveTx) HandleRequestSubBot(matchedStream *config.Stream) error {
-	log.Printf("Received tx for sub bot: %s\n", matchedStream.Wallet.Address.GetEncoded())
 	//otherwise, one of the sub-bots has just been sent some funds, so based on the value of CatchUp, decide if we try to GetSkippedTweets
 	flag, err := db.GetFlag(wallet.GetAddressFromString(matchedStream.Sender).GetAddr(), matchedStream.UserID)
 	if err != nil || flag == nil {
@@ -173,7 +171,6 @@ func (s *SaveTx) HandleRequestSubBot(matchedStream *config.Stream) error {
 		Address: matchedStream.Wallet.Address,
 	}
 	if s.SenderAddress == s.Bot.Addr.String() {
-		log.Println("\n\nSub bot received funds from main bot\n\n")
 		subBotCommand, err := db.GetSubBotCommand(s.TxHash)
 		if err != nil {
 			return jerr.Get("error getting sub bot command", err)
@@ -181,7 +178,6 @@ func (s *SaveTx) HandleRequestSubBot(matchedStream *config.Stream) error {
 		if subBotCommand == nil {
 			return jerr.Get("sub bot command not found", errors.New("sub bot command not found"))
 		}
-		fmt.Printf("HistoryNum: %d\nBotExists: %b\n", subBotCommand.HistoryNum, subBotCommand.BotExists)
 		if !subBotCommand.BotExists {
 			log.Println("New bot, updating profile")
 			_, err := updateProfile(s.Bot, matchedStream.Wallet.Address, matchedStream.Wallet.Key, matchedStream.UserID, matchedStream.Sender)
@@ -191,24 +187,18 @@ func (s *SaveTx) HandleRequestSubBot(matchedStream *config.Stream) error {
 		}
 
 		if subBotCommand.HistoryNum > 0 {
-			log.Printf("History number was %d, getting that many skipped tweets\n", subBotCommand.HistoryNum)
 			err = tweets.GetSkippedTweets(accountKey, &matchedStream.Wallet, s.Bot.TweetScraper, flag.Flags, subBotCommand.HistoryNum, !subBotCommand.BotExists)
 			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 				return jerr.Get("error getting skipped tweets on bot save tx", err)
 			}
 		} else if flag.Flags.CatchUp && subBotCommand.BotExists {
-			log.Println("No history number passed, but CatchUp is true and the bot already existed, getting 100 skipped tweets")
 			err = tweets.GetSkippedTweets(accountKey, &matchedStream.Wallet, s.Bot.TweetScraper, flag.Flags, 100, !subBotCommand.BotExists)
 			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 				return jerr.Get("error getting skipped tweets on bot save tx", err)
 			}
-		} else {
-			log.Printf("No history number passed, and CatchUp is false, not getting skipped tweets\n")
 		}
 	} else {
-		log.Printf("\n\nSub bot received funds from %s\n\n", s.SenderAddress)
 		if flag.Flags.CatchUp {
-			log.Println("No history number passed, but CatchUp is true, getting 100 skipped tweets")
 			err = tweets.GetSkippedTweets(accountKey, &matchedStream.Wallet, s.Bot.TweetScraper, flag.Flags, 100, false)
 			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 				return jerr.Get("error getting skipped tweets", err)
