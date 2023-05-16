@@ -18,6 +18,7 @@ type Config struct {
 type TwitterAPI struct {
 	UserName string `mapstructure:"USER_NAME"`
 	Password string `mapstructure:"PASSWORD"`
+	Email    string `mapstructure:"EMAIL"`
 }
 
 type Stream struct {

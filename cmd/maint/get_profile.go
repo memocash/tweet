@@ -1,10 +1,10 @@
 package maint
 
 import (
-	twitterscraper "github.com/AbdelSallam/twitter-scraper"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/tweets"
+	twitterscraper "github.com/n0madic/twitter-scraper"
 	"github.com/spf13/cobra"
 	"log"
 )

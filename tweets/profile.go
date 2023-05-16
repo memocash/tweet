@@ -1,8 +1,8 @@
 package tweets
 
 import (
-	twitterscraper "github.com/AbdelSallam/twitter-scraper"
 	"github.com/jchavannes/jgo/jerr"
+	twitterscraper "github.com/n0madic/twitter-scraper"
 	"net/http"
 	"strconv"
 	"strings"

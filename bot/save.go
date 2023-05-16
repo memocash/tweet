@@ -196,8 +196,8 @@ func (s *SaveTx) HandleRequestSubBot(matchedStream *config.Stream) error {
 			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 				return jerr.Get("error getting skipped tweets on bot save tx", err)
 			}
-		} else if flag.Flags.CatchUp {
-			log.Println("No history number passed, but CatchUp is true, getting 100 skipped tweets")
+		} else if flag.Flags.CatchUp && subBotCommand.BotExists {
+			log.Println("No history number passed, but CatchUp is true and the bot already existed, getting 100 skipped tweets")
 			err = tweets.GetSkippedTweets(accountKey, &matchedStream.Wallet, s.Bot.TweetScraper, flag.Flags, 100, !subBotCommand.BotExists)
 			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 				return jerr.Get("error getting skipped tweets on bot save tx", err)

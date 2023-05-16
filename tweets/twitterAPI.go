@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	twitterscraper "github.com/AbdelSallam/twitter-scraper"
 	"github.com/dghubble/go-twitter/twitter"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets/obj"
 	"github.com/memocash/tweet/wallet"
+	twitterscraper "github.com/n0madic/twitter-scraper"
 	"github.com/syndtr/goleveldb/leveldb"
 	"log"
 	"net/http"
@@ -39,7 +39,6 @@ func getNewTweets(accountKey obj.AccountKey, numTweets int, newBot bool, scraper
 	}
 	if errors.Is(err, leveldb.ErrNotFound) && !newBot {
 		log.Printf("no recent tweet tx for user %d\n", accountKey.UserID)
-		return nil, nil
 	}
 	if recentTweetTx != nil {
 		userTimelineParams.SinceID = recentTweetTx.TweetId
@@ -167,6 +166,7 @@ func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, scraper *tw
 			break
 		}
 	}
+	log.Printf("finished posting new tweets for user %d\n", accountKey.UserID)
 	return nil
 }
 
