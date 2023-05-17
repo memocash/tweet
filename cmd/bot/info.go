@@ -42,6 +42,13 @@ var infoCmd = &cobra.Command{
 			if err := info.Profile(*senderAdder, userId); err != nil {
 				log.Fatalf("error info profile; %v", err)
 			}
+		case "report":
+			if len(args) != 1 {
+				log.Fatalf("report takes no arguments")
+			}
+			if err := info.Report(); err != nil {
+				log.Fatalf("error info report; %v", err)
+			}
 		default:
 			log.Fatalf("unknown info command: %s", args[0])
 		}

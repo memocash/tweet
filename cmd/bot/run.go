@@ -83,7 +83,7 @@ var runCmd = &cobra.Command{
 			errorChan <- jerr.Get("error listening for transactions", err)
 		}()
 		go func() {
-			infoServer := info.NewServer()
+			infoServer := info.NewServer(memoBot)
 			err = infoServer.Listen()
 			errorChan <- jerr.Get("error info server listener", err)
 		}()
