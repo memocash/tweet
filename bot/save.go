@@ -173,7 +173,11 @@ func (s *SaveTx) HandleRequestSubBot(matchedStream *config.Stream) error {
 	if s.SenderAddress == s.Bot.Addr.String() {
 		subBotCommand, err := db.GetSubBotCommand(s.TxHash)
 		if err != nil {
-			return jerr.Get("error getting sub bot command", err)
+			log.Println("No sub bot command with this txhash, likely the main bot liked a post from a sub bot")
+			if err := s.Bot.SafeUpdate(); err != nil {
+				return jerr.Get("error updating bot", err)
+			}
+			return nil
 		}
 		if subBotCommand == nil {
 			return jerr.Get("sub bot command not found", errors.New("sub bot command not found"))

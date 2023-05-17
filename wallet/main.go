@@ -1,10 +1,13 @@
 package wallet
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"github.com/hasura/go-graphql-client"
 	"github.com/jchavannes/jgo/jerr"
+	"github.com/jchavannes/jgo/jutil"
 	"github.com/memocash/index/ref/bitcoin/memo"
 	"github.com/memocash/index/ref/bitcoin/tx/gen"
 	"github.com/memocash/index/ref/bitcoin/tx/parse"
@@ -82,6 +85,22 @@ func MakeReply(wallet Wallet, parentHash []byte, message string) ([]byte, error)
 		return nil, jerr.Get("error completing transaction memo reply", err)
 	}
 	return memoTx.GetHash(), nil
+}
+func GetProfile(address string, date time.Time, client *graphql.Client) (*graph.Profiles, error) {
+	var senderData graph.Profiles
+	var variables = map[string]interface{}{"address": address}
+	var startDate string
+	if !jutil.IsTimeZero(date) {
+		startDate = date.Format(time.RFC3339)
+	} else {
+		startDate = time.Date(2009, 1, 1, 0, 0, 0, 0, time.Local).Format(time.RFC3339)
+	}
+	variables["start"] = graph.Date(startDate)
+	err := client.Query(context.Background(), &senderData, variables)
+	if err != nil {
+		return nil, jerr.Get("error getting sender profile", err)
+	}
+	return &senderData, nil
 }
 
 func FundTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Address, historyNum int, botExists bool) error {

@@ -57,3 +57,69 @@ func (d Date) GetTime() time.Time {
 	t, _ := time.Parse(time.RFC3339, string(d))
 	return t
 }
+
+type Profiles struct {
+	Profiles []Profile `graphql:"profiles(addresses: [$address])"`
+}
+type Profile struct {
+	Lock struct {
+		Address string
+	}
+	Address string
+	Name    struct {
+		Tx   Tx
+		Name string
+	}
+	Profile struct {
+		Tx   Tx
+		Text string
+	}
+	Pic struct {
+		Tx  Tx
+		Pic string
+	}
+	Following []Follow `graphql:"following(start: $start)"`
+	Followers []Follow `graphql:"followers(start: $start)"`
+	Posts     []Post   `graphql:"posts()"`
+}
+
+type Follow struct {
+	Tx      Tx
+	Tx_hash string
+	Lock    struct {
+		Address string
+	}
+	Address     string
+	Follow_Lock struct {
+		Address string
+	}
+	Follow_Address string
+	Unfollow       bool
+}
+
+type Post struct {
+	Tx      Tx
+	Tx_hash string
+	Lock    struct {
+		Address string
+	}
+	Address string
+	Text    string
+	Likes   []struct {
+		Tx  Tx
+		Tip int64
+	}
+	//Parent is another post
+	Parent struct {
+		Tx      Tx
+		Tx_hash string
+		Address string
+		Text    string
+	}
+	Replies []struct {
+		Tx      Tx
+		Tx_hash string
+		Address string
+		Text    string
+	}
+}
