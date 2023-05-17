@@ -1,0 +1,83 @@
+<html>
+    <head>
+        <title>Bot Report</title>
+        <style>
+            table {
+                width: 500px;
+                border: none;
+                border-top: 1px solid #EEEEEE;
+                font-family: arial, sans-serif;
+                border-collapse: collapse;
+            }
+            td,
+            th {
+                border: 1px solid #EEEEEE;
+                border-top: none;
+                text-align: left;
+                padding: 8px;
+                color: #363D41;
+                font-size: 14px;
+            }
+            th {
+                background-color: #F5F5F5;
+                color: #363D41;
+                font-size: 14px;
+            }
+            td {
+                font-size: 12px;
+            }
+            tr {
+                background-color: #fff;
+                border: none;
+                cursor: pointer;
+                justify-content: flex-start;
+            }
+            tr:first-child:hover {
+                cursor: default;
+                background-color: #fff;
+            }
+            tr:hover {
+                background-color: #EEF4FD;
+            }
+        </style>
+        <body>
+            <h2>Bot Report</h2>
+            <table>
+                <tr>
+                    <th>Profile</th>
+                    <th>Owner</th>
+                    <th>Created At</th>
+                    <th>Balance</th>
+                    <th>Total Actions</th>
+                    <th>Latest Action</th>
+                    <th>Total Interactions</th>
+                    <th>Profile Updated</th>
+                    <th>New Posts Made</th>
+                    <th>New Replies Made</th>
+                    <th>New Replies Received</th>
+                    <th>New Likes Received</th>
+                    <th>New Followers Today</th>
+                </tr>
+                {{ range .Bots }}
+                <tr>
+                    <td>
+                        <a href="{{.ProfileLink}}">{{ .Name }}</a>
+                    </td>
+                    <td>{{ .Owner }}</td>
+                    <td>{{ .CreatedAt }}</td>
+                    <td>{{ .Balance }}</td>
+                    <td>{{ .TotalActions }}</td>
+                    <td>{{ .LatestAction }}</td>
+                    <td>{{ .TotalInteractions }}</td>
+                    <td>{{ .ProfileUpdated }}</td>
+                    <td>{{ .NumSentPosts }}</td>
+                    <td>{{ .NumSentReplies }}</td>
+                    <td>{{ .NumIncomingReplies }}</td>
+                    <td>{{ .NumIncomingLikes }}</td>
+                    <td>{{ .NumFollowers }}</td>
+                </tr>
+                {{ end }}
+            </table>
+        </body>
+    </head>
+</html>

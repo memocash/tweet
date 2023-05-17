@@ -7,6 +7,7 @@ replace golang.org/x/net => golang.org/x/net v0.1.1-0.20221104162952-702349b0e86
 go 1.16
 
 require (
+	github.com/aws/aws-sdk-go v1.44.264
 	github.com/dghubble/go-twitter v0.0.0-20221024160433-0cc1e72ed6d8
 	github.com/hasura/go-graphql-client v0.9.0
 	github.com/jchavannes/btcd v1.1.5-0.20230112162803-412def37b600
