@@ -61,11 +61,9 @@ func Report() error {
 		return fmt.Errorf("error info request: %w", err)
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
+	_, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("error reading info response body: %w", err)
 	}
-	//send email instead of printing body
-	log.Println(string(body))
 	return nil
 }

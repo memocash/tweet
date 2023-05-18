@@ -161,6 +161,7 @@ func (s *SaveTx) HandleTxType() error {
 }
 func (s *SaveTx) HandleRequestSubBot(matchedStream *config.Stream) error {
 	//otherwise, one of the sub-bots has just been sent some funds, so based on the value of CatchUp, decide if we try to GetSkippedTweets
+	var logMsg = fmt.Sprintf("Received tx for sub bot %s", matchedStream.Wallet.Address.GetEncoded())
 	flag, err := db.GetFlag(wallet.GetAddressFromString(matchedStream.Sender).GetAddr(), matchedStream.UserID)
 	if err != nil || flag == nil {
 		return jerr.Get("error getting flag", err)
@@ -171,9 +172,11 @@ func (s *SaveTx) HandleRequestSubBot(matchedStream *config.Stream) error {
 		Address: matchedStream.Wallet.Address,
 	}
 	if s.SenderAddress == s.Bot.Addr.String() {
+		logMsg += " from main bot"
 		subBotCommand, err := db.GetSubBotCommand(s.TxHash)
 		if err != nil {
-			log.Println("No sub bot command with this txhash, likely the main bot liked a post from a sub bot")
+			logMsg += ", no sub bot command found in db with this txhash, no action taken"
+			log.Println(logMsg)
 			if err := s.Bot.SafeUpdate(); err != nil {
 				return jerr.Get("error updating bot", err)
 			}
@@ -183,7 +186,7 @@ func (s *SaveTx) HandleRequestSubBot(matchedStream *config.Stream) error {
 			return jerr.Get("sub bot command not found", errors.New("sub bot command not found"))
 		}
 		if !subBotCommand.BotExists {
-			log.Println("New bot, updating profile")
+			logMsg += ", creating new bot"
 			_, err := updateProfile(s.Bot, matchedStream.Wallet.Address, matchedStream.Wallet.Key, matchedStream.UserID, matchedStream.Sender)
 			if err != nil {
 				return jerr.Get("error updating profile for sub bot", err)
@@ -191,11 +194,13 @@ func (s *SaveTx) HandleRequestSubBot(matchedStream *config.Stream) error {
 		}
 
 		if subBotCommand.HistoryNum > 0 {
+			logMsg += fmt.Sprintf(", getting %d skipped tweets", subBotCommand.HistoryNum)
 			err = tweets.GetSkippedTweets(accountKey, &matchedStream.Wallet, s.Bot.TweetScraper, flag.Flags, subBotCommand.HistoryNum, !subBotCommand.BotExists)
 			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 				return jerr.Get("error getting skipped tweets on bot save tx", err)
 			}
 		} else if flag.Flags.CatchUp && subBotCommand.BotExists {
+			logMsg += ", getting 100 skipped tweets"
 			err = tweets.GetSkippedTweets(accountKey, &matchedStream.Wallet, s.Bot.TweetScraper, flag.Flags, 100, !subBotCommand.BotExists)
 			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 				return jerr.Get("error getting skipped tweets on bot save tx", err)
@@ -203,13 +208,14 @@ func (s *SaveTx) HandleRequestSubBot(matchedStream *config.Stream) error {
 		}
 	} else {
 		if flag.Flags.CatchUp {
+			logMsg += fmt.Sprintf("from %s, getting 100 skipped tweets", s.SenderAddress)
 			err = tweets.GetSkippedTweets(accountKey, &matchedStream.Wallet, s.Bot.TweetScraper, flag.Flags, 100, false)
 			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 				return jerr.Get("error getting skipped tweets", err)
 			}
 		}
 	}
-
+	log.Println(logMsg)
 	if err := s.Bot.SafeUpdate(); err != nil {
 		return jerr.Get("error updating bot", err)
 	}
@@ -225,6 +231,7 @@ func (s *SaveTx) HandleDown() error {
 
 }
 func (s *SaveTx) HandleCreate() error {
+	logMsg := fmt.Sprintf("Received create tx from %s", s.SenderAddress)
 	//split the message into an array of strings
 	splitMessage := strings.Split(s.Message, " ")
 	//get the twitter name from the message
@@ -239,10 +246,12 @@ func (s *SaveTx) HandleCreate() error {
 		twitterExists = true
 	}
 	if !twitterExists {
+		logMsg += fmt.Sprintf(", twitter account %s does not exist, refunding", twitterName)
 		err := refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, "Twitter account does not exist")
 		if err != nil {
 			return jerr.Get("error refunding", err)
 		}
+		log.Println(logMsg)
 		return nil
 	}
 	userId, err := strconv.ParseInt(twitterProfile.UserID, 10, 64)
@@ -278,10 +287,12 @@ func (s *SaveTx) HandleCreate() error {
 		}
 	}
 	if historyNum > 1000 {
+		logMsg += fmt.Sprintf(", number of tweets must be less than 1000, refunding")
 		err = refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, "Number of tweets must be less than 1000")
 		if err != nil {
 			return jerr.Get("error refunding", err)
 		}
+		log.Println(logMsg)
 		return nil
 	}
 	if err := db.Save([]db.ObjectI{&db.Flag{
@@ -291,14 +302,17 @@ func (s *SaveTx) HandleCreate() error {
 	}}); err != nil {
 		return jerr.Get("error saving flags to db", err)
 	}
+	logMsg += fmt.Sprintf(", creating bot for %s", twitterName)
 	err = createBotStream(s.Bot, &twitterAccount, s.SenderAddress, s.Tx, s.CoinIndex, historyNum)
 	if err != nil {
 		return jerr.Get("error creating bot", err)
 	}
+	log.Println(logMsg)
 	return nil
 }
 
 func (s *SaveTx) HandleWithdraw() error {
+	logMsg := fmt.Sprintf("Received withdraw tx from %s", s.SenderAddress)
 	twitterName := regexp.MustCompile("^WITHDRAW @?([a-zA-Z0-9_]{1,15})( [0-9]+)?$").FindStringSubmatch(s.Message)[1]
 	if twitterName[0] == '@' {
 		twitterName = twitterName[1:]
@@ -309,10 +323,12 @@ func (s *SaveTx) HandleWithdraw() error {
 		twitterExists = true
 	}
 	if !twitterExists {
+		logMsg += fmt.Sprintf(", twitter account %s does not exist, refunding", twitterName)
 		err := refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, "Twitter account does not exist")
 		if err != nil {
 			return jerr.Get("error refunding", err)
 		}
+		log.Println(logMsg)
 		return nil
 	}
 	userID, err := strconv.ParseInt(twitterProfile.UserID, 10, 64)
@@ -329,11 +345,13 @@ func (s *SaveTx) HandleWithdraw() error {
 		if !errors.Is(err, leveldb.ErrNotFound) {
 			return jerr.Get("error getting linked-"+s.SenderAddress+"-"+twitterAccount.IDStr, err)
 		}
+		logMsg += fmt.Sprintf(", no linked address found for %s-%s, refunding", s.SenderAddress, twitterAccount.IDStr)
 		errMsg := "No linked address found for " + s.SenderAddress + "-" + twitterAccount.IDStr
 		err = refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, errMsg)
 		if err != nil {
 			return jerr.Get("error refunding no linked address key found", err)
 		}
+		log.Println(logMsg)
 		return nil
 	}
 	decryptedKey, err := tweetWallet.Decrypt(addressKey.Key, s.Bot.Crypt)
@@ -345,9 +363,6 @@ func (s *SaveTx) HandleWithdraw() error {
 		return jerr.Get("error importing private key", err)
 	}
 	address := key.GetAddress()
-	if s.Bot.Verbose {
-		jlog.Logf("Withdrawing from address: %s\n", address.GetEncoded())
-	}
 	inputGetter := tweetWallet.InputGetter{Address: address}
 	//use the address object of the spawned key to get the outputs array
 	outputs, err := inputGetter.GetUTXOs(nil)
@@ -360,37 +375,46 @@ func (s *SaveTx) HandleWithdraw() error {
 	if regexp.MustCompile("^WITHDRAW @?([a-zA-Z0-9_]{1,15}) [0-9]+$").MatchString(s.Message) {
 		amount, _ = strconv.ParseInt(regexp.MustCompile("^WITHDRAW @?([a-zA-Z0-9_]{1,15}) ([0-9]+)$").FindStringSubmatch(s.Message)[2], 10, 64)
 		if amount > maxSend {
+			logMsg += fmt.Sprintf(", cannot withdraw more than the total balance, refunding")
 			err = refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, "Cannot withdraw more than the total balance is capable of sending")
 			if err != nil {
 				return jerr.Get("error refunding", err)
 			}
+			log.Println(logMsg)
 			return nil
 		} else if amount+memo.DustMinimumOutput+memo.OutputFeeP2PKH > maxSend {
+			logMsg += fmt.Sprintf(", not enough funds will be left over to send change to bot account, refunding")
 			errmsg := fmt.Sprintf("Not enough funds will be left over to send change to bot account, please withdraw less than %d", maxSend+1-memo.DustMinimumOutput-memo.OutputFeeP2PKH)
 			err = refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, errmsg)
 			if err != nil {
 				return jerr.Get("error refunding", err)
 			}
+			log.Println(logMsg)
 			return nil
 		} else {
+			logMsg += fmt.Sprintf(", withdrawing %d", amount)
 			err := tweetWallet.WithdrawAmount(outputs, key, wallet.GetAddressFromString(s.SenderAddress), amount)
 			if err != nil {
 				return jerr.Get("error withdrawing amount", err)
 			}
 		}
+		log.Println(logMsg)
 		return nil
 	}
 	if maxSend > 0 {
+		logMsg += fmt.Sprintf(", withdrawing all")
 		err := tweetWallet.WithdrawAll(outputs, key, wallet.GetAddressFromString(s.SenderAddress))
 		if err != nil {
 			return jerr.Get("error withdrawing all", err)
 		}
 	} else {
+		logMsg += fmt.Sprintf(", not enough balance to withdraw anything")
 		err = refund(s.Tx, s.Bot, s.CoinIndex, s.SenderAddress, "Not enough balance to withdraw anything")
 		if err != nil {
 			return jerr.Get("error refunding", err)
 		}
 	}
+	log.Println(logMsg)
 	return nil
 }
 

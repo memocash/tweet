@@ -164,7 +164,7 @@ func (b *Bot) Listen() error {
 }
 
 func (b *Bot) CheckForNewTweets() error {
-	log.Println("Checking for new tweets")
+	log.Println("Checking for new tweets...")
 	botStreams, err := GetBotStreams(b.Crypt, true)
 	if err != nil {
 		return jerr.Get("error getting bot streams for listen skipped", err)
