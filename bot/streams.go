@@ -17,7 +17,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-func getBotStreams(cryptKey []byte, onlyFunded bool) ([]config.Stream, error) {
+func GetBotStreams(cryptKey []byte, onlyFunded bool) ([]config.Stream, error) {
 	botStreams := make([]config.Stream, 0)
 	addressKeys, err := db.GetAllAddressKey()
 	if err != nil {

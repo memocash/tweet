@@ -13,8 +13,8 @@ const (
 	USER_ID = 1585391045935710208
 )
 
-var getProfileCmd = &cobra.Command{
-	Use:   "get-profile",
+var getTwitterProfileCmd = &cobra.Command{
+	Use:   "get-twitter-profile",
 	Short: "Testing getting profiles from user ids through the scraper",
 	Run: func(c *cobra.Command, args []string) {
 		scraper := twitterscraper.New()

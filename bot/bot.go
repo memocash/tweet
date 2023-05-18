@@ -125,7 +125,7 @@ func (b *Bot) Listen() error {
 			select {
 			case <-t.C:
 			}
-			botStreams, err := getBotStreams(b.Crypt, true)
+			botStreams, err := GetBotStreams(b.Crypt, true)
 			if err != nil {
 				b.ErrorChan <- jerr.Get("error making stream array bot listen", err)
 			}
@@ -137,7 +137,7 @@ func (b *Bot) Listen() error {
 			}
 		}
 	}()
-	botStreams, err := getBotStreams(b.Crypt, true)
+	botStreams, err := GetBotStreams(b.Crypt, true)
 	if err != nil {
 		return jerr.Get("error getting bot streams for listen skipped", err)
 	}
@@ -165,7 +165,7 @@ func (b *Bot) Listen() error {
 
 func (b *Bot) CheckForNewTweets() error {
 	log.Println("Checking for new tweets")
-	botStreams, err := getBotStreams(b.Crypt, true)
+	botStreams, err := GetBotStreams(b.Crypt, true)
 	if err != nil {
 		return jerr.Get("error getting bot streams for listen skipped", err)
 	}
@@ -247,7 +247,7 @@ func (b *Bot) SafeUpdate() error {
 
 func (b *Bot) UpdateStream() error {
 	//create an array of {userId, newKey} objects by searching through the linked-<senderAddress>-<userId> fields
-	botStreams, err := getBotStreams(b.Crypt, false)
+	botStreams, err := GetBotStreams(b.Crypt, false)
 	if err != nil {
 		return jerr.Get("error making stream array update", err)
 	}

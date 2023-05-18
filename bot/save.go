@@ -139,7 +139,7 @@ func (s *SaveTx) HandleTxType() error {
 			}
 			s.Handled = true
 		} else {
-			botStreams, err := getBotStreams(s.Bot.Crypt, false)
+			botStreams, err := GetBotStreams(s.Bot.Crypt, false)
 			if err != nil {
 				return jerr.Get("error getting bot streams", err)
 			}
