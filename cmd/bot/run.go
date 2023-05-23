@@ -72,8 +72,8 @@ var runCmd = &cobra.Command{
 		var errorChan = make(chan error)
 		go func() {
 			err = memoBot.Listen()
-			err := memoBot.TweetScraper.Logout()
-			if err != nil {
+			logoutError := memoBot.TweetScraper.Logout()
+			if logoutError != nil {
 				jerr.Get("error logging out", err).Print()
 			}
 			cookieError := tweets.SaveCookies(memoBot.TweetScraper.GetCookies())
