@@ -39,8 +39,7 @@ var getTweetsCmd = &cobra.Command{
 			scraper.SetCookies(cookieList)
 		}
 		scraper.SetSearchMode(twitterscraper.SearchLatest)
-		err = scraper.Login(config.GetTwitterAPIConfig().UserName, config.GetTwitterAPIConfig().Password)
-		if err != nil {
+		if err = scraper.Login(config.GetTwitterCreds().GetStrings()...); err != nil {
 			err2 := tweets.SaveCookies(scraper.GetCookies())
 			if err2 != nil {
 				jerr.Get("error saving cookies", err2).Fatal()

@@ -35,16 +35,8 @@ var runCmd = &cobra.Command{
 		botAddress := botKey.GetPublicKey().GetAddress().GetEncoded()
 		scraper := twitterscraper.New()
 		scraper.SetSearchMode(twitterscraper.SearchLatest)
-		if config.GetTwitterAPIConfig().Email == "" {
-			err = scraper.Login(config.GetTwitterAPIConfig().UserName, config.GetTwitterAPIConfig().Password)
-			if err != nil {
-				jerr.Get("fatal error logging in to twitter", err).Fatal()
-			}
-		} else {
-			err = scraper.Login(config.GetTwitterAPIConfig().UserName, config.GetTwitterAPIConfig().Password, config.GetTwitterAPIConfig().Email)
-			if err != nil {
-				jerr.Get("fatal error logging in to twitter", err).Fatal()
-			}
+		if err = scraper.Login(config.GetTwitterCreds().GetStrings()...); err != nil {
+			jerr.Get("fatal error logging in to twitter", err).Fatal()
 		}
 		memoBot, err := bot.NewBot(mnemonic, scraper, []string{botAddress}, *botKey, verbose, false)
 		if err != nil {

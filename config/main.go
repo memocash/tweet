@@ -7,20 +7,28 @@ import (
 )
 
 type Config struct {
-	BotSeed        string     `mapstructure:"BOT_SEED"`
-	BotCrypt       string     `mapstructure:"BOT_CRYPT"`
-	Streams        []Stream   `mapstructure:"STREAMS"`
-	TwitterAPI     TwitterAPI `mapstructure:"TWITTER_API"`
-	UpdateInterval int        `mapstructure:"UPDATE_INTERVAL"`
-	InfoServerPort int        `mapstructure:"INFO_SERVER_PORT"`
-	TemplateDir    string     `mapstructure:"TEMPLATE_DIR"`
-	AWS            AwsConfig  `mapstructure:"AWS"`
+	BotSeed        string       `mapstructure:"BOT_SEED"`
+	BotCrypt       string       `mapstructure:"BOT_CRYPT"`
+	Streams        []Stream     `mapstructure:"STREAMS"`
+	TwitterCreds   TwitterCreds `mapstructure:"TWITTER_CREDS"`
+	UpdateInterval int          `mapstructure:"UPDATE_INTERVAL"`
+	InfoServerPort int          `mapstructure:"INFO_SERVER_PORT"`
+	TemplateDir    string       `mapstructure:"TEMPLATE_DIR"`
+	AWS            AwsConfig    `mapstructure:"AWS"`
 }
 
-type TwitterAPI struct {
+type TwitterCreds struct {
 	UserName string `mapstructure:"USER_NAME"`
 	Password string `mapstructure:"PASSWORD"`
 	Email    string `mapstructure:"EMAIL"`
+}
+
+func (t TwitterCreds) GetStrings() []string {
+	credentials := []string{t.UserName, t.Password}
+	if t.Email != "" {
+		credentials = append(credentials, t.Email)
+	}
+	return credentials
 }
 
 type Stream struct {
@@ -64,8 +72,8 @@ func GetConfig() Config {
 	return _config
 }
 
-func GetTwitterAPIConfig() TwitterAPI {
-	return _config.TwitterAPI
+func GetTwitterCreds() TwitterCreds {
+	return _config.TwitterCreds
 }
 
 func GetAwsSesCredentials() AwsCredentials {

@@ -18,8 +18,7 @@ var getTwitterProfileCmd = &cobra.Command{
 	Short: "Testing getting profiles from user ids through the scraper",
 	Run: func(c *cobra.Command, args []string) {
 		scraper := twitterscraper.New()
-		err := scraper.Login(config.GetTwitterAPIConfig().UserName, config.GetTwitterAPIConfig().Password)
-		if err != nil {
+		if err := scraper.Login(config.GetTwitterCreds().GetStrings()...); err != nil {
 			jerr.Get("error logging in", err).Fatal()
 		}
 		profile, err := tweets.GetProfile(USER_ID, scraper)
