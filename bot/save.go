@@ -159,11 +159,21 @@ func (s *SaveTx) HandleTxType() error {
 	}
 	return nil
 }
+
 func (s *SaveTx) HandleRequestSubBot(matchedStream *config.Stream) error {
 	//otherwise, one of the sub-bots has just been sent some funds, so based on the value of CatchUp, decide if we try to GetSkippedTweets
-	var logMsg = fmt.Sprintf("Received tx for sub bot %s", matchedStream.Wallet.Address.GetEncoded())
-	flag, err := db.GetFlag(wallet.GetAddressFromString(matchedStream.Sender).GetAddr(), matchedStream.UserID)
+	var logMsg = fmt.Sprintf("Received tx for sub bot %s: %s", matchedStream.Wallet.Address.GetEncoded(), s.TxHash)
+	defer func() {
+		log.Println(logMsg)
+	}()
+	addr, err := wallet.GetAddressFromStringErr(matchedStream.Sender)
+	if err != nil {
+		logMsg += ", error processing sender address from string"
+		return jerr.Get("error getting sender address from string from matched stream sub bot request", err)
+	}
+	flag, err := db.GetFlag(addr.GetAddr(), matchedStream.UserID)
 	if err != nil || flag == nil {
+		logMsg += ", error getting flag or flag not found"
 		return jerr.Get("error getting flag", err)
 	}
 	accountKey := obj.AccountKey{
@@ -176,7 +186,6 @@ func (s *SaveTx) HandleRequestSubBot(matchedStream *config.Stream) error {
 		subBotCommand, err := db.GetSubBotCommand(s.TxHash)
 		if err != nil {
 			logMsg += ", no sub bot command found in db with this txhash, no action taken"
-			log.Println(logMsg)
 			if err := s.Bot.SafeUpdate(); err != nil {
 				return jerr.Get("error updating bot", err)
 			}
@@ -215,7 +224,6 @@ func (s *SaveTx) HandleRequestSubBot(matchedStream *config.Stream) error {
 			}
 		}
 	}
-	log.Println(logMsg)
 	if err := s.Bot.SafeUpdate(); err != nil {
 		return jerr.Get("error updating bot", err)
 	}

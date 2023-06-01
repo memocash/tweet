@@ -41,9 +41,11 @@ type Tx struct {
 		}
 	}
 	Blocks []struct {
-		Hash      string
-		Timestamp Date
-		Height    int
+		BlockHash string `graphql:"block_hash"`
+		Block     struct {
+			Timestamp Date
+			Height    int
+		}
 	}
 }
 

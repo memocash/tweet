@@ -24,6 +24,9 @@ type TwitterCreds struct {
 }
 
 func (t TwitterCreds) GetStrings() []string {
+	if t.UserName == "" || t.Password == "" {
+		return nil
+	}
 	credentials := []string{t.UserName, t.Password}
 	if t.Email != "" {
 		credentials = append(credentials, t.Email)
