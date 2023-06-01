@@ -566,8 +566,8 @@ github.com/mattn/go-isatty v0.0.16/go.mod h1:kYGgaQfpe5nmfYZH+SKPsOc2e4SrIfOl2e/
 github.com/mattn/go-sqlite3 v1.14.0/go.mod h1:JIl7NbARA7phWnGvh0LKTyg7S9BA+6gx71ShQilpsus=
 github.com/mattn/go-sqlite3 v1.14.16/go.mod h1:2eHXhiwb8IkHr+BDWZGa96P6+rkvnG63S2DGjv9HUNg=
 github.com/matttproud/golang_protobuf_extensions v1.0.1/go.mod h1:D8He9yQNgCq6Z5Ld7szi9bcBfOoFv/3dc6xSMkL2PC0=
-github.com/memocash/index v0.2.0-alpha.0.0.20230323182811-fd9337017bac h1:vXVMyNA/JN9MIARYvMUQAWDRSftRBlRnQsLyjYkZG20=
-github.com/memocash/index v0.2.0-alpha.0.0.20230323182811-fd9337017bac/go.mod h1:0Airl+6PpDtEj8bpJr5+LnkqQLsItYVPYZ+jxni9Rx4=
+github.com/memocash/index v0.2.0-alpha.0.0.20230531220112-0ba6174bbc6e h1:7RO0/PaUFMWX2gvoq4tlHpbi+SWk7BZ/s3BuEPUzHuc=
+github.com/memocash/index v0.2.0-alpha.0.0.20230531220112-0ba6174bbc6e/go.mod h1:oHAQZ/g1ncIqmAebOF//nVPtB+Xs6CEdtaesbB3kak4=
 github.com/miekg/dns v1.0.14/go.mod h1:W1PPwlIAgtquWBMBEV9nkV9Cazfe8ScdGz/Lj7v3Nrg=
 github.com/miekg/dns v1.1.26/go.mod h1:bPDLeHnStXmXAq1m/Ch/hvfNHr14JKNPMBo3VZKjuso=
 github.com/miekg/dns v1.1.41/go.mod h1:p6aan82bvRIyn+zDIv9xYNUpwa73JcSh9BKwknJysuI=

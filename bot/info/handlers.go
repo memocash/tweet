@@ -41,7 +41,7 @@ func (l *Server) balanceHandler(writer http.ResponseWriter, request *http.Reques
 		return
 	}
 	walletDb := tweetWallet.Database{}
-	utxos, err := walletDb.GetUtxos(*addr)
+	utxos, err := walletDb.GetUtxos([]wallet.Addr{*addr})
 	var total int64
 	for _, utxo := range utxos {
 		_, err := writer.Write([]byte(fmt.Sprintf("utxo: %s:%d - %d\n", utxo.Hash, utxo.Index, utxo.Amount)))
@@ -146,7 +146,7 @@ func (l *Server) reportHandler(writer http.ResponseWriter, request *http.Request
 }
 
 func (l *Server) CompileBotReport(stream *config.Stream, client *lib.Client, graphqlClient *graphql.Client) BotReport {
-	bal, err := client.GetBalance(stream.Wallet.Key.GetAddr())
+	bal, err := client.GetBalance([]wallet.Addr{stream.Wallet.Key.GetAddr()})
 	if err != nil {
 		l.ErrorChan <- jerr.Get("error getting balance", err)
 	}
@@ -222,7 +222,7 @@ func (l *Server) CompileBotReport(stream *config.Stream, client *lib.Client, gra
 		Name:               twitterProfile.Name,
 		Address:            stream.Wallet.Address.GetEncoded(),
 		ProfileLink:        MEMO_PROFILE_URL + stream.Wallet.Address.GetEncoded(),
-		Balance:            bal,
+		Balance:            bal.Balance,
 		NumSentPosts:       numSentPosts,
 		NumFollowers:       numFollowers,
 		NumIncomingLikes:   numIncomingLikes,

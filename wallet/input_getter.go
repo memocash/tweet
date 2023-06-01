@@ -29,7 +29,7 @@ func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
 	}
 	client := lib.NewClient(graph.ServerUrlHttp, &Database{})
 	address := g.Address.GetAddr()
-	outputs, err := client.GetUtxos(address)
+	outputs, err := client.GetUtxos([]wallet.Addr{address})
 	if err != nil {
 		return nil, jerr.Get("error getting utxos from database for input getter", err)
 	}
