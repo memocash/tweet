@@ -5,11 +5,15 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"github.com/jchavannes/jgo/jerr"
+	"github.com/memocash/index/ref/bitcoin/memo"
 	"net/http"
 	"time"
 )
 
-func Broadcast(raw []byte) error {
+func Broadcast(memoTx *memo.Tx) error {
+	//log.Printf("Broadcasting transaction: %s\n", memoTx.MsgTx.TxHash())
+	//parse.GetTxInfo(memoTx).Print()
+	raw := memo.GetRaw(memoTx.MsgTx)
 	jsonData := map[string]interface{}{
 		"query": `mutation ($raw: String!) {
 					broadcast(raw: $raw)

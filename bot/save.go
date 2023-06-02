@@ -158,7 +158,7 @@ func (s *SaveTx) HandleTxType() error {
 
 func (s *SaveTx) HandleRequestSubBot(stream Stream) error {
 	//otherwise, one of the sub-bots has just been sent some funds, so based on the value of CatchUp, decide if we try to GetSkippedTweets
-	var logMsg = fmt.Sprintf("Received tx for sub bot %s: %s", stream.Wallet.Address.GetEncoded(), s.TxHash)
+	var logMsg = fmt.Sprintf("Handled stream tx %s (%s)", s.TxHash, stream.Wallet.Address.GetEncoded())
 	defer func() {
 		log.Println(logMsg)
 	}()
@@ -207,7 +207,7 @@ func (s *SaveTx) HandleRequestSubBot(stream Stream) error {
 		}
 	} else {
 		if flag.Flags.CatchUp {
-			logMsg += fmt.Sprintf("from %s, getting 100 skipped tweets", s.SenderAddress)
+			logMsg += fmt.Sprintf(", from non-bot: %s, getting 100 skipped tweets", s.SenderAddress)
 			err = tweets.GetSkippedTweets(accountKey, &stream.Wallet, s.Bot.TweetScraper, flag.Flags, 100, false)
 			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 				return jerr.Get("error getting skipped tweets", err)
@@ -301,7 +301,7 @@ func (s *SaveTx) HandleCreate() error {
 		return jerr.Get("error saving flags to db", err)
 	}
 	logMsg += fmt.Sprintf(", creating bot for %s", twitterName)
-	err = createBotStream(s.Bot, &twitterAccount, s.SenderAddress, s.Tx, s.CoinIndex, historyNum)
+	err = createStream(s.Bot, &twitterAccount, s.SenderAddress, s.Tx, s.CoinIndex, historyNum)
 	if err != nil {
 		return jerr.Get("error creating bot", err)
 	}

@@ -66,7 +66,7 @@ func GetStreams(cryptKey []byte, onlyFunded bool) ([]Stream, error) {
 	return streams, nil
 }
 
-func createBotStream(b *Bot, twitterAccount *twitter.User, senderAddress string, tx graph.Tx, coinIndex uint32, historyNum int) error {
+func createStream(b *Bot, twitterAccount *twitter.User, senderAddress string, tx graph.Tx, coinIndex uint32, historyNum int) error {
 	//check if the value of the transaction is less than 5,000 or this address already has a bot for this account in the database
 	botExists := false
 	_, err := db.GetAddressKey(wallet.GetAddressFromString(senderAddress).GetAddr(), twitterAccount.ID)

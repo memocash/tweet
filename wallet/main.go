@@ -6,6 +6,7 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"github.com/hasura/go-graphql-client"
+	"github.com/jchavannes/btcd/chaincfg/chainhash"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jutil"
 	"github.com/memocash/index/ref/bitcoin/memo"
@@ -60,27 +61,29 @@ func NewWallet(address wallet.Address, key wallet.PrivateKey) Wallet {
 	}
 }
 
-func MakePost(wlt Wallet, message string) ([]byte, error) {
+func MakePost(wlt Wallet, message string) (chainhash.Hash, error) {
 	memoTx, err := buildTx(wlt, script.Post{Message: message})
 	//check if the prefix already exists in the database
 	if err != nil {
-		return nil, jerr.Get("error generating memo tx make post", err)
+		return chainhash.Hash{}, jerr.Get("error generating memo tx make post", err)
 	}
-	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
-		return nil, jerr.Get("error completing transaction make post", err)
+	if err := graph.Broadcast(memoTx); err != nil {
+		return chainhash.Hash{}, jerr.Get("error completing transaction make post", err)
 	}
-	return memoTx.GetHash(), nil
+	return memoTx.MsgTx.TxHash(), nil
 }
-func MakeReply(wallet Wallet, parentHash []byte, message string) ([]byte, error) {
+
+func MakeReply(wallet Wallet, parentHash []byte, message string) (chainhash.Hash, error) {
 	memoTx, err := buildTx(wallet, script.Reply{Message: message, TxHash: parentHash})
 	if err != nil {
-		return nil, jerr.Get("error generating memo tx", err)
+		return chainhash.Hash{}, jerr.Get("error generating memo tx", err)
 	}
-	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
-		return nil, jerr.Get("error completing transaction memo reply", err)
+	if err := graph.Broadcast(memoTx); err != nil {
+		return chainhash.Hash{}, jerr.Get("error completing transaction memo reply", err)
 	}
-	return memoTx.GetHash(), nil
+	return memoTx.MsgTx.TxHash(), nil
 }
+
 func GetProfile(address string, date time.Time, client *graphql.Client) (*graph.Profiles, error) {
 	var senderData graph.Profiles
 	var variables = map[string]interface{}{"address": address}
@@ -121,11 +124,12 @@ func FundTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Ad
 		BotExists:  botExists}}); err != nil {
 		return jerr.Get("error saving sub bot command", err)
 	}
-	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
+	if err := graph.Broadcast(memoTx); err != nil {
 		return jerr.Get("error completing transaction fund twitter address", err)
 	}
 	return nil
 }
+
 func WithdrawAmount(utxos []memo.UTXO, key wallet.PrivateKey, address wallet.Address, amount int64) error {
 	memoTx, err := gen.Tx(gen.TxRequest{
 		InputsToUse: utxos,
@@ -143,11 +147,12 @@ func WithdrawAmount(utxos []memo.UTXO, key wallet.PrivateKey, address wallet.Add
 	if err != nil {
 		return jerr.Get("error generating memo tx", err)
 	}
-	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
+	if err := graph.Broadcast(memoTx); err != nil {
 		return jerr.Get("error completing transaction withdraw amount", err)
 	}
 	return nil
 }
+
 func WithdrawAll(utxos []memo.UTXO, key wallet.PrivateKey, address wallet.Address) error {
 	memoTx, err := gen.Tx(gen.TxRequest{
 		InputsToUse: utxos,
@@ -165,11 +170,12 @@ func WithdrawAll(utxos []memo.UTXO, key wallet.PrivateKey, address wallet.Addres
 	if err != nil {
 		return jerr.Get("error generating memo tx", err)
 	}
-	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
+	if err := graph.Broadcast(memoTx); err != nil {
 		return jerr.Get("error completing transaction withdraw all", err)
 	}
 	return nil
 }
+
 func SendToTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Address, errorMsg string) error {
 	memoTx, err := gen.Tx(gen.TxRequest{
 		InputsToUse: []memo.UTXO{utxo},
@@ -189,17 +195,18 @@ func SendToTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.
 	if err != nil {
 		return jerr.Get("error generating memo tx send to twitter address", err)
 	}
-	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
+	if err := graph.Broadcast(memoTx); err != nil {
 		return jerr.Get("error completing transaction send to twitter address", err)
 	}
 	return nil
 }
+
 func UpdateName(wlt Wallet, name string) error {
 	memoTx, err := buildTx(wlt, script.SetName{Name: name})
 	if err != nil {
 		return jerr.Get("error generating memo tx update name", err)
 	}
-	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
+	if err := graph.Broadcast(memoTx); err != nil {
 		return jerr.Get("error completing transaction update name", err)
 	}
 	return nil
@@ -213,7 +220,7 @@ func UpdateProfileText(wlt Wallet, profile string) error {
 	if err != nil {
 		return jerr.Get("error generating memo tx update profile text", err)
 	}
-	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
+	if err := graph.Broadcast(memoTx); err != nil {
 		return jerr.Get("error completing transaction update profile text", err)
 	}
 	return nil
@@ -224,7 +231,7 @@ func UpdateProfilePic(wlt Wallet, url string) error {
 	if err != nil {
 		return jerr.Get("error generating memo tx update profile pic", err)
 	}
-	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
+	if err := graph.Broadcast(memoTx); err != nil {
 		return jerr.Get("error completing transaction update profile pic", err)
 	}
 	return nil

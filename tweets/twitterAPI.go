@@ -40,8 +40,7 @@ func getNewTweets(accountKey obj.AccountKey, numTweets int, newBot bool, scraper
 	if recentTweetTx != nil {
 		userTimelineParams.SinceID = recentTweetTx.TweetId
 	}
-	_, err = GetAndSaveTwitterTweets(userTimelineParams, scraper)
-	if err != nil {
+	if err = GetAndSaveTwitterTweets(userTimelineParams, scraper); err != nil {
 		return nil, jerr.Get("error getting new tweets from twitter", err)
 	}
 	recentSavedTweetTx, err := db.GetRecentSavedAddressTweet(accountKey.Address.GetAddr(), accountKey.UserID)
@@ -61,9 +60,9 @@ func getNewTweets(accountKey obj.AccountKey, numTweets int, newBot bool, scraper
 	return tweetTxs, nil
 }
 
-func GetAndSaveTwitterTweets(params *twitter.UserTimelineParams, scraper *twitterscraper.Scraper) ([]obj.TweetTx, error) {
+func GetAndSaveTwitterTweets(params *twitter.UserTimelineParams, scraper *twitterscraper.Scraper) error {
 	if params.UserID == 0 {
-		return nil, jerr.New("userID is required")
+		return jerr.New("userID is required")
 	}
 	query := fmt.Sprintf("from:%s", params.ScreenName)
 	if params.SinceID != 0 {
@@ -75,14 +74,14 @@ func GetAndSaveTwitterTweets(params *twitter.UserTimelineParams, scraper *twitte
 	var tweets []twitter.Tweet
 	for scrapedTweet := range scraper.SearchTweets(context.Background(), query, params.Count) {
 		if scrapedTweet.Error != nil {
-			return nil, jerr.Get("error getting tweets", scrapedTweet.Error)
+			return jerr.Get("error getting tweets", scrapedTweet.Error)
 		}
 		tweetID, err := strconv.ParseInt(scrapedTweet.ID, 10, 64)
 		var inReplyToStatusID int64
 		if scrapedTweet.InReplyToStatus != nil {
 			inReplyToStatusID, err = strconv.ParseInt(scrapedTweet.InReplyToStatus.ID, 10, 64)
 			if err != nil {
-				return nil, jerr.Get("error parsing in reply to status id", err)
+				return jerr.Get("error parsing in reply to status id", err)
 			}
 		} else {
 			inReplyToStatusID = 0
@@ -113,12 +112,11 @@ func GetAndSaveTwitterTweets(params *twitter.UserTimelineParams, scraper *twitte
 		}
 		tweets = append(tweets, tweet)
 	}
-	var tweetTxs = make([]obj.TweetTx, len(tweets))
 	var dbTweetTxs = make([]db.ObjectI, len(tweets))
 	for i := range tweets {
-		tweetTxJson, err := json.Marshal(obj.TweetTx{Tweet: &tweets[i], TxHash: nil})
+		tweetTxJson, err := json.Marshal(obj.TweetTx{Tweet: &tweets[i]})
 		if err != nil {
-			return nil, jerr.Get("error marshaling tweet tx for saving twitter tweets", err)
+			return jerr.Get("error marshaling tweet tx for saving twitter tweets", err)
 		}
 		dbTweetTxs[i] = &db.TweetTx{
 			UserID:  params.UserID,
@@ -127,9 +125,9 @@ func GetAndSaveTwitterTweets(params *twitter.UserTimelineParams, scraper *twitte
 		}
 	}
 	if err := db.Save(dbTweetTxs); err != nil {
-		return nil, jerr.Get("error saving db tweet from twitter tweet", err)
+		return jerr.Get("error saving db tweet from twitter tweet", err)
 	}
-	return tweetTxs, nil
+	return nil
 }
 
 func GetSkippedTweets(accountKey obj.AccountKey, wlt *wallet.Wallet, scraper *twitterscraper.Scraper, flags db.Flags, numTweets int, newBot bool) error {
