@@ -258,8 +258,18 @@ func SetSalt(newSalt []byte) {
 	salt = newSalt
 }
 
-// Encrypt see: https://golang.org/pkg/crypto/cipher/#example_NewCFBEncrypter
-func Encrypt(value []byte, key []byte) ([]byte, error) {
+var _dbEncryptionKey []byte
+
+func SetDbEncryptionKey(encryptionKey []byte) {
+	_dbEncryptionKey = encryptionKey
+}
+
+func EncryptForDb(value []byte) ([]byte, error) {
+	return EncryptWithKey(value, _dbEncryptionKey)
+}
+
+// EncryptWithKey see: https://golang.org/pkg/crypto/cipher/#example_NewCFBEncrypter
+func EncryptWithKey(value []byte, key []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return []byte{}, jerr.Get("error getting new cipher", err)
@@ -274,8 +284,12 @@ func Encrypt(value []byte, key []byte) ([]byte, error) {
 	return encryptedValue, nil
 }
 
-// Decrypt see: https://golang.org/pkg/crypto/cipher/#example_NewCFBDecrypter
-func Decrypt(value []byte, key []byte) ([]byte, error) {
+func DecryptFromDb(value []byte) ([]byte, error) {
+	return DecryptWithKey(value, _dbEncryptionKey)
+}
+
+// DecryptWithKey see: https://golang.org/pkg/crypto/cipher/#example_NewCFBDecrypter
+func DecryptWithKey(value []byte, key []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return []byte{}, jerr.Get("error getting new cipher", err)

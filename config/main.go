@@ -8,12 +8,13 @@ import (
 
 type Config struct {
 	BotSeed        string       `mapstructure:"BOT_SEED"`
-	BotCrypt       string       `mapstructure:"BOT_CRYPT"`
 	TwitterCreds   TwitterCreds `mapstructure:"TWITTER_CREDS"`
 	UpdateInterval int          `mapstructure:"UPDATE_INTERVAL"`
 	InfoServerPort int          `mapstructure:"INFO_SERVER_PORT"`
 	TemplateDir    string       `mapstructure:"TEMPLATE_DIR"`
 	AWS            AwsConfig    `mapstructure:"AWS"`
+
+	DbEncryptionKey string `mapstructure:"DB_ENCRYPTION_KEY"`
 }
 
 type TwitterCreds struct {
@@ -73,4 +74,8 @@ func GetAwsSesCredentials() AwsConfig {
 // GetScrapeSleepTime spaces out twitter scrapes to avoid rate limiting
 func GetScrapeSleepTime() time.Duration {
 	return 1 * time.Second
+}
+
+func GetDbEncryptionKey() string {
+	return _config.DbEncryptionKey
 }

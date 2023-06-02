@@ -100,7 +100,7 @@ func (l *Server) reportHandler(writer http.ResponseWriter, _ *http.Request) {
 	log.Println("Running Balance Report")
 	graphQlClient := graphql.NewClient(graph.ServerUrlHttp, nil)
 	client := lib.NewClient(graph.ServerUrlHttp, &tweetWallet.Database{})
-	streams, err := bot.GetStreams(l.Bot.Crypt, true)
+	streams, err := bot.GetStreams(true)
 	if err != nil {
 		_, err2 := writer.Write([]byte(fmt.Sprintf("error getting address keys; %v", err)))
 		if err2 != nil {

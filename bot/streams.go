@@ -22,14 +22,14 @@ type Stream struct {
 	Wallet tweetWallet.Wallet
 }
 
-func GetStreams(cryptKey []byte, onlyFunded bool) ([]Stream, error) {
+func GetStreams(onlyFunded bool) ([]Stream, error) {
 	var streams []Stream
 	addressKeys, err := db.GetAllAddressKey()
 	if err != nil {
 		return nil, jerr.Get("error getting address keys for database for stream configs", err)
 	}
 	for _, addressKey := range addressKeys {
-		decryptedWifByte, err := tweetWallet.Decrypt(addressKey.Key, cryptKey)
+		decryptedWifByte, err := tweetWallet.DecryptFromDb(addressKey.Key)
 		if err != nil {
 			return nil, jerr.Get("error decrypting", err)
 		}
@@ -102,7 +102,7 @@ func createStream(b *Bot, twitterAccount *twitter.User, senderAddress string, tx
 		if err != nil {
 			return jerr.Get("error getting key from database", err)
 		}
-		decryptedKey, err := tweetWallet.Decrypt(addressKey.Key, b.Crypt)
+		decryptedKey, err := tweetWallet.DecryptFromDb(addressKey.Key)
 		if err != nil {
 			return jerr.Get("error decrypting key", err)
 		}
@@ -127,7 +127,7 @@ func createStream(b *Bot, twitterAccount *twitter.User, senderAddress string, tx
 		if err := db.Save([]db.ObjectI{&db.BotStreamsCount{Count: int(numStreamUint + 1)}}); err != nil {
 			return jerr.Get("error saving bot streams count", err)
 		}
-		encryptedKey, err := tweetWallet.Encrypt([]byte(newKey.GetBase58Compressed()), b.Crypt)
+		encryptedKey, err := tweetWallet.EncryptForDb([]byte(newKey.GetBase58Compressed()))
 		if err != nil {
 			return jerr.Get("error encrypting key", err)
 		}

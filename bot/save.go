@@ -60,6 +60,7 @@ func (s *SaveTx) Save(tx graph.Tx) error {
 	}
 	return nil
 }
+
 func (s *SaveTx) HandleRequestMainBot() error {
 	switch {
 	case s.Bot.Down:
@@ -127,6 +128,7 @@ func (s *SaveTx) FinishSave() {
 		s.Bot.ErrorChan <- jerr.Get("error adding tx hash to database", err)
 	}
 }
+
 func (s *SaveTx) HandleTxType() error {
 	for i, _ := range s.Tx.Outputs {
 		s.CoinIndex = uint32(i)
@@ -138,7 +140,7 @@ func (s *SaveTx) HandleTxType() error {
 			}
 			s.Handled = true
 		} else {
-			streams, err := GetStreams(s.Bot.Crypt, false)
+			streams, err := GetStreams(false)
 			if err != nil {
 				return jerr.Get("error getting bot streams", err)
 			}
@@ -226,8 +228,8 @@ func (s *SaveTx) HandleDown() error {
 		return jerr.Get("error refunding", err)
 	}
 	return nil
-
 }
+
 func (s *SaveTx) HandleCreate() error {
 	logMsg := fmt.Sprintf("Received create tx: %s (%s)", s.TxHash, s.SenderAddress)
 	//split the message into an array of strings
@@ -352,7 +354,7 @@ func (s *SaveTx) HandleWithdraw() error {
 		log.Println(logMsg)
 		return nil
 	}
-	decryptedKey, err := tweetWallet.Decrypt(addressKey.Key, s.Bot.Crypt)
+	decryptedKey, err := tweetWallet.DecryptFromDb(addressKey.Key)
 	if err != nil {
 		return jerr.Get("error decrypting key", err)
 	}

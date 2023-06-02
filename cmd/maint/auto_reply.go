@@ -6,7 +6,6 @@ import (
 	"github.com/memocash/tweet/bot"
 	"github.com/memocash/tweet/bot/info"
 	"github.com/memocash/tweet/config"
-	tweetWallet "github.com/memocash/tweet/wallet"
 	"github.com/spf13/cobra"
 )
 
@@ -30,11 +29,6 @@ var autoReplyCmd = &cobra.Command{
 		if err != nil {
 			jerr.Get("fatal error creating new bot", err).Fatal()
 		}
-		cryptBytes, err := tweetWallet.GenerateEncryptionKeyFromPassword(config.GetConfig().BotCrypt)
-		if err != nil {
-			jerr.Get("fatal error generating encryption key", err).Fatal()
-		}
-		memoBot.Crypt = cryptBytes
 		if err := memoBot.ProcessMissedTxs(); err != nil {
 			jerr.Get("fatal error updating bot", err).Fatal()
 		}

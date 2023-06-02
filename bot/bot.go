@@ -35,7 +35,6 @@ type Bot struct {
 	ErrorChan    chan error
 	TxMutex      sync.Mutex
 	UpdateMutex  sync.Mutex
-	Crypt        []byte
 	Timer        *time.Timer
 	Verbose      bool
 	Down         bool
@@ -121,7 +120,7 @@ func (b *Bot) Listen() error {
 	}
 	go func() {
 		for {
-			streams, err := GetStreams(b.Crypt, true)
+			streams, err := GetStreams(true)
 			if err != nil {
 				b.ErrorChan <- jerr.Get("error making stream array bot listen", err)
 			}
@@ -181,7 +180,7 @@ func (b *Bot) SetAddresses() error {
 		return jerr.Get("error getting all address keys", err)
 	}
 	for _, addressKey := range addressKeys {
-		decryptedKey, err := tweetWallet.Decrypt(addressKey.Key, b.Crypt)
+		decryptedKey, err := tweetWallet.DecryptFromDb(addressKey.Key)
 		if err != nil {
 			return jerr.Get("error decrypting key", err)
 		}
@@ -218,7 +217,7 @@ func (b *Bot) SafeUpdate() error {
 }
 
 func (b *Bot) UpdateStream() error {
-	streams, err := GetStreams(b.Crypt, false)
+	streams, err := GetStreams(false)
 	if err != nil {
 		return jerr.Get("error making stream array update", err)
 	}
