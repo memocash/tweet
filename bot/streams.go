@@ -10,26 +10,31 @@ import (
 	"github.com/memocash/index/ref/bitcoin/memo"
 	"github.com/memocash/index/ref/bitcoin/tx/hs"
 	"github.com/memocash/index/ref/bitcoin/wallet"
-	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/graph"
 	tweetWallet "github.com/memocash/tweet/wallet"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-func GetBotStreams(cryptKey []byte, onlyFunded bool) ([]config.Stream, error) {
-	botStreams := make([]config.Stream, 0)
+type Stream struct {
+	UserID int64
+	Owner  wallet.Addr
+	Wallet tweetWallet.Wallet
+}
+
+func GetStreams(cryptKey []byte, onlyFunded bool) ([]Stream, error) {
+	var streams []Stream
 	addressKeys, err := db.GetAllAddressKey()
 	if err != nil {
 		return nil, jerr.Get("error getting address keys for database for stream configs", err)
 	}
 	for _, addressKey := range addressKeys {
-		decryptedKeyByte, err := tweetWallet.Decrypt(addressKey.Key, cryptKey)
+		decryptedWifByte, err := tweetWallet.Decrypt(addressKey.Key, cryptKey)
 		if err != nil {
 			return nil, jerr.Get("error decrypting", err)
 		}
-		decryptedKey := string(decryptedKeyByte)
-		walletKey, err := wallet.ImportPrivateKey(decryptedKey)
+		wif := string(decryptedWifByte)
+		walletKey, err := wallet.ImportPrivateKey(wif)
 		if err != nil {
 			return nil, jerr.Get("error importing private key", err)
 		}
@@ -51,15 +56,14 @@ func GetBotStreams(cryptKey []byte, onlyFunded bool) ([]config.Stream, error) {
 			if err != nil {
 				return nil, jerr.Get("error parsing user id", err)
 			}
-			botStreams = append(botStreams, config.Stream{
-				Key:    decryptedKey,
+			streams = append(streams, Stream{
 				UserID: addressKey.UserID,
-				Sender: wallet.Addr(addressKey.Address).String(),
+				Owner:  addressKey.Address,
 				Wallet: wlt,
 			})
 		}
 	}
-	return botStreams, nil
+	return streams, nil
 }
 
 func createBotStream(b *Bot, twitterAccount *twitter.User, senderAddress string, tx graph.Tx, coinIndex uint32, historyNum int) error {

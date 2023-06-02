@@ -66,12 +66,12 @@ func (l *Server) profileHandler(writer http.ResponseWriter, request *http.Reques
 		return
 	}
 	sender := request.FormValue("sender")
-	userIdstr := request.FormValue("userId")
-	_, err := writer.Write([]byte(fmt.Sprintf("Searching for profile-%s-%s\n", sender, userIdstr)))
+	userIdStr := request.FormValue("userId")
+	_, err := writer.Write([]byte(fmt.Sprintf("Searching for profile-%s-%s\n", sender, userIdStr)))
 	if err != nil {
 		l.ErrorChan <- jerr.Get("error writing response", err)
 	}
-	userId, err := strconv.ParseInt(userIdstr, 10, 64)
+	userId, err := strconv.ParseInt(userIdStr, 10, 64)
 	dbProfile, err := db.GetProfile(wallet.GetAddressFromString(sender).GetAddr(), userId)
 	if err != nil {
 		_, err2 := writer.Write([]byte(fmt.Sprintf("error getting profile; %v", err)))
@@ -96,11 +96,11 @@ func (l *Server) profileHandler(writer http.ResponseWriter, request *http.Reques
 	return
 }
 
-func (l *Server) reportHandler(writer http.ResponseWriter, request *http.Request) {
+func (l *Server) reportHandler(writer http.ResponseWriter, _ *http.Request) {
 	log.Println("Running Balance Report")
-	graphQlCLient := graphql.NewClient(graph.ServerUrlHttp, nil)
+	graphQlClient := graphql.NewClient(graph.ServerUrlHttp, nil)
 	client := lib.NewClient(graph.ServerUrlHttp, &tweetWallet.Database{})
-	botStreams, err := bot.GetBotStreams(l.Bot.Crypt, true)
+	streams, err := bot.GetStreams(l.Bot.Crypt, true)
 	if err != nil {
 		_, err2 := writer.Write([]byte(fmt.Sprintf("error getting address keys; %v", err)))
 		if err2 != nil {
@@ -109,8 +109,8 @@ func (l *Server) reportHandler(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	var report TweetReport
-	for _, stream := range botStreams {
-		botReport := l.CompileBotReport(&stream, client, graphQlCLient)
+	for _, stream := range streams {
+		botReport := l.CompileBotReport(&stream, client, graphQlClient)
 		report.Bots = append(report.Bots, botReport)
 		_, err := writer.Write([]byte(fmt.Sprintf("%s\n", botReport.String())))
 		if err != nil {
@@ -145,7 +145,7 @@ func (l *Server) reportHandler(writer http.ResponseWriter, request *http.Request
 	return
 }
 
-func (l *Server) CompileBotReport(stream *config.Stream, client *lib.Client, graphqlClient *graphql.Client) BotReport {
+func (l *Server) CompileBotReport(stream *bot.Stream, client *lib.Client, graphqlClient *graphql.Client) BotReport {
 	bal, err := client.GetBalance([]wallet.Addr{stream.Wallet.Key.GetAddr()})
 	if err != nil {
 		l.ErrorChan <- jerr.Get("error getting balance", err)
@@ -232,6 +232,6 @@ func (l *Server) CompileBotReport(stream *config.Stream, client *lib.Client, gra
 		TotalInteractions:  totalInteractions,
 		CreatedAt:          time.Unix(createdAt, 0).String(),
 		LatestAction:       time.Unix(latestAction, 0).String(),
-		Owner:              stream.Sender,
+		Owner:              stream.Owner.String(),
 	}
 }

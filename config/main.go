@@ -2,14 +2,13 @@ package config
 
 import (
 	"github.com/jchavannes/jgo/jerr"
-	"github.com/memocash/tweet/wallet"
 	"github.com/spf13/viper"
+	"time"
 )
 
 type Config struct {
 	BotSeed        string       `mapstructure:"BOT_SEED"`
 	BotCrypt       string       `mapstructure:"BOT_CRYPT"`
-	Streams        []Stream     `mapstructure:"STREAMS"`
 	TwitterCreds   TwitterCreds `mapstructure:"TWITTER_CREDS"`
 	UpdateInterval int          `mapstructure:"UPDATE_INTERVAL"`
 	InfoServerPort int          `mapstructure:"INFO_SERVER_PORT"`
@@ -34,12 +33,6 @@ func (t TwitterCreds) GetStrings() []string {
 	return credentials
 }
 
-type Stream struct {
-	Key    string        `mapstructure:"KEY"`
-	UserID int64         `mapstructure:"USER_ID"`
-	Sender string        `mapstructure:"SENDER"`
-	Wallet wallet.Wallet `mapstructure:"WALLET"`
-}
 type AwsCredentials struct {
 	Key    string
 	Secret string
@@ -85,4 +78,9 @@ func GetAwsSesCredentials() AwsCredentials {
 		Secret: _config.AWS.Secret,
 		Region: _config.AWS.Region,
 	}
+}
+
+// GetScrapeSleepTime spaces out twitter scrapes to avoid rate limiting
+func GetScrapeSleepTime() time.Duration {
+	return 1 * time.Second
 }

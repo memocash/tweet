@@ -3,9 +3,9 @@ package bot
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jlog"
-	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets"
@@ -14,38 +14,34 @@ import (
 	"time"
 )
 
-func updateProfiles(botStreams []config.Stream, b *Bot) error {
+func checkAndUpdateProfiles(botStreams []Stream, b *Bot) error {
 	for _, stream := range botStreams {
-		streamKey, err := wallet.ImportPrivateKey(stream.Key)
-		if err != nil {
-			return jerr.Get("error importing private key", err)
+		if err := checkAndUpdateProfile(b, stream); err != nil {
+			return fmt.Errorf("error updating bot profile for stream; %w", err)
 		}
-		streamAddress := streamKey.GetAddress()
-		_, err = updateProfile(b, streamAddress, streamKey, stream.UserID, stream.Sender)
-		time.Sleep(1 * time.Second)
+		time.Sleep(config.GetScrapeSleepTime())
 	}
 	return nil
 }
 
-func updateProfile(b *Bot, newAddr wallet.Address, newKey wallet.PrivateKey, userId int64, senderAddress string) (*tweetWallet.Wallet, error) {
-	profile, err := tweets.GetProfile(userId, b.TweetScraper)
+func checkAndUpdateProfile(b *Bot, stream Stream) error {
+	profile, err := tweets.GetProfile(stream.UserID, b.TweetScraper)
 	if err != nil {
-		return nil, jerr.Get("fatal error getting profile", err)
+		return jerr.Get("fatal error getting profile", err)
 	}
-	existingDbProfile, err := db.GetProfile(wallet.GetAddressFromString(senderAddress).GetAddr(), userId)
+	existingDbProfile, err := db.GetProfile(stream.Owner, stream.UserID)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
-		return nil, jerr.Get("error getting profile from database", err)
+		return jerr.Get("error getting profile from database", err)
 	}
-	newWallet := tweetWallet.NewWallet(newAddr, newKey)
 	if existingDbProfile == nil {
-		if err = tweetWallet.UpdateName(newWallet, profile.Name); err != nil {
-			return nil, jerr.Get("error updating name", err)
+		if err = tweetWallet.UpdateName(stream.Wallet, profile.Name); err != nil {
+			return jerr.Get("error updating name", err)
 		}
-		if err = tweetWallet.UpdateProfileText(newWallet, profile.Description); err != nil {
-			return nil, jerr.Get("error updating profile text", err)
+		if err = tweetWallet.UpdateProfileText(stream.Wallet, profile.Description); err != nil {
+			return jerr.Get("error updating profile text", err)
 		}
-		if err = tweetWallet.UpdateProfilePic(newWallet, profile.ProfilePic); err != nil {
-			return nil, jerr.Get("error updating profile pic", err)
+		if err = tweetWallet.UpdateProfilePic(stream.Wallet, profile.ProfilePic); err != nil {
+			return jerr.Get("error updating profile pic", err)
 		}
 		if b.Verbose {
 			jlog.Log("updated profile info for the first time")
@@ -53,25 +49,25 @@ func updateProfile(b *Bot, newAddr wallet.Address, newKey wallet.PrivateKey, use
 	} else {
 		dbProfile := new(tweets.Profile)
 		if err = json.Unmarshal(existingDbProfile.Profile, &dbProfile); err != nil {
-			return nil, jerr.Getf(err, "error unmarshalling profile: %s", dbProfile.Name)
+			return jerr.Getf(err, "error unmarshalling profile: %s", dbProfile.Name)
 		}
 		if dbProfile.Name != profile.Name {
-			if err = tweetWallet.UpdateName(newWallet, profile.Name); err != nil {
-				return nil, jerr.Get("error updating name", err)
+			if err = tweetWallet.UpdateName(stream.Wallet, profile.Name); err != nil {
+				return jerr.Get("error updating name", err)
 			} else if b.Verbose {
 				jlog.Logf("updated profile name for %s: %s to %s\n", profile.ID, dbProfile.Name, profile.Name)
 			}
 		}
 		if dbProfile.Description != profile.Description {
-			if err = tweetWallet.UpdateProfileText(newWallet, profile.Description); err != nil {
-				return nil, jerr.Get("error updating profile text", err)
+			if err = tweetWallet.UpdateProfileText(stream.Wallet, profile.Description); err != nil {
+				return jerr.Get("error updating profile text", err)
 			} else if b.Verbose {
 				jlog.Logf("updated profile text for %s: %s to %s\n", profile.ID, dbProfile.Description, profile.Description)
 			}
 		}
 		if dbProfile.ProfilePic != profile.ProfilePic {
-			if err = tweetWallet.UpdateProfilePic(newWallet, profile.ProfilePic); err != nil {
-				return nil, jerr.Get("error updating profile pic", err)
+			if err = tweetWallet.UpdateProfilePic(stream.Wallet, profile.ProfilePic); err != nil {
+				return jerr.Get("error updating profile pic", err)
 			} else if b.Verbose {
 				jlog.Logf("updated profile pic for %s: %s to %s\n", profile.ID, dbProfile.ProfilePic, profile.ProfilePic)
 			}
@@ -79,17 +75,17 @@ func updateProfile(b *Bot, newAddr wallet.Address, newKey wallet.PrivateKey, use
 	}
 	profileBytes, err := json.Marshal(profile)
 	if err != nil {
-		return nil, jerr.Get("error marshalling profile", err)
+		return jerr.Get("error marshalling profile", err)
 	}
 	if err := db.Save([]db.ObjectI{&db.Profile{
-		Address: wallet.GetAddressFromString(senderAddress).GetAddr(),
-		UserID:  userId,
+		Owner:   stream.Owner,
+		UserID:  stream.UserID,
 		Profile: profileBytes,
 	}}); err != nil {
-		return nil, jerr.Get("error saving profile to database", err)
+		return jerr.Get("error saving profile to database", err)
 	}
 	if b.Verbose {
-		jlog.Logf("checked for profile updates: %s (%s)", profile.Name, senderAddress)
+		jlog.Logf("checked for profile updates: %s (%s)", profile.Name, stream.Owner)
 	}
-	return &newWallet, nil
+	return nil
 }

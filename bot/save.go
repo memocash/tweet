@@ -13,7 +13,6 @@ import (
 	"github.com/memocash/index/ref/bitcoin/memo"
 	"github.com/memocash/index/ref/bitcoin/tx/gen"
 	"github.com/memocash/index/ref/bitcoin/wallet"
-	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/graph"
 	"github.com/memocash/tweet/tweets"
@@ -139,16 +138,13 @@ func (s *SaveTx) HandleTxType() error {
 			}
 			s.Handled = true
 		} else {
-			botStreams, err := GetBotStreams(s.Bot.Crypt, false)
+			streams, err := GetStreams(s.Bot.Crypt, false)
 			if err != nil {
 				return jerr.Get("error getting bot streams", err)
 			}
-			var matchedStream *config.Stream = nil
-			for _, botStream := range botStreams {
-				if botStream.Wallet.Address.GetEncoded() == address && s.SenderAddress != botStream.Wallet.Address.GetEncoded() {
-					matchedStream = &botStream
-					err := s.HandleRequestSubBot(matchedStream)
-					if err != nil {
+			for _, stream := range streams {
+				if stream.Wallet.Address.GetEncoded() == address && s.SenderAddress != stream.Wallet.Address.GetEncoded() {
+					if err := s.HandleRequestSubBot(stream); err != nil {
 						return jerr.Get("error handling request sub bot for save tx", err)
 					}
 					s.Handled = true
@@ -160,26 +156,21 @@ func (s *SaveTx) HandleTxType() error {
 	return nil
 }
 
-func (s *SaveTx) HandleRequestSubBot(matchedStream *config.Stream) error {
+func (s *SaveTx) HandleRequestSubBot(stream Stream) error {
 	//otherwise, one of the sub-bots has just been sent some funds, so based on the value of CatchUp, decide if we try to GetSkippedTweets
-	var logMsg = fmt.Sprintf("Received tx for sub bot %s: %s", matchedStream.Wallet.Address.GetEncoded(), s.TxHash)
+	var logMsg = fmt.Sprintf("Received tx for sub bot %s: %s", stream.Wallet.Address.GetEncoded(), s.TxHash)
 	defer func() {
 		log.Println(logMsg)
 	}()
-	addr, err := wallet.GetAddressFromStringErr(matchedStream.Sender)
-	if err != nil {
-		logMsg += ", error processing sender address from string"
-		return jerr.Get("error getting sender address from string from matched stream sub bot request", err)
-	}
-	flag, err := db.GetFlag(addr.GetAddr(), matchedStream.UserID)
+	flag, err := db.GetFlag(stream.Owner, stream.UserID)
 	if err != nil || flag == nil {
 		logMsg += ", error getting flag or flag not found"
 		return jerr.Get("error getting flag", err)
 	}
 	accountKey := obj.AccountKey{
-		UserID:  matchedStream.UserID,
-		Key:     matchedStream.Wallet.Key,
-		Address: matchedStream.Wallet.Address,
+		UserID:  stream.UserID,
+		Key:     stream.Wallet.Key,
+		Address: stream.Wallet.Address,
 	}
 	if s.SenderAddress == s.Bot.Addr.String() {
 		logMsg += " from main bot"
@@ -196,21 +187,20 @@ func (s *SaveTx) HandleRequestSubBot(matchedStream *config.Stream) error {
 		}
 		if !subBotCommand.BotExists {
 			logMsg += ", creating new bot"
-			_, err := updateProfile(s.Bot, matchedStream.Wallet.Address, matchedStream.Wallet.Key, matchedStream.UserID, matchedStream.Sender)
-			if err != nil {
+			if err := checkAndUpdateProfile(s.Bot, stream); err != nil {
 				return jerr.Get("error updating profile for sub bot", err)
 			}
 		}
 
 		if subBotCommand.HistoryNum > 0 {
 			logMsg += fmt.Sprintf(", getting %d skipped tweets", subBotCommand.HistoryNum)
-			err = tweets.GetSkippedTweets(accountKey, &matchedStream.Wallet, s.Bot.TweetScraper, flag.Flags, subBotCommand.HistoryNum, !subBotCommand.BotExists)
+			err = tweets.GetSkippedTweets(accountKey, &stream.Wallet, s.Bot.TweetScraper, flag.Flags, subBotCommand.HistoryNum, !subBotCommand.BotExists)
 			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 				return jerr.Get("error getting skipped tweets on bot save tx", err)
 			}
 		} else if flag.Flags.CatchUp && subBotCommand.BotExists {
 			logMsg += ", getting 100 skipped tweets"
-			err = tweets.GetSkippedTweets(accountKey, &matchedStream.Wallet, s.Bot.TweetScraper, flag.Flags, 100, !subBotCommand.BotExists)
+			err = tweets.GetSkippedTweets(accountKey, &stream.Wallet, s.Bot.TweetScraper, flag.Flags, 100, !subBotCommand.BotExists)
 			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 				return jerr.Get("error getting skipped tweets on bot save tx", err)
 			}
@@ -218,7 +208,7 @@ func (s *SaveTx) HandleRequestSubBot(matchedStream *config.Stream) error {
 	} else {
 		if flag.Flags.CatchUp {
 			logMsg += fmt.Sprintf("from %s, getting 100 skipped tweets", s.SenderAddress)
-			err = tweets.GetSkippedTweets(accountKey, &matchedStream.Wallet, s.Bot.TweetScraper, flag.Flags, 100, false)
+			err = tweets.GetSkippedTweets(accountKey, &stream.Wallet, s.Bot.TweetScraper, flag.Flags, 100, false)
 			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 				return jerr.Get("error getting skipped tweets", err)
 			}

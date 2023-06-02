@@ -121,56 +121,28 @@ func (b *Bot) Listen() error {
 	}
 	go func() {
 		for {
-			t := time.NewTimer(time.Duration(updateInterval) * time.Minute)
-			select {
-			case <-t.C:
-			}
-			botStreams, err := GetBotStreams(b.Crypt, true)
+			streams, err := GetStreams(b.Crypt, true)
 			if err != nil {
 				b.ErrorChan <- jerr.Get("error making stream array bot listen", err)
 			}
-			if err = updateProfiles(botStreams, b); err != nil {
+			if err = checkAndUpdateProfiles(streams, b); err != nil {
 				b.ErrorChan <- jerr.Get("error updating profiles for bot listen", err)
 			}
-			if err = b.CheckForNewTweets(); err != nil {
+			if err = b.CheckForNewTweets(streams); err != nil {
 				b.ErrorChan <- jerr.Get("error checking for new tweets for bot listen", err)
 			}
+			time.Sleep(time.Duration(updateInterval) * time.Minute)
 		}
 	}()
-	botStreams, err := GetBotStreams(b.Crypt, true)
-	if err != nil {
-		return jerr.Get("error getting bot streams for listen skipped", err)
-	}
-	for _, stream := range botStreams {
-		flag, err := db.GetFlag(wallet.GetAddressFromString(stream.Sender).GetAddr(), stream.UserID)
-		if err != nil {
-			return jerr.Get("error getting flag for listen skipped", err)
-		}
-		if flag.Flags.CatchUp {
-			err = tweets.GetSkippedTweets(obj.AccountKey{
-				UserID:  stream.UserID,
-				Key:     stream.Wallet.Key,
-				Address: stream.Wallet.Address,
-			}, &stream.Wallet, b.TweetScraper, flag.Flags, 100, false)
-			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
-				return jerr.Get("error getting skipped tweets on bot listen", err)
-			}
-		}
-	}
-	if err = b.CheckForNewTweets(); err != nil {
-		return jerr.Get("error updating stream 2nd time", err)
-	}
 	return jerr.Get("error in listen", <-b.ErrorChan)
 }
 
-func (b *Bot) CheckForNewTweets() error {
-	log.Println("Checking for new tweets...")
-	botStreams, err := GetBotStreams(b.Crypt, true)
-	if err != nil {
-		return jerr.Get("error getting bot streams for listen skipped", err)
+func (b *Bot) CheckForNewTweets(streams []Stream) error {
+	if b.Verbose {
+		log.Println("Checking for new tweets...")
 	}
-	for _, stream := range botStreams {
-		flag, err := db.GetFlag(wallet.GetAddressFromString(stream.Sender).GetAddr(), stream.UserID)
+	for _, stream := range streams {
+		flag, err := db.GetFlag(stream.Owner, stream.UserID)
 		if err != nil {
 			return jerr.Get("error getting flag for listen skipped", err)
 		}
@@ -183,10 +155,10 @@ func (b *Bot) CheckForNewTweets() error {
 			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
 				return jerr.Get("error getting skipped tweets on bot listen", err)
 			}
+			time.Sleep(config.GetScrapeSleepTime())
 		}
 	}
-	err = b.SafeUpdate()
-	if err != nil {
+	if err := b.SafeUpdate(); err != nil {
 		return jerr.Get("error updating streams after getting new tweets", err)
 	}
 	return nil
@@ -246,8 +218,7 @@ func (b *Bot) SafeUpdate() error {
 }
 
 func (b *Bot) UpdateStream() error {
-	//create an array of {userId, newKey} objects by searching through the linked-<senderAddress>-<userId> fields
-	botStreams, err := GetBotStreams(b.Crypt, false)
+	streams, err := GetStreams(b.Crypt, false)
 	if err != nil {
 		return jerr.Get("error making stream array update", err)
 	}
@@ -255,14 +226,9 @@ func (b *Bot) UpdateStream() error {
 	if err != nil {
 		return jerr.Get("error setting addresses", err)
 	}
-	for _, stream := range botStreams {
-		streamKey, err := wallet.ImportPrivateKey(stream.Key)
-		if err != nil {
-			return jerr.Get("error importing private key", err)
-		}
-		streamAddress := streamKey.GetAddress()
+	for _, stream := range streams {
 		if b.Verbose {
-			jlog.Logf("streaming %s to address %s\n", stream.UserID, streamAddress.GetEncoded())
+			jlog.Logf("streaming %s to address %s\n", stream.UserID, stream.Wallet.Key.GetAddr())
 		}
 	}
 	if err := graph.AddressListen(b.Addresses, b.SaveTx, b.ErrorChan); err != nil {

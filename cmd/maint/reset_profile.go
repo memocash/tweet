@@ -11,19 +11,22 @@ import (
 
 var resetProfileCmd = &cobra.Command{
 	Use:   "reset-profile",
-	Short: "reset-profile <senderAddr> <userId>",
+	Short: "reset-profile <ownerAddr> <userId>",
 	Run: func(c *cobra.Command, args []string) {
 		if len(args) < 2 {
-			log.Fatal("must specify sender address and userId")
+			log.Fatal("must specify owner address and userId")
 		}
-		senderAddr := args[0]
+		owner, err := wallet.GetAddrFromString(args[0])
+		if err != nil {
+			log.Fatalf("error parsing owner address; %v", err)
+		}
 		userId := jutil.GetInt64FromString(strings.TrimLeft(args[1], "0"))
 		if err := db.Delete([]db.ObjectI{&db.Profile{
-			Address: wallet.GetAddressFromString(senderAddr).GetAddr(),
-			UserID:  userId,
+			Owner:  *owner,
+			UserID: userId,
 		}}); err != nil {
 			log.Fatalf("error removing profile from db for reset; %v", err)
 		}
-		log.Printf("reset %s profile linked to %s\n", userId, senderAddr)
+		log.Printf("reset %d profile linked to %s\n", userId, owner)
 	},
 }
