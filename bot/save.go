@@ -229,7 +229,7 @@ func (s *SaveTx) HandleDown() error {
 
 }
 func (s *SaveTx) HandleCreate() error {
-	logMsg := fmt.Sprintf("Received create tx from %s", s.SenderAddress)
+	logMsg := fmt.Sprintf("Received create tx: %s (%s)", s.TxHash, s.SenderAddress)
 	//split the message into an array of strings
 	splitMessage := strings.Split(s.Message, " ")
 	//get the twitter name from the message
