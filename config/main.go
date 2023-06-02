@@ -33,12 +33,6 @@ func (t TwitterCreds) GetStrings() []string {
 	return credentials
 }
 
-type AwsCredentials struct {
-	Key    string
-	Secret string
-	Region string
-}
-
 type AwsConfig struct {
 	Key       string   `mapstructure:"SES_KEY"`
 	Secret    string   `mapstructure:"SES_SECRET"`
@@ -72,12 +66,8 @@ func GetTwitterCreds() TwitterCreds {
 	return _config.TwitterCreds
 }
 
-func GetAwsSesCredentials() AwsCredentials {
-	return AwsCredentials{
-		Key:    _config.AWS.Key,
-		Secret: _config.AWS.Secret,
-		Region: _config.AWS.Region,
-	}
+func GetAwsSesCredentials() AwsConfig {
+	return _config.AWS
 }
 
 // GetScrapeSleepTime spaces out twitter scrapes to avoid rate limiting
