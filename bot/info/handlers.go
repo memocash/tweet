@@ -11,7 +11,7 @@ import (
 	"github.com/memocash/tweet/bot"
 	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/db"
-	ses "github.com/memocash/tweet/email"
+	"github.com/memocash/tweet/email"
 	"github.com/memocash/tweet/graph"
 	"github.com/memocash/tweet/tweets"
 	tweetWallet "github.com/memocash/tweet/wallet"
@@ -117,7 +117,7 @@ func (l *Server) reportHandler(writer http.ResponseWriter, _ *http.Request) {
 			l.ErrorChan <- jerr.Get("error writing response", err)
 		}
 	}
-	templateText, err := os.ReadFile(config.GetConfig().TemplateDir + "/balance_report.html")
+	templateText, err := os.ReadFile(email.GetTemplatePath(email.BotReportTemplate))
 	if err != nil {
 		l.ErrorChan <- fmt.Errorf("error reading balance report template; %w", err)
 		return
@@ -132,8 +132,8 @@ func (l *Server) reportHandler(writer http.ResponseWriter, _ *http.Request) {
 		l.ErrorChan <- fmt.Errorf("error executing balance report template; %w", err)
 		return
 	}
-	sender := ses.NewSender()
-	if err := sender.Send(ses.Email{
+	sender := email.NewSender()
+	if err := sender.Send(email.Email{
 		From:    config.GetConfig().AWS.FromEmail,
 		To:      config.GetConfig().AWS.ToEmails,
 		Subject: "Daily Twitter Bot Report",

@@ -1,12 +1,24 @@
-package ses
+package email
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/jchavannes/jgo/jerr"
 	"mime/multipart"
 	"net/textproto"
+	"os"
 	"strings"
 )
+
+const (
+	TemplateDir = "email/templates"
+
+	BotReportTemplate = "bot_report.html"
+)
+
+func GetTemplatePath(templateName string) string {
+	return fmt.Sprintf("%s%c%s", TemplateDir, os.PathSeparator, templateName)
+}
 
 type Email struct {
 	UserId  uint

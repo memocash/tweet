@@ -1,4 +1,4 @@
-package ses
+package email
 
 import (
 	"github.com/aws/aws-sdk-go/aws"

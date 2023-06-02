@@ -4,6 +4,7 @@
 /tweets.db
 /tweet
 /tweet.exe
+/tweet.exe~
 config.yaml
 example.db
 sendToServer.sh
