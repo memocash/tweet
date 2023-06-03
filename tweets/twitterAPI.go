@@ -14,13 +14,8 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
-)
-
-const (
-	COOKJAR_FILE = "cookies.json"
 )
 
 func getNewTweets(accountKey obj.AccountKey, numTweets int, newBot bool, scraper *twitterscraper.Scraper) ([]*db.TweetTx, error) {
@@ -170,9 +165,9 @@ func SaveCookies(cookies []*http.Cookie) error {
 	if err != nil {
 		return jerr.Get("error marshalling cookies", err)
 	}
-	err = os.WriteFile(COOKJAR_FILE, marshaledCookies, 0644)
-	if err != nil {
-		return jerr.Get("error writing cookies", err)
+	var dbCookies = &db.Cookies{CookieData: marshaledCookies}
+	if err := db.Save([]db.ObjectI{dbCookies}); err != nil {
+		return fmt.Errorf("error saving cookies; %w", err)
 	}
 	return nil
 }

@@ -3,14 +3,17 @@ package maint
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/tweet/config"
+	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets"
 	twitterscraper "github.com/n0madic/twitter-scraper"
 	"github.com/spf13/cobra"
+	"github.com/syndtr/goleveldb/leveldb"
+	"log"
 	"net/http"
-	"os"
 )
 
 const (
@@ -25,14 +28,13 @@ var getTweetsCmd = &cobra.Command{
 			jerr.Get("error: must specify screen name", nil).Fatal()
 		}
 		scraper := twitterscraper.New()
-		//look for and unmarshal the cookie jar
-		cookies, err := os.ReadFile(tweets.COOKJAR_FILE)
-		if err != nil && !os.IsNotExist(err) {
-			jerr.Get("error reading cookies", err).Fatal()
+		dbCookies, err := db.GetCookies()
+		if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
+			log.Fatalf("error getting cookies from db; %v", err)
 		}
-		if !os.IsNotExist(err) {
+		if dbCookies != nil {
 			var cookieList []*http.Cookie
-			err := json.Unmarshal(cookies, &cookieList)
+			err := json.Unmarshal(dbCookies.CookieData, &cookieList)
 			if err != nil {
 				jerr.Get("error unmarshalling cookies", err).Fatal()
 			}

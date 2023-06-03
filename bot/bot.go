@@ -3,6 +3,7 @@ package bot
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jlog"
 	"github.com/memocash/index/ref/bitcoin/tx/gen"
@@ -17,13 +18,8 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"log"
 	"net/http"
-	"os"
 	"sync"
 	"time"
-)
-
-const (
-	COOKJAR_FILE = "cookies.json"
 )
 
 type Bot struct {
@@ -237,13 +233,13 @@ func (b *Bot) UpdateStream() error {
 }
 
 func (b *Bot) SetExistingCookies() error {
-	cookies, err := os.ReadFile(COOKJAR_FILE)
-	if err != nil && !os.IsNotExist(err) {
-		return jerr.Get("error reading cookies", err)
+	dbCookies, err := db.GetCookies()
+	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
+		return fmt.Errorf("error getting cookies; %w", err)
 	}
-	if !os.IsNotExist(err) {
+	if dbCookies != nil {
 		var cookieList []*http.Cookie
-		err := json.Unmarshal(cookies, &cookieList)
+		err := json.Unmarshal(dbCookies.CookieData, &cookieList)
 		if err != nil {
 			return jerr.Get("error unmarshalling cookies", err)
 		}
