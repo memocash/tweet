@@ -98,9 +98,9 @@ func (l *Server) reportHandler(writer http.ResponseWriter, _ *http.Request) {
 		}
 		return
 	}
-	var reportBots []bot_report.Bot
+	var reportBots []*bot_report.Bot
 	for _, stream := range streams {
-		reportBots = append(reportBots, bot_report.Bot{
+		reportBots = append(reportBots, &bot_report.Bot{
 			Owner:   stream.Owner,
 			Address: stream.Wallet.Address.GetAddr(),
 			UserId:  stream.UserID,

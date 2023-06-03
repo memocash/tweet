@@ -15,10 +15,10 @@ import (
 )
 
 type Report struct {
-	Bots []Bot
+	Bots []*Bot
 }
 
-func New(bots []Bot) *Report {
+func New(bots []*Bot) *Report {
 	return &Report{
 		Bots: bots,
 	}
