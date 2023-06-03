@@ -7,7 +7,6 @@ import (
 	"github.com/memocash/index/client/lib"
 	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/email"
-	"github.com/memocash/tweet/graph"
 	tweetWallet "github.com/memocash/tweet/wallet"
 	twitterscraper "github.com/n0madic/twitter-scraper"
 	"html/template"
@@ -25,8 +24,9 @@ func New(bots []*Bot) *Report {
 }
 
 func (r *Report) Run(scraper *twitterscraper.Scraper) error {
-	graphQlClient := graphql.NewClient(graph.ServerUrlHttp, nil)
-	client := lib.NewClient(graph.ServerUrlHttp, &tweetWallet.Database{})
+	graphQlUrl := config.GetGraphQlUrl()
+	graphQlClient := graphql.NewClient(graphQlUrl, nil)
+	client := lib.NewClient(graphQlUrl, &tweetWallet.Database{})
 	for _, bot := range r.Bots {
 		if err := bot.SetInfo(client, graphQlClient, scraper); err != nil {
 			return fmt.Errorf("error setting info for bot %s; %w", bot.Address, err)

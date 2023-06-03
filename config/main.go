@@ -3,6 +3,7 @@ package config
 import (
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/spf13/viper"
+	"regexp"
 	"time"
 )
 
@@ -10,6 +11,8 @@ const (
 	DefaultMemoUrl = "https://memo.cash"
 
 	MemoProfileSuffix = "/profile/"
+
+	DefaultGraphQLUrl = "http://127.0.0.1:26770/graphql"
 )
 
 type Config struct {
@@ -20,6 +23,7 @@ type Config struct {
 	TemplateDir    string       `mapstructure:"TEMPLATE_DIR"`
 	AWS            AwsConfig    `mapstructure:"AWS"`
 	MemoUrl        string       `mapstructure:"MEMO_URL"`
+	GraphQlUrl     string       `mapstructure:"GRAPHQL_URL"`
 
 	DbEncryptionKey string `mapstructure:"DB_ENCRYPTION_KEY"`
 }
@@ -66,6 +70,9 @@ func InitConfig() error {
 	if _config.MemoUrl == "" {
 		_config.MemoUrl = DefaultMemoUrl
 	}
+	if _config.GraphQlUrl == "" {
+		_config.GraphQlUrl = DefaultGraphQLUrl
+	}
 	return nil
 }
 
@@ -92,4 +99,12 @@ func GetDbEncryptionKey() string {
 
 func GetMemoUrl(suffix string) string {
 	return _config.MemoUrl + suffix
+}
+
+func GetGraphQlUrl() string {
+	return _config.GraphQlUrl
+}
+
+func GetGraphQlUrlWs() string {
+	return regexp.MustCompile(`((?i)https?)://`).ReplaceAllString(_config.GraphQlUrl, "ws$1://")
 }

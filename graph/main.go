@@ -4,11 +4,6 @@ import (
 	"time"
 )
 
-const (
-	ServerUrlHttp = "http://127.0.0.1:26770/graphql"
-	ServerUrlWs   = "ws://127.0.0.1:26770/graphql"
-)
-
 type UpdateQuery struct {
 	Address struct {
 		Txs []Tx `graphql:"txs(start: $start)"`

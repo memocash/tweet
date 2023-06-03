@@ -5,11 +5,12 @@ import (
 	"github.com/hasura/go-graphql-client"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jutil"
+	"github.com/memocash/tweet/config"
 	"time"
 )
 
 func GetAddressUpdates(address string, start time.Time) ([]Tx, error) {
-	client := graphql.NewClient(ServerUrlHttp, nil)
+	client := graphql.NewClient(config.GetGraphQlUrl(), nil)
 	var updateQuery = new(UpdateQuery)
 	var vars = map[string]interface{}{
 		"address": address,

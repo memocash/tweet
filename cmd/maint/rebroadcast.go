@@ -2,14 +2,11 @@ package maint
 
 import (
 	"github.com/memocash/index/client/lib/graph"
+	"github.com/memocash/tweet/config"
 	"github.com/spf13/cobra"
 	"log"
 	"os"
 	"strings"
-)
-
-const (
-	GraphQlUrl = "http://localhost:26770/graphql"
 )
 
 var rebroadcastCmd = &cobra.Command{
@@ -27,7 +24,7 @@ var rebroadcastCmd = &cobra.Command{
 		txs := strings.Split(string(f), "\n")
 		//it's ok for rebroadcast to fail, so we don't crash on errors
 		for _, tx := range txs {
-			err := graph.Broadcast(GraphQlUrl, tx)
+			err := graph.Broadcast(config.GetGraphQlUrl(), tx)
 			if err != nil {
 				log.Println(err)
 			}

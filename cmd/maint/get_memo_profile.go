@@ -3,7 +3,7 @@ package maint
 import (
 	"github.com/hasura/go-graphql-client"
 	"github.com/jchavannes/jgo/jerr"
-	"github.com/memocash/tweet/graph"
+	"github.com/memocash/tweet/config"
 	tweetWallet "github.com/memocash/tweet/wallet"
 	"github.com/spf13/cobra"
 	"log"
@@ -17,7 +17,7 @@ var getMemoProfileCmd = &cobra.Command{
 		if len(args) < 1 {
 			jerr.Get("must specify address", nil).Fatal()
 		}
-		profiles, err := tweetWallet.GetProfile(args[0], time.Time{}, graphql.NewClient(graph.ServerUrlHttp, nil))
+		profiles, err := tweetWallet.GetProfile(args[0], time.Time{}, graphql.NewClient(config.GetGraphQlUrl(), nil))
 		if err != nil {
 			jerr.Get("error getting profile", err).Fatal()
 		}

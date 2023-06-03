@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/index/ref/bitcoin/memo"
+	"github.com/memocash/tweet/config"
 	"net/http"
 	"time"
 )
@@ -23,7 +24,7 @@ func Broadcast(memoTx *memo.Tx) error {
 		},
 	}
 	jsonValue, _ := json.Marshal(jsonData)
-	request, err := http.NewRequest("POST", ServerUrlHttp, bytes.NewBuffer(jsonValue))
+	request, err := http.NewRequest("POST", config.GetGraphQlUrl(), bytes.NewBuffer(jsonValue))
 	if err != nil {
 		return jerr.Get("error making a new request failed complete transaction", err)
 	}
