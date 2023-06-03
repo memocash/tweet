@@ -6,6 +6,12 @@ import (
 	"time"
 )
 
+const (
+	DefaultMemoUrl = "https://memo.cash"
+
+	MemoProfileSuffix = "/profile/"
+)
+
 type Config struct {
 	BotSeed        string       `mapstructure:"BOT_SEED"`
 	TwitterCreds   TwitterCreds `mapstructure:"TWITTER_CREDS"`
@@ -13,6 +19,7 @@ type Config struct {
 	InfoServerPort int          `mapstructure:"INFO_SERVER_PORT"`
 	TemplateDir    string       `mapstructure:"TEMPLATE_DIR"`
 	AWS            AwsConfig    `mapstructure:"AWS"`
+	MemoUrl        string       `mapstructure:"MEMO_URL"`
 
 	DbEncryptionKey string `mapstructure:"DB_ENCRYPTION_KEY"`
 }
@@ -56,6 +63,9 @@ func InitConfig() error {
 	if _config.TemplateDir == "" {
 		_config.TemplateDir = "bot/info/templates"
 	}
+	if _config.MemoUrl == "" {
+		_config.MemoUrl = DefaultMemoUrl
+	}
 	return nil
 }
 
@@ -78,4 +88,8 @@ func GetScrapeSleepTime() time.Duration {
 
 func GetDbEncryptionKey() string {
 	return _config.DbEncryptionKey
+}
+
+func GetMemoUrl(suffix string) string {
+	return _config.MemoUrl + suffix
 }
