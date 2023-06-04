@@ -39,10 +39,10 @@ go build
 ## Mirror Bot
 
 ```sh
-./tweet memobot
+./tweet bot run
 ```
 
-Then send memos with at least 10,000 sats in funds to bot address to control bot.
+Then send memos with at least 5,000 sats in funds to bot address to control bot. You'll need more if you use the --history flag.
 Some examples:
 
 ```text
