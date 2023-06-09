@@ -5,7 +5,8 @@
 /tweet
 /tweet.exe
 /tweet.exe~
-config.yaml
+/config.yaml
+/.config
 example.db
 sendToServer.sh
 tweets-*.json

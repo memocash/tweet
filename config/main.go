@@ -58,6 +58,7 @@ var _config Config
 func InitConfig() error {
 	viper.SetConfigName("config")
 	viper.AddConfigPath(".")
+	viper.AddConfigPath(".config/tweet")
 	if err := viper.ReadInConfig(); err != nil {
 		return jerr.Get("error reading config", err)
 	}
@@ -106,5 +107,5 @@ func GetGraphQlUrl() string {
 }
 
 func GetGraphQlUrlWs() string {
-	return regexp.MustCompile(`((?i)https?)://`).ReplaceAllString(_config.GraphQlUrl, "ws$1://")
+	return regexp.MustCompile(`(?i)http(s?)://`).ReplaceAllString(_config.GraphQlUrl, "ws$1://")
 }

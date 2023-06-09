@@ -13,8 +13,10 @@ var reportCmd = &cobra.Command{
 		if len(args) != 0 {
 			log.Fatalf("report takes no arguments")
 		}
+		log.Println("starting tweet info report")
 		if err := info.Report(); err != nil {
 			log.Fatalf("error info report; %v", err)
 		}
+		log.Println("finished tweet info report")
 	},
 }
