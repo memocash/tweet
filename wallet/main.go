@@ -248,8 +248,10 @@ func buildTx(wlt Wallet, outputScript memo.Script) (*memo.Tx, error) {
 			Keys: []wallet.PrivateKey{wlt.Key},
 		},
 	})
-
-	return memoTx, err
+	if err != nil {
+		return nil, jerr.Getf(err, "error building tx for tweet wallet: %s", wlt.Key.GetAddress().GetEncoded())
+	}
+	return memoTx, nil
 }
 
 var salt = []byte{0xfe, 0xa9, 0xe9, 0x4c, 0xd9, 0x84, 0x50, 0x3d}

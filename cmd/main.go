@@ -3,6 +3,7 @@ package cmd
 import (
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/tweet/cmd/bot"
+	"github.com/memocash/tweet/cmd/db"
 	"github.com/memocash/tweet/cmd/maint"
 	"github.com/memocash/tweet/cmd/update"
 	"github.com/memocash/tweet/config"
@@ -34,6 +35,7 @@ var tweetCmd = &cobra.Command{
 func Execute() error {
 	tweetCmd.AddCommand(
 		bot.GetCommand(),
+		db.GetCommand(),
 		maint.GetCommand(),
 		update.GetCommand(),
 	)
