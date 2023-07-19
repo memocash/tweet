@@ -12,8 +12,8 @@ require (
 	github.com/hasura/go-graphql-client v0.9.0
 	github.com/jchavannes/btcd v1.1.5-0.20230112162803-412def37b600
 	github.com/jchavannes/jgo v0.0.0-20230222214331-95b230651774
-	github.com/memocash/index v0.2.0-alpha.0.0.20230531220112-0ba6174bbc6e
-	github.com/n0madic/twitter-scraper v0.0.0-20230511111556-b81d753caa92
+	github.com/memocash/index v0.2.0-alpha.0.0.20230719004923-ba2ac325c1bb
+	github.com/n0madic/twitter-scraper v0.0.0-20230711213008-94503a2bc36c
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/viper v1.14.0
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
