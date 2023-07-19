@@ -9,6 +9,7 @@ var dbCmd = &cobra.Command{
 func GetCommand() *cobra.Command {
 	dbCmd.AddCommand(
 		outputsCmd,
+		addressTimeCmd,
 	)
 	return dbCmd
 }
