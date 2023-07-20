@@ -10,6 +10,7 @@ func GetCommand() *cobra.Command {
 	dbCmd.AddCommand(
 		outputsCmd,
 		addressTimeCmd,
+		deleteCookiesCmd,
 	)
 	return dbCmd
 }
