@@ -38,30 +38,31 @@ func GetStreams(onlyFunded bool) ([]Stream, error) {
 		if err != nil {
 			return nil, jerr.Get("error importing private key", err)
 		}
-		//check the balance of the new key
-		inputGetter := tweetWallet.InputGetter{
-			Address: walletKey.GetAddress(),
-		}
-		outputs, err := inputGetter.GetUTXOs(nil)
-		if err != nil {
-			return nil, jerr.Get("error getting utxos", err)
-		}
-		//if the balance is greater than 800, add the twitterName and newKey to the botStreams
-		balance := int64(0)
-		for _, output := range outputs {
-			balance += output.Input.Value
-		}
-		if balance > 800 || !onlyFunded {
-			wlt := tweetWallet.NewWallet(walletKey.GetAddress(), walletKey)
-			if err != nil {
-				return nil, jerr.Get("error parsing user id", err)
+		if onlyFunded {
+			inputGetter := tweetWallet.InputGetter{
+				Address: walletKey.GetAddress(),
 			}
-			streams = append(streams, Stream{
-				UserID: addressKey.UserID,
-				Owner:  addressKey.Address,
-				Wallet: wlt,
-			})
+			outputs, err := inputGetter.GetUTXOs(nil)
+			if err != nil {
+				return nil, jerr.Get("error getting utxos", err)
+			}
+			balance := int64(0)
+			for _, output := range outputs {
+				balance += output.Input.Value
+			}
+			if balance <= 800 {
+				continue
+			}
 		}
+		wlt := tweetWallet.NewWallet(walletKey.GetAddress(), walletKey)
+		if err != nil {
+			return nil, jerr.Get("error parsing user id", err)
+		}
+		streams = append(streams, Stream{
+			UserID: addressKey.UserID,
+			Owner:  addressKey.Address,
+			Wallet: wlt,
+		})
 	}
 	return streams, nil
 }
