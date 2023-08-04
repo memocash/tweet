@@ -9,6 +9,7 @@ import (
 	"github.com/memocash/index/ref/bitcoin/tx/gen"
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/bot/info"
+	"github.com/memocash/tweet/bot/strm"
 	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/graph"
@@ -112,7 +113,7 @@ func (b *Bot) Run() error {
 		b.ErrorChan <- nil
 	}()
 	go func() {
-		infoServer := info.NewServer(b)
+		infoServer := info.NewServer(b.TweetScraper)
 		b.ErrorChan <- fmt.Errorf("error info server listener; %w", infoServer.Listen())
 	}()
 	jlog.Logf("Bot listening to address: %s\n", b.Addr.String())
@@ -128,7 +129,7 @@ func (b *Bot) Run() error {
 	}
 	go func() {
 		for {
-			streams, err := GetStreams(true)
+			streams, err := strm.GetStreams(true)
 			if err != nil {
 				b.ErrorChan <- jerr.Get("error making stream array bot listen", err)
 			}
@@ -151,7 +152,7 @@ func (b *Bot) Run() error {
 	return nil
 }
 
-func (b *Bot) CheckForNewTweets(streams []Stream) error {
+func (b *Bot) CheckForNewTweets(streams []strm.Stream) error {
 	if b.Verbose {
 		log.Println("Checking for new tweets...")
 	}
@@ -230,7 +231,7 @@ func (b *Bot) SafeUpdate() error {
 }
 
 func (b *Bot) UpdateStream() error {
-	streams, err := GetStreams(false)
+	streams, err := strm.GetStreams(false)
 	if err != nil {
 		return jerr.Get("error making stream array update", err)
 	}

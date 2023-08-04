@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jlog"
+	"github.com/memocash/tweet/bot/strm"
 	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets"
@@ -14,7 +15,7 @@ import (
 	"time"
 )
 
-func checkAndUpdateProfiles(botStreams []Stream, b *Bot) error {
+func checkAndUpdateProfiles(botStreams []strm.Stream, b *Bot) error {
 	for _, stream := range botStreams {
 		if err := checkAndUpdateProfile(b, stream); err != nil {
 			return fmt.Errorf("error updating bot profile for stream; %w", err)
@@ -24,7 +25,7 @@ func checkAndUpdateProfiles(botStreams []Stream, b *Bot) error {
 	return nil
 }
 
-func checkAndUpdateProfile(b *Bot, stream Stream) error {
+func checkAndUpdateProfile(b *Bot, stream strm.Stream) error {
 	profile, err := tweets.GetProfile(stream.UserID, b.TweetScraper)
 	if err != nil {
 		return jerr.Get("fatal error getting profile", err)

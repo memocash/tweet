@@ -13,6 +13,7 @@ import (
 	"github.com/memocash/index/ref/bitcoin/memo"
 	"github.com/memocash/index/ref/bitcoin/tx/gen"
 	"github.com/memocash/index/ref/bitcoin/wallet"
+	"github.com/memocash/tweet/bot/strm"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/graph"
 	"github.com/memocash/tweet/tweets"
@@ -140,7 +141,7 @@ func (s *SaveTx) HandleTxType() error {
 			}
 			s.Handled = true
 		} else {
-			streams, err := GetStreams(false)
+			streams, err := strm.GetStreams(false)
 			if err != nil {
 				return jerr.Get("error getting bot streams", err)
 			}
@@ -158,7 +159,7 @@ func (s *SaveTx) HandleTxType() error {
 	return nil
 }
 
-func (s *SaveTx) HandleRequestSubBot(stream Stream) error {
+func (s *SaveTx) HandleRequestSubBot(stream strm.Stream) error {
 	//otherwise, one of the sub-bots has just been sent some funds, so based on the value of CatchUp, decide if we try to GetSkippedTweets
 	var logMsg = fmt.Sprintf("Handled stream tx %s (%s)", s.TxHash, stream.Wallet.Address.GetEncoded())
 	defer func() {

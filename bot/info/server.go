@@ -2,8 +2,8 @@ package info
 
 import (
 	"fmt"
-	"github.com/memocash/tweet/bot"
 	"github.com/memocash/tweet/config"
+	twitterscraper "github.com/n0madic/twitter-scraper"
 	"net/http"
 )
 
@@ -14,14 +14,14 @@ const (
 )
 
 type Server struct {
-	Bot       *bot.Bot
+	Scraper   *twitterscraper.Scraper
 	Mux       *http.ServeMux
 	ErrorChan chan error
 }
 
-func NewServer(bot *bot.Bot) *Server {
+func NewServer(scraper *twitterscraper.Scraper) *Server {
 	return &Server{
-		Bot:       bot,
+		Scraper:   scraper,
 		Mux:       http.NewServeMux(),
 		ErrorChan: make(chan error),
 	}

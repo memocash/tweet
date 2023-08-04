@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/index/ref/bitcoin/wallet"
-	"github.com/memocash/tweet/bot"
+	"github.com/memocash/tweet/bot/strm"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/email/bot_report"
 	"github.com/memocash/tweet/tweets"
@@ -90,7 +90,7 @@ func (l *Server) profileHandler(writer http.ResponseWriter, request *http.Reques
 
 func (l *Server) reportHandler(writer http.ResponseWriter, _ *http.Request) {
 	log.Println("Running Balance Report")
-	streams, err := bot.GetStreams(true)
+	streams, err := strm.GetStreams(true)
 	if err != nil {
 		_, err2 := writer.Write([]byte(fmt.Sprintf("error getting streams for bot report; %v", err)))
 		if err2 != nil {
@@ -107,7 +107,7 @@ func (l *Server) reportHandler(writer http.ResponseWriter, _ *http.Request) {
 		})
 	}
 	report := bot_report.New(reportBots)
-	if err = report.Run(l.Bot.TweetScraper); err != nil {
+	if err = report.Run(l.Scraper); err != nil {
 		_, err2 := writer.Write([]byte(fmt.Sprintf("error running bot email report; %v", err)))
 		if err2 != nil {
 			l.ErrorChan <- jerr.Get("error writing bot report error response", err2)

@@ -38,7 +38,7 @@ var autoReplyCmd = &cobra.Command{
 			errorChan <- jerr.Get("error listening for transactions while under maintenance", err)
 		}()
 		go func() {
-			infoServer := info.NewServer(memoBot)
+			infoServer := info.NewServer(memoBot.TweetScraper)
 			err = infoServer.Listen()
 			errorChan <- jerr.Get("error info server listener", err)
 		}()
