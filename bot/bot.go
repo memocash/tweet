@@ -8,6 +8,7 @@ import (
 	"github.com/jchavannes/jgo/jlog"
 	"github.com/memocash/index/ref/bitcoin/tx/gen"
 	"github.com/memocash/index/ref/bitcoin/wallet"
+	"github.com/memocash/tweet/bot/info"
 	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/graph"
@@ -18,7 +19,10 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -44,10 +48,7 @@ func NewBot(mnemonic *wallet.Mnemonic, scraper *twitterscraper.Scraper, addresse
 	if err != nil {
 		return nil, jerr.Get("error getting address from string for new bot", err)
 	}
-	if err != nil {
-		return nil, jerr.Get("error getting new tweet stream", err)
-	}
-	return &Bot{
+	bot := &Bot{
 		Mnemonic:     mnemonic,
 		Addresses:    addresses,
 		Addr:         *addr,
@@ -56,14 +57,14 @@ func NewBot(mnemonic *wallet.Mnemonic, scraper *twitterscraper.Scraper, addresse
 		ErrorChan:    make(chan error),
 		Verbose:      verbose,
 		Down:         down,
-	}, nil
+	}
+	if err := bot.SetExistingCookies(); err != nil {
+		return nil, jerr.Get("error setting existing cookies", err)
+	}
+	return bot, nil
 }
 
 func (b *Bot) ProcessMissedTxs() error {
-	err := b.SetExistingCookies()
-	if err != nil {
-		return jerr.Get("error setting existing cookies", err)
-	}
 	recentAddressSeenTx, err := db.GetRecentAddressSeenTx(b.Addr)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		return jerr.Get("error getting recent address seen tx for addr", err)
@@ -90,6 +91,7 @@ func (b *Bot) ProcessMissedTxs() error {
 	}
 	return nil
 }
+
 func (b *Bot) MaintenanceListen() error {
 	jlog.Logf("Bot listening to address: %s\n", b.Addr.String())
 	if err := graph.AddressListen([]string{b.Addr.String()}, b.SaveTx, b.ErrorChan); err != nil {
@@ -97,17 +99,27 @@ func (b *Bot) MaintenanceListen() error {
 	}
 	return jerr.Get("error in listen", <-b.ErrorChan)
 }
-func (b *Bot) Listen() error {
-	jlog.Logf("Bot listening to address: %s\n", b.Addr.String())
-	err := b.SetExistingCookies()
-	if err != nil {
-		return jerr.Get("error setting existing cookies", err)
+
+func (b *Bot) Run() error {
+	if err := b.ProcessMissedTxs(); err != nil {
+		jerr.Get("fatal error updating bot", err).Fatal()
 	}
-	err = b.SetAddresses()
-	if err != nil {
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigc
+		log.Println("Tweet Bot caught SIGINT, saving cookies and stopping...")
+		b.ErrorChan <- nil
+	}()
+	go func() {
+		infoServer := info.NewServer(b)
+		b.ErrorChan <- fmt.Errorf("error info server listener; %w", infoServer.Listen())
+	}()
+	jlog.Logf("Bot listening to address: %s\n", b.Addr.String())
+	if err := b.SetAddresses(); err != nil {
 		return jerr.Get("error setting addresses", err)
 	}
-	if err = graph.AddressListen(b.Addresses, b.SaveTx, b.ErrorChan); err != nil {
+	if err := graph.AddressListen(b.Addresses, b.SaveTx, b.ErrorChan); err != nil {
 		return jerr.Get("error listening to address on graphql", err)
 	}
 	updateInterval := config.GetConfig().UpdateInterval
@@ -129,7 +141,14 @@ func (b *Bot) Listen() error {
 			time.Sleep(time.Duration(updateInterval) * time.Minute)
 		}
 	}()
-	return jerr.Get("error in listen", <-b.ErrorChan)
+	mainErr := <-b.ErrorChan
+	if err := tweets.SaveCookies(b.TweetScraper.GetCookies()); err != nil {
+		mainErr = jerr.Combine(jerr.Get("memo bot main error", mainErr), jerr.Get("error saving cookies", err))
+	}
+	if mainErr != nil {
+		return jerr.Get("error running memo bot listen", mainErr)
+	}
+	return nil
 }
 
 func (b *Bot) CheckForNewTweets(streams []Stream) error {
@@ -141,17 +160,15 @@ func (b *Bot) CheckForNewTweets(streams []Stream) error {
 		if err != nil {
 			return jerr.Get("error getting flag for listen skipped", err)
 		}
-		if flag.Flags.CatchUp {
-			err = tweets.GetSkippedTweets(obj.AccountKey{
-				UserID:  stream.UserID,
-				Key:     stream.Wallet.Key,
-				Address: stream.Wallet.Address,
-			}, &stream.Wallet, b.TweetScraper, flag.Flags, 100, false)
-			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
-				return jerr.Get("error getting skipped tweets on bot listen", err)
-			}
-			time.Sleep(config.GetScrapeSleepTime())
+		err = tweets.GetSkippedTweets(obj.AccountKey{
+			UserID:  stream.UserID,
+			Key:     stream.Wallet.Key,
+			Address: stream.Wallet.Address,
+		}, &stream.Wallet, b.TweetScraper, flag.Flags, 100, false)
+		if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
+			return jerr.Get("error getting skipped tweets on bot listen", err)
 		}
+		time.Sleep(config.GetScrapeSleepTime())
 	}
 	if err := b.SafeUpdate(); err != nil {
 		return jerr.Get("error updating streams after getting new tweets", err)
