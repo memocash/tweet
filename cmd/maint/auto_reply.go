@@ -6,7 +6,6 @@ import (
 	"github.com/memocash/tweet/bot"
 	"github.com/memocash/tweet/bot/info"
 	"github.com/memocash/tweet/config"
-	tweetWallet "github.com/memocash/tweet/wallet"
 	"github.com/spf13/cobra"
 )
 
@@ -26,15 +25,10 @@ var autoReplyCmd = &cobra.Command{
 			jerr.Get("fatal error getting path", err).Fatal()
 		}
 		botAddress := botKey.GetPublicKey().GetAddress().GetEncoded()
-		memoBot, err := bot.NewBot(mnemonic, []string{botAddress}, *botKey, nil, verbose, true)
+		memoBot, err := bot.NewBot(mnemonic, nil, []string{botAddress}, *botKey, verbose, true)
 		if err != nil {
 			jerr.Get("fatal error creating new bot", err).Fatal()
 		}
-		cryptBytes, err := tweetWallet.GenerateEncryptionKeyFromPassword(config.GetConfig().BotCrypt)
-		if err != nil {
-			jerr.Get("fatal error generating encryption key", err).Fatal()
-		}
-		memoBot.Crypt = cryptBytes
 		if err := memoBot.ProcessMissedTxs(); err != nil {
 			jerr.Get("fatal error updating bot", err).Fatal()
 		}
@@ -44,7 +38,7 @@ var autoReplyCmd = &cobra.Command{
 			errorChan <- jerr.Get("error listening for transactions while under maintenance", err)
 		}()
 		go func() {
-			infoServer := info.NewServer()
+			infoServer := info.NewServer(memoBot.TweetScraper)
 			err = infoServer.Listen()
 			errorChan <- jerr.Get("error info server listener", err)
 		}()

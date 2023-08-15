@@ -3,6 +3,7 @@ package db
 import (
 	"fmt"
 	"github.com/jchavannes/jgo/jutil"
+	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
@@ -42,22 +43,24 @@ func (o *TxOutput) Deserialize(d []byte) {
 	o.Output = d
 }
 
-func GetTxOutputs(address [25]byte) ([]*TxOutput, error) {
+func GetTxOutputs(addresses []wallet.Addr) ([]*TxOutput, error) {
 	db, err := GetDb()
 	if err != nil {
 		return nil, fmt.Errorf("error getting database handler for get tx outputs; %w", err)
 	}
-	iterKey := jutil.CombineBytes([]byte(PrefixTxOutput), []byte{Spacer}, address[:])
-	iter := db.NewIterator(util.BytesPrefix(iterKey), nil)
-	defer iter.Release()
 	var txOutputs []*TxOutput
-	for iter.Next() {
-		var tweetTx = new(TxOutput)
-		Set(tweetTx, iter)
-		txOutputs = append(txOutputs, tweetTx)
-	}
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("error iterating over tx outputs for address; %w", err)
+	for _, address := range addresses {
+		iterKey := jutil.CombineBytes([]byte(PrefixTxOutput), []byte{Spacer}, address[:])
+		iter := db.NewIterator(util.BytesPrefix(iterKey), nil)
+		for iter.Next() {
+			var tweetTx = new(TxOutput)
+			Set(tweetTx, iter)
+			txOutputs = append(txOutputs, tweetTx)
+		}
+		iter.Release()
+		if err := iter.Error(); err != nil {
+			return nil, fmt.Errorf("error iterating over tx outputs for address; %w", err)
+		}
 	}
 	return txOutputs, nil
 }

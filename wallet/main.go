@@ -1,15 +1,19 @@
 package wallet
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"github.com/hasura/go-graphql-client"
+	"github.com/jchavannes/btcd/chaincfg/chainhash"
 	"github.com/jchavannes/jgo/jerr"
+	"github.com/jchavannes/jgo/jutil"
 	"github.com/memocash/index/ref/bitcoin/memo"
 	"github.com/memocash/index/ref/bitcoin/tx/gen"
-	"github.com/memocash/index/ref/bitcoin/tx/parse"
 	"github.com/memocash/index/ref/bitcoin/tx/script"
 	"github.com/memocash/index/ref/bitcoin/wallet"
+	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/graph"
 	"golang.org/x/crypto/scrypt"
 	"io"
@@ -57,33 +61,47 @@ func NewWallet(address wallet.Address, key wallet.PrivateKey) Wallet {
 	}
 }
 
-func MakePost(wlt Wallet, message string) ([]byte, error) {
+func MakePost(wlt Wallet, message string) (chainhash.Hash, error) {
 	memoTx, err := buildTx(wlt, script.Post{Message: message})
 	//check if the prefix already exists in the database
 	if err != nil {
-		return nil, jerr.Get("error generating memo tx make post", err)
+		return chainhash.Hash{}, jerr.Get("error generating memo tx make post", err)
 	}
-	txInfo := parse.GetTxInfo(memoTx)
-	txInfo.Print()
-	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
-		return nil, jerr.Get("error completing transaction make post", err)
+	if err := graph.Broadcast(memoTx); err != nil {
+		return chainhash.Hash{}, jerr.Get("error completing transaction make post", err)
 	}
-	return memoTx.GetHash(), nil
-}
-func MakeReply(wallet Wallet, parentHash []byte, message string) ([]byte, error) {
-	memoTx, err := buildTx(wallet, script.Reply{Message: message, TxHash: parentHash})
-	if err != nil {
-		return nil, jerr.Get("error generating memo tx", err)
-	}
-	txInfo := parse.GetTxInfo(memoTx)
-	txInfo.Print()
-	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
-		return nil, jerr.Get("error completing transaction memo reply", err)
-	}
-	return memoTx.GetHash(), nil
+	return memoTx.MsgTx.TxHash(), nil
 }
 
-func FundTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Address) error {
+func MakeReply(wallet Wallet, parentHash []byte, message string) (chainhash.Hash, error) {
+	memoTx, err := buildTx(wallet, script.Reply{Message: message, TxHash: parentHash})
+	if err != nil {
+		return chainhash.Hash{}, jerr.Get("error generating memo tx", err)
+	}
+	if err := graph.Broadcast(memoTx); err != nil {
+		return chainhash.Hash{}, jerr.Get("error completing transaction memo reply", err)
+	}
+	return memoTx.MsgTx.TxHash(), nil
+}
+
+func GetProfile(address string, date time.Time, client *graphql.Client) (*graph.Profiles, error) {
+	var senderData graph.Profiles
+	var variables = map[string]interface{}{"address": address}
+	var startDate string
+	if !jutil.IsTimeZero(date) {
+		startDate = date.Format(time.RFC3339)
+	} else {
+		startDate = time.Date(2009, 1, 1, 0, 0, 0, 0, time.Local).Format(time.RFC3339)
+	}
+	variables["start"] = graph.Date(startDate)
+	err := client.Query(context.Background(), &senderData, variables)
+	if err != nil {
+		return nil, jerr.Get("error getting sender profile", err)
+	}
+	return &senderData, nil
+}
+
+func FundTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Address, historyNum int, botExists bool) error {
 	memoTx, err := gen.Tx(gen.TxRequest{
 		InputsToUse: []memo.UTXO{utxo},
 		Change: wallet.Change{
@@ -100,13 +118,18 @@ func FundTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Ad
 	if err != nil {
 		return jerr.Get("error generating memo tx fund twitter address", err)
 	}
-	txInfo := parse.GetTxInfo(memoTx)
-	txInfo.Print()
-	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
+	if err := db.Save([]db.ObjectI{&db.SubBotCommand{
+		TxHash:     memoTx.MsgTx.TxHash(),
+		HistoryNum: historyNum,
+		BotExists:  botExists}}); err != nil {
+		return jerr.Get("error saving sub bot command", err)
+	}
+	if err := graph.Broadcast(memoTx); err != nil {
 		return jerr.Get("error completing transaction fund twitter address", err)
 	}
 	return nil
 }
+
 func WithdrawAmount(utxos []memo.UTXO, key wallet.PrivateKey, address wallet.Address, amount int64) error {
 	memoTx, err := gen.Tx(gen.TxRequest{
 		InputsToUse: utxos,
@@ -124,13 +147,12 @@ func WithdrawAmount(utxos []memo.UTXO, key wallet.PrivateKey, address wallet.Add
 	if err != nil {
 		return jerr.Get("error generating memo tx", err)
 	}
-	txInfo := parse.GetTxInfo(memoTx)
-	txInfo.Print()
-	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
+	if err := graph.Broadcast(memoTx); err != nil {
 		return jerr.Get("error completing transaction withdraw amount", err)
 	}
 	return nil
 }
+
 func WithdrawAll(utxos []memo.UTXO, key wallet.PrivateKey, address wallet.Address) error {
 	memoTx, err := gen.Tx(gen.TxRequest{
 		InputsToUse: utxos,
@@ -148,13 +170,12 @@ func WithdrawAll(utxos []memo.UTXO, key wallet.PrivateKey, address wallet.Addres
 	if err != nil {
 		return jerr.Get("error generating memo tx", err)
 	}
-	txInfo := parse.GetTxInfo(memoTx)
-	txInfo.Print()
-	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
+	if err := graph.Broadcast(memoTx); err != nil {
 		return jerr.Get("error completing transaction withdraw all", err)
 	}
 	return nil
 }
+
 func SendToTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.Address, errorMsg string) error {
 	memoTx, err := gen.Tx(gen.TxRequest{
 		InputsToUse: []memo.UTXO{utxo},
@@ -174,21 +195,18 @@ func SendToTwitterAddress(utxo memo.UTXO, key wallet.PrivateKey, address wallet.
 	if err != nil {
 		return jerr.Get("error generating memo tx send to twitter address", err)
 	}
-	txInfo := parse.GetTxInfo(memoTx)
-	txInfo.Print()
-	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
+	if err := graph.Broadcast(memoTx); err != nil {
 		return jerr.Get("error completing transaction send to twitter address", err)
 	}
 	return nil
 }
+
 func UpdateName(wlt Wallet, name string) error {
 	memoTx, err := buildTx(wlt, script.SetName{Name: name})
 	if err != nil {
 		return jerr.Get("error generating memo tx update name", err)
 	}
-	txInfo := parse.GetTxInfo(memoTx)
-	txInfo.Print()
-	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
+	if err := graph.Broadcast(memoTx); err != nil {
 		return jerr.Get("error completing transaction update name", err)
 	}
 	return nil
@@ -202,9 +220,7 @@ func UpdateProfileText(wlt Wallet, profile string) error {
 	if err != nil {
 		return jerr.Get("error generating memo tx update profile text", err)
 	}
-	txInfo := parse.GetTxInfo(memoTx)
-	txInfo.Print()
-	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
+	if err := graph.Broadcast(memoTx); err != nil {
 		return jerr.Get("error completing transaction update profile text", err)
 	}
 	return nil
@@ -215,9 +231,7 @@ func UpdateProfilePic(wlt Wallet, url string) error {
 	if err != nil {
 		return jerr.Get("error generating memo tx update profile pic", err)
 	}
-	txInfo := parse.GetTxInfo(memoTx)
-	txInfo.Print()
-	if err := graph.Broadcast(memo.GetRaw(memoTx.MsgTx)); err != nil {
+	if err := graph.Broadcast(memoTx); err != nil {
 		return jerr.Get("error completing transaction update profile pic", err)
 	}
 	return nil
@@ -234,8 +248,10 @@ func buildTx(wlt Wallet, outputScript memo.Script) (*memo.Tx, error) {
 			Keys: []wallet.PrivateKey{wlt.Key},
 		},
 	})
-
-	return memoTx, err
+	if err != nil {
+		return nil, jerr.Getf(err, "error building tx for tweet wallet: %s", wlt.Key.GetAddress().GetEncoded())
+	}
+	return memoTx, nil
 }
 
 var salt = []byte{0xfe, 0xa9, 0xe9, 0x4c, 0xd9, 0x84, 0x50, 0x3d}
@@ -244,8 +260,18 @@ func SetSalt(newSalt []byte) {
 	salt = newSalt
 }
 
-// Encrypt see: https://golang.org/pkg/crypto/cipher/#example_NewCFBEncrypter
-func Encrypt(value []byte, key []byte) ([]byte, error) {
+var _dbEncryptionKey []byte
+
+func SetDbEncryptionKey(encryptionKey []byte) {
+	_dbEncryptionKey = encryptionKey
+}
+
+func EncryptForDb(value []byte) ([]byte, error) {
+	return EncryptWithKey(value, _dbEncryptionKey)
+}
+
+// EncryptWithKey see: https://golang.org/pkg/crypto/cipher/#example_NewCFBEncrypter
+func EncryptWithKey(value []byte, key []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return []byte{}, jerr.Get("error getting new cipher", err)
@@ -260,8 +286,12 @@ func Encrypt(value []byte, key []byte) ([]byte, error) {
 	return encryptedValue, nil
 }
 
-// Decrypt see: https://golang.org/pkg/crypto/cipher/#example_NewCFBDecrypter
-func Decrypt(value []byte, key []byte) ([]byte, error) {
+func DecryptFromDb(value []byte) ([]byte, error) {
+	return DecryptWithKey(value, _dbEncryptionKey)
+}
+
+// DecryptWithKey see: https://golang.org/pkg/crypto/cipher/#example_NewCFBDecrypter
+func DecryptWithKey(value []byte, key []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return []byte{}, jerr.Get("error getting new cipher", err)

@@ -3,13 +3,12 @@ package wallet
 import (
 	"bytes"
 	"github.com/jchavannes/jgo/jerr"
-	"github.com/jchavannes/jgo/jlog"
 	"github.com/memocash/index/client/lib"
 	"github.com/memocash/index/ref/bitcoin/memo"
 	"github.com/memocash/index/ref/bitcoin/tx/hs"
 	"github.com/memocash/index/ref/bitcoin/tx/script"
 	"github.com/memocash/index/ref/bitcoin/wallet"
-	"github.com/memocash/tweet/graph"
+	"github.com/memocash/tweet/config"
 )
 
 type InputGetter struct {
@@ -25,14 +24,12 @@ func (g *InputGetter) GetUTXOs(*memo.UTXORequest) ([]memo.UTXO, error) {
 	if g.reset {
 		g.reset = false
 		if len(g.UTXOs) > 0 {
-			jlog.Logf("Using existing UTXOS: %d\n", len(g.UTXOs))
 			return g.UTXOs, nil
 		}
 	}
-	println("Getting utxos from database...")
-	client := lib.NewClient(graph.ServerUrlHttp, &Database{})
+	client := lib.NewClient(config.GetGraphQlUrl(), &Database{})
 	address := g.Address.GetAddr()
-	outputs, err := client.GetUtxos(address)
+	outputs, err := client.GetUtxos([]wallet.Addr{address})
 	if err != nil {
 		return nil, jerr.Get("error getting utxos from database for input getter", err)
 	}

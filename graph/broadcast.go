@@ -5,11 +5,16 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"github.com/jchavannes/jgo/jerr"
+	"github.com/memocash/index/ref/bitcoin/memo"
+	"github.com/memocash/tweet/config"
 	"net/http"
 	"time"
 )
 
-func Broadcast(raw []byte) error {
+func Broadcast(memoTx *memo.Tx) error {
+	//log.Printf("Broadcasting transaction: %s\n", memoTx.MsgTx.TxHash())
+	//parse.GetTxInfo(memoTx).Print()
+	raw := memo.GetRaw(memoTx.MsgTx)
 	jsonData := map[string]interface{}{
 		"query": `mutation ($raw: String!) {
 					broadcast(raw: $raw)
@@ -19,7 +24,7 @@ func Broadcast(raw []byte) error {
 		},
 	}
 	jsonValue, _ := json.Marshal(jsonData)
-	request, err := http.NewRequest("POST", ServerUrlHttp, bytes.NewBuffer(jsonValue))
+	request, err := http.NewRequest("POST", config.GetGraphQlUrl(), bytes.NewBuffer(jsonValue))
 	if err != nil {
 		return jerr.Get("error making a new request failed complete transaction", err)
 	}

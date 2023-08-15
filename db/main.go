@@ -13,6 +13,7 @@ const (
 	PrefixAddressSeenTx     = "address-seen-tx"
 	PrefixAddressTime       = "addresstime"
 	PrefixBlock             = "block"
+	PrefixCookies           = "cookies"
 	PrefixBotRunningCount   = "memobot-running-count"
 	PrefixBotStreamsCount   = "memobot-num-streams"
 	PrefixCompletedTx       = "completed"
@@ -23,6 +24,8 @@ const (
 	PrefixTxBlock           = "txblock"
 	PrefixTxInput           = "input"
 	PrefixTxOutput          = "output"
+
+	PrefixSubBotCommand = "sub-bot-command"
 )
 
 var _db *leveldb.DB

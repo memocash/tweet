@@ -4,10 +4,11 @@ import (
 	"github.com/hasura/go-graphql-client"
 	"github.com/hasura/go-graphql-client/pkg/jsonutil"
 	"github.com/jchavannes/jgo/jerr"
+	"github.com/memocash/tweet/config"
 )
 
 func AddressListen(addresses []string, fn func(Tx) error, errorChan chan error) error {
-	client := graphql.NewSubscriptionClient(ServerUrlWs)
+	client := graphql.NewSubscriptionClient(config.GetGraphQlUrlWs())
 	defer client.Close()
 	var subscription = new(Subscription)
 	client.OnError(func(sc *graphql.SubscriptionClient, err error) error {

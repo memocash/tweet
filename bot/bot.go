@@ -1,39 +1,47 @@
 package bot
 
 import (
+	"encoding/json"
 	"errors"
-	"github.com/dghubble/go-twitter/twitter"
+	"fmt"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/jchavannes/jgo/jlog"
 	"github.com/memocash/index/ref/bitcoin/tx/gen"
 	"github.com/memocash/index/ref/bitcoin/wallet"
+	"github.com/memocash/tweet/bot/info"
+	"github.com/memocash/tweet/bot/strm"
 	"github.com/memocash/tweet/config"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/graph"
 	"github.com/memocash/tweet/tweets"
 	"github.com/memocash/tweet/tweets/obj"
+	tweetWallet "github.com/memocash/tweet/wallet"
+	twitterscraper "github.com/n0madic/twitter-scraper"
 	"github.com/syndtr/goleveldb/leveldb"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 )
 
 type Bot struct {
-	Mnemonic    *wallet.Mnemonic
-	Addresses   []string
-	Addr        wallet.Addr
-	Key         wallet.PrivateKey
-	TweetClient *twitter.Client
-	Stream      *tweets.Stream
-	ErrorChan   chan error
-	TxMutex     sync.Mutex
-	UpdateMutex sync.Mutex
-	Crypt       []byte
-	Timer       *time.Timer
-	Verbose     bool
-	Down        bool
+	Mnemonic     *wallet.Mnemonic
+	Addresses    []string
+	Addr         wallet.Addr
+	Key          wallet.PrivateKey
+	TweetScraper *twitterscraper.Scraper
+	ErrorChan    chan error
+	TxMutex      sync.Mutex
+	UpdateMutex  sync.Mutex
+	Timer        *time.Timer
+	Verbose      bool
+	Down         bool
 }
 
-func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey, tweetClient *twitter.Client, verbose bool, down bool) (*Bot, error) {
+func NewBot(mnemonic *wallet.Mnemonic, scraper *twitterscraper.Scraper, addresses []string, key wallet.PrivateKey, verbose bool, down bool) (*Bot, error) {
 	if len(addresses) == 0 {
 		return nil, jerr.New("error new bot, no addresses")
 	}
@@ -41,27 +49,20 @@ func NewBot(mnemonic *wallet.Mnemonic, addresses []string, key wallet.PrivateKey
 	if err != nil {
 		return nil, jerr.Get("error getting address from string for new bot", err)
 	}
-	var stream *tweets.Stream
-	if !down {
-		stream, err = tweets.NewStream()
-		if err != nil {
-			return nil, jerr.Get("error getting new tweet stream", err)
-		}
+	bot := &Bot{
+		Mnemonic:     mnemonic,
+		Addresses:    addresses,
+		Addr:         *addr,
+		Key:          key,
+		TweetScraper: scraper,
+		ErrorChan:    make(chan error),
+		Verbose:      verbose,
+		Down:         down,
 	}
-	if err != nil {
-		return nil, jerr.Get("error getting new tweet stream", err)
+	if err := bot.SetExistingCookies(); err != nil {
+		return nil, jerr.Get("error setting existing cookies", err)
 	}
-	return &Bot{
-		Mnemonic:    mnemonic,
-		Addresses:   addresses,
-		Addr:        *addr,
-		Key:         key,
-		Stream:      stream,
-		TweetClient: tweetClient,
-		ErrorChan:   make(chan error),
-		Verbose:     verbose,
-		Down:        down,
-	}, nil
+	return bot, nil
 }
 
 func (b *Bot) ProcessMissedTxs() error {
@@ -91,6 +92,7 @@ func (b *Bot) ProcessMissedTxs() error {
 	}
 	return nil
 }
+
 func (b *Bot) MaintenanceListen() error {
 	jlog.Logf("Bot listening to address: %s\n", b.Addr.String())
 	if err := graph.AddressListen([]string{b.Addr.String()}, b.SaveTx, b.ErrorChan); err != nil {
@@ -98,13 +100,27 @@ func (b *Bot) MaintenanceListen() error {
 	}
 	return jerr.Get("error in listen", <-b.ErrorChan)
 }
-func (b *Bot) Listen() error {
+
+func (b *Bot) Run() error {
+	if err := b.ProcessMissedTxs(); err != nil {
+		jerr.Get("fatal error updating bot", err).Fatal()
+	}
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigc
+		log.Println("Tweet Bot caught SIGINT, saving cookies and stopping...")
+		b.ErrorChan <- nil
+	}()
+	go func() {
+		infoServer := info.NewServer(b.TweetScraper)
+		b.ErrorChan <- fmt.Errorf("error info server listener; %w", infoServer.Listen())
+	}()
 	jlog.Logf("Bot listening to address: %s\n", b.Addr.String())
-	err := b.SetAddresses()
-	if err != nil {
+	if err := b.SetAddresses(); err != nil {
 		return jerr.Get("error setting addresses", err)
 	}
-	if err = graph.AddressListen(b.Addresses, b.SaveTx, b.ErrorChan); err != nil {
+	if err := graph.AddressListen(b.Addresses, b.SaveTx, b.ErrorChan); err != nil {
 		return jerr.Get("error listening to address on graphql", err)
 	}
 	updateInterval := config.GetConfig().UpdateInterval
@@ -113,43 +129,52 @@ func (b *Bot) Listen() error {
 	}
 	go func() {
 		for {
-			t := time.NewTimer(time.Duration(updateInterval) * time.Minute)
-			select {
-			case <-t.C:
-			}
-			botStreams, err := getBotStreams(b.Crypt)
+			streams, err := strm.GetStreams(true)
 			if err != nil {
 				b.ErrorChan <- jerr.Get("error making stream array bot listen", err)
 			}
-			if err = updateProfiles(botStreams, b); err != nil {
+			if err = checkAndUpdateProfiles(streams, b); err != nil {
 				b.ErrorChan <- jerr.Get("error updating profiles for bot listen", err)
 			}
+			if err = b.CheckForNewTweets(streams); err != nil {
+				b.ErrorChan <- jerr.Get("error checking for new tweets for bot listen", err)
+			}
+			time.Sleep(time.Duration(updateInterval) * time.Minute)
 		}
 	}()
-	botStreams, err := getBotStreams(b.Crypt)
-	if err != nil {
-		return jerr.Get("error getting bot streams for listen skipped", err)
+	mainErr := <-b.ErrorChan
+	if err := tweets.SaveCookies(b.TweetScraper.GetCookies()); err != nil {
+		mainErr = jerr.Combine(jerr.Get("memo bot main error", mainErr), jerr.Get("error saving cookies", err))
 	}
-	for _, stream := range botStreams {
-		flag, err := db.GetFlag(wallet.GetAddressFromString(stream.Sender).GetAddr(), stream.UserID)
+	if mainErr != nil {
+		return jerr.Get("error running memo bot listen", mainErr)
+	}
+	return nil
+}
+
+func (b *Bot) CheckForNewTweets(streams []strm.Stream) error {
+	if b.Verbose {
+		log.Println("Checking for new tweets...")
+	}
+	for _, stream := range streams {
+		flag, err := db.GetFlag(stream.Owner, stream.UserID)
 		if err != nil {
 			return jerr.Get("error getting flag for listen skipped", err)
 		}
-		if flag.Flags.CatchUp {
-			err = tweets.GetSkippedTweets(obj.AccountKey{
-				UserID:  stream.UserID,
-				Key:     stream.Wallet.Key,
-				Address: stream.Wallet.Address,
-			}, &stream.Wallet, b.TweetClient, flag.Flags, 100, false)
-			if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
-				return jerr.Get("error getting skipped tweets on bot listen", err)
-			}
+		err = tweets.GetSkippedTweets(obj.AccountKey{
+			UserID:  stream.UserID,
+			Key:     stream.Wallet.Key,
+			Address: stream.Wallet.Address,
+		}, &stream.Wallet, b.TweetScraper, flag.Flags, 100, false)
+		if err != nil && !jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
+			return jerr.Get("error getting skipped tweets on bot listen", err)
 		}
+		time.Sleep(config.GetScrapeSleepTime())
 	}
-	if err = b.SafeUpdate(); err != nil {
-		return jerr.Get("error updating stream 2nd time", err)
+	if err := b.SafeUpdate(); err != nil {
+		return jerr.Get("error updating streams after getting new tweets", err)
 	}
-	return jerr.Get("error in listen", <-b.ErrorChan)
+	return nil
 }
 
 func (b *Bot) SaveTx(tx graph.Tx) error {
@@ -169,7 +194,15 @@ func (b *Bot) SetAddresses() error {
 		return jerr.Get("error getting all address keys", err)
 	}
 	for _, addressKey := range addressKeys {
-		b.Addresses = append(b.Addresses, wallet.Addr(addressKey.Address).String())
+		decryptedKey, err := tweetWallet.DecryptFromDb(addressKey.Key)
+		if err != nil {
+			return jerr.Get("error decrypting key", err)
+		}
+		key, err := wallet.ImportPrivateKey(string(decryptedKey))
+		if err != nil {
+			return jerr.Get("error importing private key", err)
+		}
+		b.Addresses = append(b.Addresses, key.GetAddress().GetEncoded())
 	}
 	return nil
 }
@@ -198,8 +231,7 @@ func (b *Bot) SafeUpdate() error {
 }
 
 func (b *Bot) UpdateStream() error {
-	//create an array of {userId, newKey} objects by searching through the linked-<senderAddress>-<userId> fields
-	botStreams, err := getBotStreams(b.Crypt)
+	streams, err := strm.GetStreams(false)
 	if err != nil {
 		return jerr.Get("error making stream array update", err)
 	}
@@ -207,39 +239,29 @@ func (b *Bot) UpdateStream() error {
 	if err != nil {
 		return jerr.Get("error setting addresses", err)
 	}
-	for _, stream := range botStreams {
-		streamKey, err := wallet.ImportPrivateKey(stream.Key)
-		if err != nil {
-			return jerr.Get("error importing private key", err)
-		}
-		streamAddress := streamKey.GetAddress()
+	for _, stream := range streams {
 		if b.Verbose {
-			jlog.Logf("streaming %s to address %s\n", stream.UserID, streamAddress.GetEncoded())
+			jlog.Logf("streaming %s to address %s\n", stream.UserID, stream.Wallet.Key.GetAddr())
 		}
-	}
-	if err := db.Save([]db.ObjectI{&db.BotRunningCount{Count: len(botStreams)}}); err != nil {
-		return jerr.Get("error saving bot running count", err)
 	}
 	if err := graph.AddressListen(b.Addresses, b.SaveTx, b.ErrorChan); err != nil {
 		return jerr.Get("error listening to address on graphql", err)
 	}
-	go func() {
-		if len(botStreams) == 0 {
-			return
-		}
-		err := b.Stream.ListenForNewTweets(botStreams)
-		if err != nil {
-			if jerr.HasErrorPart(err, gen.NotEnoughValueErrorText) {
-				err := b.UpdateStream()
-				if err != nil {
-					b.ErrorChan <- jerr.Get("error updating stream", err)
-				}
-			} else {
-				//otherwise, it's a different error, so we should send it to the error channel
-				b.ErrorChan <- jerr.Get("error twitter initiate stream in update", err)
+	return nil
+}
 
-			}
+func (b *Bot) SetExistingCookies() error {
+	dbCookies, err := db.GetCookies()
+	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
+		return fmt.Errorf("error getting cookies; %w", err)
+	}
+	if dbCookies != nil {
+		var cookieList []*http.Cookie
+		err := json.Unmarshal(dbCookies.CookieData, &cookieList)
+		if err != nil {
+			return jerr.Get("error unmarshalling cookies", err)
 		}
-	}()
+		b.TweetScraper.SetCookies(cookieList)
+	}
 	return nil
 }

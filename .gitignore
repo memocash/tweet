@@ -4,7 +4,10 @@
 /tweets.db
 /tweet
 /tweet.exe
-config.yaml
+/tweet.exe~
+/config.yaml
+/.config
 example.db
 sendToServer.sh
 tweets-*.json
+cookies.json

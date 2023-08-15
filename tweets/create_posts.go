@@ -43,7 +43,7 @@ func CreateMemoPostsFromDb(accountKey obj.AccountKey, flags db.Flags, wlt wallet
 				tweet.Tweet.Text += fmt.Sprintf("\n%s", media.MediaURL)
 			}
 		}
-		if err := save.Tweet(wlt, accountKey.GetAddress(), tweet, flags); err != nil {
+		if err := save.Tweet(wlt, accountKey.GetAddress(), tweet.Tweet, flags); err != nil {
 			return numTransferred, jerr.Get("error streaming tweets for transfer", err)
 		}
 		numTransferred++

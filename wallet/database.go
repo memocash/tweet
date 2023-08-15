@@ -5,51 +5,59 @@ import (
 	"errors"
 	"github.com/jchavannes/btcd/chaincfg/chainhash"
 	"github.com/jchavannes/jgo/jerr"
+	"github.com/memocash/index/client/lib"
 	"github.com/memocash/index/client/lib/graph"
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/db"
 	"github.com/syndtr/goleveldb/leveldb"
-	"time"
 )
 
 type Database struct{}
 
-func (d *Database) GetAddressBalance(address wallet.Addr) (int64, error) {
-	utxos, err := d.GetUtxos(address)
+func (d *Database) GetAddressBalance(addresses []wallet.Addr) (*lib.Balance, error) {
+	utxos, err := d.GetUtxos(addresses)
 	if err != nil {
-		return 0, jerr.Get("error getting address balance", err)
+		return nil, jerr.Get("error getting address balance", err)
 	}
-	var balance int64 = 0
+	var balance = new(lib.Balance)
 	for _, utxo := range utxos {
-		balance += utxo.Amount
+		balance.Balance += utxo.Amount
+		balance.UtxoCount++
 	}
 	return balance, nil
 }
 
-func (d *Database) SetAddressLastUpdate(address wallet.Addr, updateTime time.Time) error {
-	if err := db.Save([]db.ObjectI{&db.AddressWalletTime{
-		Address: address,
-		Time:    updateTime,
-	}}); err != nil {
-		return jerr.Get("error saving address wallet last update time to db", err)
+func (d *Database) SetAddressLastUpdate(addressUpdates []graph.AddressUpdate) error {
+	for _, addressUpdate := range addressUpdates {
+		if err := db.Save([]db.ObjectI{&db.AddressWalletTime{
+			Address: addressUpdate.Address,
+			Time:    addressUpdate.Time,
+		}}); err != nil {
+			return jerr.Get("error saving address wallet last update time to db", err)
+		}
 	}
 	return nil
 }
 
-func (d *Database) GetAddressLastUpdate(address wallet.Addr) (time.Time, error) {
-	addressTime, err := db.GetAddressTime(address)
-	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
-		return time.Time{}, jerr.Get("error getting address wallet last update from db", err)
+func (d *Database) GetAddressLastUpdate(addresses []wallet.Addr) ([]graph.AddressUpdate, error) {
+	var addressUpdates []graph.AddressUpdate
+	for _, address := range addresses {
+		addressTime, err := db.GetAddressTime(address)
+		if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
+			return nil, jerr.Get("error getting address wallet last update from db", err)
+		}
+		addressUpdate := graph.AddressUpdate{Address: address}
+		if addressTime != nil {
+			addressUpdate.Time = addressTime.Time
+		}
+		addressUpdates = append(addressUpdates, addressUpdate)
 	}
-	if addressTime != nil {
-		return addressTime.Time, nil
-	}
-	return time.Time{}, nil
+	return addressUpdates, nil
 }
 
-func (d *Database) GetUtxos(address wallet.Addr) ([]graph.Output, error) {
+func (d *Database) GetUtxos(addresses []wallet.Addr) ([]graph.Output, error) {
 	var utxos []graph.Output
-	dbTxOutputs, err := db.GetTxOutputs(address)
+	dbTxOutputs, err := db.GetTxOutputs(addresses)
 	if err != nil {
 		return nil, jerr.Get("error getting tx outputs from db for get utxos", err)
 	}
@@ -111,7 +119,7 @@ func (d *Database) SaveTxs(txs []graph.Tx) error {
 			if err != nil {
 				return jerr.Get("error saving tx", err)
 			}
-			blockByteHash, err := chainhash.NewHashFromStr(block.Hash)
+			blockByteHash, err := chainhash.NewHashFromStr(block.BlockHash)
 			if err != nil {
 				return jerr.Get("error saving tx", err)
 			}

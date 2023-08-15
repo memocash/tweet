@@ -5,6 +5,7 @@ import (
 	"github.com/memocash/index/ref/bitcoin/wallet"
 	"github.com/memocash/tweet/config"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -26,7 +27,7 @@ func Balance(address wallet.Addr) error {
 	if err != nil {
 		return fmt.Errorf("error reading info response body: %w", err)
 	}
-	fmt.Println(string(body))
+	log.Println(string(body))
 	return nil
 }
 func Profile(sender wallet.Addr, userId int64) error {
@@ -46,6 +47,23 @@ func Profile(sender wallet.Addr, userId int64) error {
 	if err != nil {
 		return fmt.Errorf("error reading info response body: %w", err)
 	}
-	fmt.Println(string(body))
+	log.Println(string(body))
+	return nil
+}
+
+func Report() error {
+	port := config.GetConfig().InfoServerPort
+	if port == 0 {
+		return fmt.Errorf("error info request port is 0")
+	}
+	resp, err := http.PostForm(fmt.Sprintf("http://localhost:%d/report", port), url.Values{})
+	if err != nil {
+		return fmt.Errorf("error info request: %w", err)
+	}
+	defer resp.Body.Close()
+	_, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("error reading info response body: %w", err)
+	}
 	return nil
 }
