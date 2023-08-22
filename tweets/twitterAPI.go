@@ -82,16 +82,10 @@ func GetAndSaveTwitterTweets(params *twitter.UserTimelineParams, scraper *twitte
 			inReplyToStatusID = 0
 		}
 		var entities = twitter.Entities{}
-		var extendedEntity = twitter.ExtendedEntity{}
-		if scrapedTweet.URLs != nil {
-			for _, media := range scrapedTweet.URLs {
-				entities.Media = append(entities.Media, twitter.MediaEntity{
-					MediaURL: media,
-				})
-				extendedEntity.Media = append(extendedEntity.Media, twitter.MediaEntity{
-					MediaURL: media,
-				})
-			}
+		for _, media := range scrapedTweet.URLs {
+			entities.Media = append(entities.Media, twitter.MediaEntity{
+				MediaURL: media,
+			})
 		}
 		for _, photo := range scrapedTweet.Photos {
 			entities.Media = append(entities.Media, twitter.MediaEntity{
@@ -108,7 +102,6 @@ func GetAndSaveTwitterTweets(params *twitter.UserTimelineParams, scraper *twitte
 				ScreenName: params.ScreenName,
 			},
 			Entities:         &entities,
-			ExtendedEntities: &extendedEntity,
 		}
 		tweets = append(tweets, tweet)
 	}

@@ -3,7 +3,6 @@ package tweets
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/jchavannes/jgo/jerr"
 	"github.com/memocash/tweet/db"
 	"github.com/memocash/tweet/tweets/obj"
@@ -36,12 +35,6 @@ func CreateMemoPostsFromDb(accountKey obj.AccountKey, flags db.Flags, wlt wallet
 		if match {
 			//remove the https://t.co from the tweet text
 			tweet.Tweet.Text = regexp.MustCompile("https://t.co/[a-zA-Z0-9]*$").ReplaceAllString(tweet.Tweet.Text, "")
-		}
-		if tweet.Tweet.Entities != nil && tweet.Tweet.Entities.Media != nil && len(tweet.Tweet.Entities.Media) > 0 {
-			//append the url to the tweet text on a new line
-			for _, media := range tweet.Tweet.ExtendedEntities.Media {
-				tweet.Tweet.Text += fmt.Sprintf("\n%s", media.MediaURL)
-			}
 		}
 		if err := save.Tweet(wlt, accountKey.GetAddress(), tweet.Tweet, flags); err != nil {
 			return numTransferred, jerr.Get("error streaming tweets for transfer", err)
