@@ -29,9 +29,18 @@ func Tweet(wlt wallet.Wallet, address string, tweet *twitter.Tweet, flags db.Fla
 	if existingSavedAddressTweet != nil {
 		return nil
 	}
-	tweetLink := fmt.Sprintf("\nhttps://twitter.com/%s/status/%d\n", tweet.User.ScreenName, tweet.ID)
-	tweetDate := fmt.Sprintf("\n%s\n", tweet.CreatedAt)
-	tweetText := tweet.Text
+	var tweetMedia string
+	if tweet.Entities != nil && len(tweet.Entities.Media) > 0 {
+		tweetMedia = tweet.Entities.Media[0].MediaURL
+	}
+	tweetText := &Text{
+		Text:     tweet.Text,
+		Link:     fmt.Sprintf("https://twitter.com/%s/status/%d", tweet.User.ScreenName, tweet.ID),
+		Date:     tweet.CreatedAt,
+		Media:    tweetMedia,
+		FlagLink: flags.Link,
+		FlagDate: flags.Date,
+	}
 	tweetJson, err := json.Marshal(obj.TweetTx{Tweet: tweet})
 	if err != nil {
 		return jerr.Get("error marshaling tweetTx", err)
@@ -46,9 +55,9 @@ func Tweet(wlt wallet.Wallet, address string, tweet *twitter.Tweet, flags db.Fla
 	var logMsg string
 	var txHash chainhash.Hash
 	if tweet.InReplyToStatusID == 0 {
-		tweetText = trimTweet(tweetText, tweetLink, tweetDate, flags.Link, flags.Date, memo.OldMaxPostSize)
+		message := tweetText.Gen(memo.OldMaxPostSize)
 		logMsg = "post (regular)"
-		parentHash, err := wallet.MakePost(wlt, html.UnescapeString(tweetText))
+		parentHash, err := wallet.MakePost(wlt, html.UnescapeString(message))
 		if err != nil {
 			return jerr.Get("error making post", err)
 		}
@@ -60,16 +69,16 @@ func Tweet(wlt wallet.Wallet, address string, tweet *twitter.Tweet, flags db.Fla
 			return jerr.Get("error getting saved address tweet for tweet parent reply", err)
 		}
 		if parentSavedTweet == nil {
-			tweetText = trimTweet(tweetText, tweetLink, tweetDate, flags.Link, flags.Date, memo.OldMaxPostSize)
+			message := tweetText.Gen(memo.OldMaxPostSize)
 			logMsg = "post (reply parent not found)"
-			txHash, err = wallet.MakePost(wlt, html.UnescapeString(tweetText))
+			txHash, err = wallet.MakePost(wlt, html.UnescapeString(message))
 			if err != nil {
 				return jerr.Get("error making post", err)
 			}
 		} else {
-			tweetText = trimTweet(tweetText, tweetLink, tweetDate, flags.Link, flags.Date, memo.OldMaxReplySize)
+			message := tweetText.Gen(memo.OldMaxReplySize)
 			logMsg = "reply"
-			txHash, err = wallet.MakeReply(wlt, parentSavedTweet.TxHash, html.UnescapeString(tweetText))
+			txHash, err = wallet.MakeReply(wlt, parentSavedTweet.TxHash, html.UnescapeString(message))
 			if err != nil {
 				return jerr.Get("error making reply", err)
 			}
@@ -85,22 +94,4 @@ func Tweet(wlt wallet.Wallet, address string, tweet *twitter.Tweet, flags db.Fla
 		return jerr.Get("error saving saved address tweet", err)
 	}
 	return nil
-}
-
-func trimTweet(tweetText string, tweetLink string, tweetDate string, appendLink bool, appendDate bool, size int) string {
-	if appendLink {
-		if len([]byte(tweetText))+len([]byte(tweetLink)) > size {
-			//if the tweet is too long, trim it
-			tweetText = string([]byte(tweetText)[:size-len([]byte(tweetLink))])
-		}
-		tweetText += tweetLink
-	}
-	if appendDate {
-		if len([]byte(tweetText))+len([]byte(tweetDate)) > size {
-			//if the tweet is too long, trim it
-			tweetText = string([]byte(tweetText)[:size-len([]byte(tweetDate))])
-		}
-		tweetText += tweetDate
-	}
-	return tweetText
 }

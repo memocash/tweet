@@ -93,6 +93,11 @@ func GetAndSaveTwitterTweets(params *twitter.UserTimelineParams, scraper *twitte
 				})
 			}
 		}
+		for _, photo := range scrapedTweet.Photos {
+			entities.Media = append(entities.Media, twitter.MediaEntity{
+				MediaURL: photo.URL,
+			})
+		}
 		tweet := twitter.Tweet{
 			ID:                tweetID,
 			InReplyToStatusID: inReplyToStatusID,
