@@ -26,6 +26,9 @@ func (t Text) Gen(size int) string {
 		appendText += fmt.Sprintf("\n%s", t.Date)
 	}
 	if len([]byte(tweetText))+len([]byte(appendText)) > size {
+		if len([]byte(appendText)) > size/2 {
+			appendText = appendText[:size/2] + "..."
+		}
 		tweetText = string([]byte(tweetText)[:size-len([]byte(appendText))-3]) + "..."
 	}
 	return tweetText + appendText
