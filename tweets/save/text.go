@@ -29,7 +29,10 @@ func (t Text) Gen(size int) string {
 		if len([]byte(appendText)) > size/2 {
 			appendText = appendText[:size/2] + "..."
 		}
-		tweetText = string([]byte(tweetText)[:size-len([]byte(appendText))-3]) + "..."
+		trim := size-len([]byte(appendText))-3
+		if trim > 0 && trim < len([]byte(tweetText)) {
+			tweetText = string([]byte(tweetText)[:trim]) + "..."
+		}
 	}
 	return tweetText + appendText
 }
