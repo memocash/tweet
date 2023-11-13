@@ -56,8 +56,19 @@ func getNewTweets(accountKey obj.AccountKey, numTweets int, newBot bool, scraper
 }
 
 func GetAndSaveTwitterTweets(params *twitter.UserTimelineParams, scraper *twitterscraper.Scraper) error {
+	tweets, err := GetTwitterTweets(params, scraper)
+	if err != nil {
+		return fmt.Errorf("error getting twitter tweets for get and save; %w", err)
+	}
+	if err := SaveTwitterTweets(params.UserID, tweets); err != nil {
+		return fmt.Errorf("error saving twitter tweets for get and save; %w", err)
+	}
+	return nil
+}
+
+func GetTwitterTweets(params *twitter.UserTimelineParams, scraper *twitterscraper.Scraper) ([]twitter.Tweet, error) {
 	if params.UserID == 0 {
-		return jerr.New("userID is required")
+		return nil, fmt.Errorf("userID is required")
 	}
 	query := fmt.Sprintf("from:%s", params.ScreenName)
 	if params.SinceID != 0 {
@@ -69,14 +80,14 @@ func GetAndSaveTwitterTweets(params *twitter.UserTimelineParams, scraper *twitte
 	var tweets []twitter.Tweet
 	for scrapedTweet := range scraper.SearchTweets(context.Background(), query, params.Count) {
 		if scrapedTweet.Error != nil {
-			return jerr.Get("error getting tweets", scrapedTweet.Error)
+			return nil, fmt.Errorf("error getting tweets; %w", scrapedTweet.Error)
 		}
 		tweetID, err := strconv.ParseInt(scrapedTweet.ID, 10, 64)
 		var inReplyToStatusID int64
 		if scrapedTweet.InReplyToStatus != nil {
 			inReplyToStatusID, err = strconv.ParseInt(scrapedTweet.InReplyToStatus.ID, 10, 64)
 			if err != nil {
-				return jerr.Get("error parsing in reply to status id", err)
+				return nil, fmt.Errorf("error parsing in reply to status id; %w", err)
 			}
 		} else {
 			inReplyToStatusID = 0
@@ -101,10 +112,14 @@ func GetAndSaveTwitterTweets(params *twitter.UserTimelineParams, scraper *twitte
 				ID:         params.UserID,
 				ScreenName: params.ScreenName,
 			},
-			Entities:         &entities,
+			Entities: &entities,
 		}
 		tweets = append(tweets, tweet)
 	}
+	return tweets, nil
+}
+
+func SaveTwitterTweets(userId int64, tweets []twitter.Tweet) error {
 	var dbTweetTxs = make([]db.ObjectI, len(tweets))
 	for i := range tweets {
 		tweetTxJson, err := json.Marshal(obj.TweetTx{Tweet: &tweets[i]})
@@ -112,7 +127,7 @@ func GetAndSaveTwitterTweets(params *twitter.UserTimelineParams, scraper *twitte
 			return jerr.Get("error marshaling tweet tx for saving twitter tweets", err)
 		}
 		dbTweetTxs[i] = &db.TweetTx{
-			UserID:  params.UserID,
+			UserID:  userId,
 			TweetId: tweets[i].ID,
 			Tx:      tweetTxJson,
 		}

@@ -10,6 +10,7 @@ func GetCommand() *cobra.Command {
 	twitterCmd.AddCommand(
 		tweetCmd,
 		tweetByGobCmd,
+		newestCmd,
 	)
 	return twitterCmd
 }
