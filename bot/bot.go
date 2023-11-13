@@ -28,7 +28,6 @@ import (
 )
 
 type Bot struct {
-	Mnemonic     *wallet.Mnemonic
 	Addresses    []string
 	Addr         wallet.Addr
 	Key          wallet.PrivateKey
@@ -41,7 +40,7 @@ type Bot struct {
 	Down         bool
 }
 
-func NewBot(mnemonic *wallet.Mnemonic, scraper *twitterscraper.Scraper, addresses []string, key wallet.PrivateKey, verbose bool, down bool) (*Bot, error) {
+func NewBot(scraper *twitterscraper.Scraper, addresses []string, key wallet.PrivateKey, verbose bool, down bool) (*Bot, error) {
 	if len(addresses) == 0 {
 		return nil, jerr.New("error new bot, no addresses")
 	}
@@ -50,7 +49,6 @@ func NewBot(mnemonic *wallet.Mnemonic, scraper *twitterscraper.Scraper, addresse
 		return nil, jerr.Get("error getting address from string for new bot", err)
 	}
 	bot := &Bot{
-		Mnemonic:     mnemonic,
 		Addresses:    addresses,
 		Addr:         *addr,
 		Key:          key,

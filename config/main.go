@@ -109,3 +109,7 @@ func GetGraphQlUrl() string {
 func GetGraphQlUrlWs() string {
 	return regexp.MustCompile(`(?i)http(s?)://`).ReplaceAllString(_config.GraphQlUrl, "ws$1://")
 }
+
+func GetBotSeed() string {
+	return _config.BotSeed
+}

@@ -62,12 +62,11 @@ func createStream(b *Bot, twitterAccount *twitter.User, senderAddress string, tx
 		}
 		newAddr = newKey.GetAddress()
 	} else {
-		path := wallet.GetBip44Path(wallet.Bip44CoinTypeBTC, numStreamUint+1, false)
-		keyPointer, err := b.Mnemonic.GetPath(path)
-		newKey = *keyPointer
+		streamKey, err := GetKey(numStreamUint+1)
 		if err != nil {
-			return jerr.Get("error getting path", err)
+			return fmt.Errorf("error getting new stream key; %w", err)
 		}
+		newKey = *streamKey
 		newAddr = newKey.GetAddress()
 	}
 	if b.Verbose {

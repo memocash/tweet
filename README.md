@@ -9,9 +9,9 @@ Put in `./config.yaml`:
 
 ```yaml
 BOT_SEED: hotel obvious agent lecture gadget evil jealous keen fragile before damp clarify
-TWITTER_API:
-  CONSUMER_KEY: 1234567890
-  CONSUMER_SECRET: abcdefghijklmnopqrstuvwxyz
+TWITTER_CREDS:
+  USER_NAME: TwitterUser
+  PASSWORD: password1234
 ```
 
 ## Build
