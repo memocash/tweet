@@ -37,7 +37,7 @@ require (
 	github.com/jchavannes/btcutil v1.1.4 // indirect
 	github.com/jchavannes/go-mnemonic v0.0.0-20191017214729-76f026914b65 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/klauspost/compress v1.10.3 // indirect
+	github.com/klauspost/compress v1.18.7 // indirect
 	github.com/magiconair/properties v1.8.6 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
